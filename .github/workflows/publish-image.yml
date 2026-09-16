@@ -27,6 +27,9 @@ jobs:
       ENVIRONMENT: testing
       DJANGO_SECRET_KEY: ci-only-not-a-production-secret
       DATABASE_URL: sqlite:///ci.sqlite3
+      EMAIL_HOST: mail.nic.ru
+      EMAIL_HOST_USER: noreply@1uup.ru
+      EMAIL_HOST_PASSWORD: ci-only-not-a-production-secret
 
     steps:
       - name: Check out repository

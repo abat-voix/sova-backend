@@ -18,7 +18,12 @@ ghcr.io/abat-voix/sova-backend:<tag>
 - `DATABASE_URL`;
 - `REDIS_URL`;
 - `DJANGO_ALLOWED_HOSTS`;
-- `CSRF_TRUSTED_ORIGINS`.
+- `CSRF_TRUSTED_ORIGINS`;
+- `EMAIL_HOST`, `EMAIL_HOST_USER` и `EMAIL_HOST_PASSWORD`.
+
+Исходящая почта отправляется через SMTP. Для RU-CENTER используются
+`mail.nic.ru:465`, SSL и полный адрес почтового ящика в качестве логина.
+Пароль ящика храните только в runtime-окружении и не коммитьте в Git.
 
 Полный пример находится в `.env.example`.
 
