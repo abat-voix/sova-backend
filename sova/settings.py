@@ -116,17 +116,41 @@ STATIC_ROOT = Path(os.getenv("STATIC_ROOT", BASE_DIR / "staticfiles"))
 MEDIA_URL = "/media/"
 MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", BASE_DIR / "media"))
 
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = os.environ["EMAIL_HOST"]
+EMAIL_HOST = os.getenv("EMAIL_HOST", "")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", "465"))
-EMAIL_HOST_USER = os.environ["EMAIL_HOST_USER"]
-EMAIL_HOST_PASSWORD = os.environ["EMAIL_HOST_PASSWORD"]
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", default=True)
 EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", default=False)
 DEFAULT_FROM_EMAIL = os.getenv(
     "DEFAULT_FROM_EMAIL",
     "СОВА <noreply@1uup.ru>",
 )
+
+smtp_settings = {
+    "EMAIL_HOST": EMAIL_HOST,
+    "EMAIL_HOST_USER": EMAIL_HOST_USER,
+    "EMAIL_HOST_PASSWORD": EMAIL_HOST_PASSWORD,
+}
+missing_smtp_settings = [name for name, value in smtp_settings.items() if not value]
+
+if missing_smtp_settings:
+    if len(missing_smtp_settings) != len(smtp_settings):
+        raise ImproperlyConfigured(
+            f"Incomplete SMTP configuration; missing: {', '.join(missing_smtp_settings)}."
+        )
+    if ENVIRONMENT not in {"development", "test", "testing"}:
+        raise ImproperlyConfigured(
+            "EMAIL_HOST, EMAIL_HOST_USER and EMAIL_HOST_PASSWORD must be set "
+            "outside development."
+        )
+    EMAIL_BACKEND = (
+        "django.core.mail.backends.locmem.EmailBackend"
+        if ENVIRONMENT in {"test", "testing"}
+        else "django.core.mail.backends.console.EmailBackend"
+    )
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
