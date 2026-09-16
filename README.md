@@ -30,27 +30,35 @@ ghcr.io/abat-voix/sova-backend:<tag>
 ## Local development
 
 ```bash
-python3.13 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
+poetry install
 
 cp .env.example .env
 set -a
 source .env
 set +a
 
-python manage.py migrate
-python manage.py runserver
+poetry run python manage.py migrate
+poetry run python manage.py runserver
 ```
 
 Для быстрого запуска без PostgreSQL и Redis переменные `DATABASE_URL` и `REDIS_URL` можно временно удалить: development-конфигурация использует SQLite и локальный memory cache.
 
+## API documentation
+
+После запуска backend доступны:
+
+- Swagger UI: `http://127.0.0.1:8000/api/docs/`;
+- OpenAPI-схема: `http://127.0.0.1:8000/api/schema/`.
+
+Оба endpoint публичны, чтобы документацию можно было открыть без авторизации.
+
 ## Checks
 
 ```bash
-python manage.py check
-python manage.py migrate --noinput
-python manage.py test
+poetry check --lock
+poetry run python manage.py check
+poetry run python manage.py migrate --noinput
+poetry run python manage.py test
 ```
 
 ## Docker

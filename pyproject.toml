@@ -4,16 +4,17 @@ version = "0.1.0"
 description = ""
 authors = ["roman <tr@letsnova.ru>"]
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
 python = ">=3.10,<4.0"
 django = "5.2.17"
 djangorestframework = "3.18.1"
+drf-spectacular = "0.30.0"
 dj-database-url = "3.1.2"
 gunicorn = "26.2.0"
 psycopg = {version = "3.3.5", extras = ["binary"]}
 redis = "8.1.0"
-
 
 [build-system]
 requires = ["poetry-core"]
