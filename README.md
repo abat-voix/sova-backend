@@ -30,12 +30,54 @@ ghcr.io/abat-voix/sova-backend:<tag>
 
 Полный пример находится в `.env.example`.
 
+## Keycloak authentication
+
+Keycloak подключён как OpenID Connect provider. Django выполняет server-side
+Authorization Code flow с PKCE, создаёт локального пользователя по стабильному
+claim `sub` и выдаёт браузеру обычную HttpOnly session cookie. Access и refresh
+tokens не передаются frontend и не сохраняются в browser storage.
+
+Маршруты:
+
+- `GET /api/auth/me/` — состояние сессии, текущий пользователь и CSRF token;
+- `GET /api/auth/oidc/authenticate/` — начало входа;
+- `GET /api/auth/oidc/callback/` — callback Keycloak;
+- `POST /api/auth/oidc/logout/` — выход из Django и Keycloak.
+
+Для локального запуска настройте realm/client в Keycloak или используйте realm
+из `sova-infra/keycloak/sova-realm.json`. Callback при запуске frontend через
+его proxy: `http://localhost:3000/api/auth/oidc/callback/`.
+
+Обязательные production-переменные авторизации:
+
+- `APP_PUBLIC_URL`;
+- `KEYCLOAK_PUBLIC_URL` и `KEYCLOAK_INTERNAL_URL`;
+- `KEYCLOAK_REALM` и `KEYCLOAK_CLIENT_ID`;
+- `KEYCLOAK_CLIENT_SECRET`.
+
+OIDC-пользователи получают unusable Django password. Локальный Django
+`ModelBackend` сохранён для аварийного superuser в `/admin/`; не назначайте
+OIDC-пользователям пароль вручную.
+
 ## Local development
+
+Сначала поднимите инфраструктуру — PostgreSQL, Redis и Keycloak — из
+репозитория `sova-infra`:
+
+```bash
+cd ../sova-infra
+cp .env.local.example .env.local   # заполните пароли и client secret
+docker compose --env-file .env.local -f compose.local.yml up -d
+```
+
+Затем backend:
 
 ```bash
 poetry install
 
 cp .env.example .env
+# DATABASE_URL, REDIS_URL и KEYCLOAK_CLIENT_SECRET должны соответствовать
+# значениям из sova-infra/.env.local
 set -a
 source .env
 set +a
@@ -43,6 +85,9 @@ set +a
 poetry run python manage.py migrate
 poetry run python manage.py runserver
 ```
+
+Файл читается через `source`, поэтому значения должны быть shell-safe: без
+пробелов, `$` и `#` вне кавычек.
 
 Для быстрого запуска без PostgreSQL и Redis переменные `DATABASE_URL` и `REDIS_URL` можно временно удалить: development-конфигурация использует SQLite и локальный memory cache.
 
