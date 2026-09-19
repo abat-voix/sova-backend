@@ -963,6 +963,17 @@ files = [
 ]
 
 [[package]]
+name = "rules"
+version = "3.5"
+description = "Awesome Django authorization, without the database"
+optional = false
+python-versions = "*"
+files = [
+    {file = "rules-3.5-py2.py3-none-any.whl", hash = "sha256:0f00fc9ee448b3f82e9aff9334ab0c56c76dce4dfa14f1598f57969f1022acc0"},
+    {file = "rules-3.5.tar.gz", hash = "sha256:f01336218f4561bab95f53672d22418b4168baea271423d50d9e8490d64cb27a"},
+]
+
+[[package]]
 name = "sqlparse"
 version = "0.6.0"
 description = "A non-validating SQL parser."
@@ -1030,4 +1041,4 @@ zstd = ["backports-zstd (>=1.0.0)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<4.0"
-content-hash = "5184e10beb81d5395e25a07610a8ae916e2367b24d2eca9eb43a1881f45bbfa1"
+content-hash = "50339a0ebccdd614ad7ad2951d69852b14a15f6d054e252af9d483076b851502"

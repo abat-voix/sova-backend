@@ -16,6 +16,7 @@ gunicorn = "26.2.0"
 psycopg = {version = "3.3.5", extras = ["binary"]}
 redis = "8.1.0"
 mozilla-django-oidc = "5.0.2"
+rules = "3.5"
 
 [build-system]
 requires = ["poetry-core"]

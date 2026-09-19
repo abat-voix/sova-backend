@@ -42,8 +42,10 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "mozilla_django_oidc",
+    "rules",
     "accounts",
     "health",
+    "sova.crm.apps.CrmConfig",
 ]
 
 MIDDLEWARE = [
@@ -159,6 +161,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTHENTICATION_BACKENDS = [
     "accounts.auth.KeycloakOIDCAuthenticationBackend",
+    "rules.permissions.ObjectPermissionBackend",
     "django.contrib.auth.backends.ModelBackend",
 ]
 
