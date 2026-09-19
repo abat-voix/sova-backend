@@ -4,6 +4,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from accounts.models import UserRole
+
 
 @extend_schema(
     responses={200: OpenApiResponse(description="Current authentication session")}
@@ -17,6 +19,9 @@ def session(request):
         return Response({"authenticated": False, "csrfToken": csrf_token})
 
     display_name = request.user.get_full_name() or request.user.email or "Пользователь"
+    role_assignment = UserRole.objects.filter(user=request.user).first()
+    role = role_assignment.role if role_assignment else None
+    role_display = role_assignment.get_role_display() if role_assignment else None
     return Response(
         {
             "authenticated": True,
@@ -28,11 +33,9 @@ def session(request):
                 "lastName": request.user.last_name,
                 "displayName": display_name,
                 "isStaff": request.user.is_staff,
-                "roles": list(
-                    request.user.groups.order_by("name").values_list(
-                        "name", flat=True
-                    )
-                ),
+                "role": role,
+                "roleDisplay": role_display,
+                "roles": [role] if role else [],
             },
         }
     )
