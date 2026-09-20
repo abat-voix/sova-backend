@@ -107,6 +107,15 @@ else:
         }
     }
 
+GOTENBERG_URL = os.getenv("GOTENBERG_URL", "http://localhost:3001").rstrip("/")
+try:
+    GOTENBERG_TIMEOUT = float(os.getenv("GOTENBERG_TIMEOUT", "30"))
+except ValueError as error:
+    raise ImproperlyConfigured("GOTENBERG_TIMEOUT must be a number.") from error
+
+if GOTENBERG_TIMEOUT <= 0:
+    raise ImproperlyConfigured("GOTENBERG_TIMEOUT must be greater than zero.")
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},

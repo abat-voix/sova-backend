@@ -19,6 +19,7 @@ ghcr.io/abat-voix/sova-backend:<tag>
 - `REDIS_URL`;
 - `DJANGO_ALLOWED_HOSTS`;
 - `CSRF_TRUSTED_ORIGINS`;
+- `GOTENBERG_URL`;
 - `EMAIL_HOST`, `EMAIL_HOST_USER` и `EMAIL_HOST_PASSWORD`.
 
 Исходящая почта отправляется через SMTP. Для RU-CENTER используются
@@ -59,6 +60,17 @@ OIDC-пользователи получают unusable Django password. Лок�
 `ModelBackend` сохранён для аварийного superuser в `/admin/`; не назначайте
 OIDC-пользователям пароль вручную.
 
+## System roles
+
+Прикладная роль пользователя хранится в СОВА и выбирается суперпользователем в
+Django Admin. Пользователю можно назначить одну из ролей: `КАМ`, `Руководитель`
+или `Администратор платформы`. Пока роль используется только как классификация и
+не меняет права доступа.
+
+Роли не синхронизируются с Keycloak: Keycloak является источником личности и
+аутентификации, а СОВА — источником прикладной роли. Django superuser остаётся
+отдельным техническим признаком и не является ролью СОВА.
+
 ## Local development
 
 Сначала поднимите инфраструктуру — PostgreSQL, Redis и Keycloak — из
@@ -90,6 +102,29 @@ poetry run python manage.py runserver
 пробелов, `$` и `#` вне кавычек.
 
 Для быстрого запуска без PostgreSQL и Redis переменные `DATABASE_URL` и `REDIS_URL` можно временно удалить: development-конфигурация использует SQLite и локальный memory cache.
+
+## PDF generation
+
+Gotenberg запускается из `sova-infra` и доступен backend по переменной
+`GOTENBERG_URL`. При локальной разработке это `http://localhost:3001`, а внутри
+Compose-сети стенда — `http://gotenberg:3000`. API Gotenberg не должен быть
+доступен из интернета.
+
+Для преобразования готового HTML используйте единый клиент:
+
+```python
+from reports.pdf import HTMLAsset, html_to_pdf
+
+pdf = html_to_pdf(
+    "<html><body><img src='logo.png'><h1>Отчёт</h1></body></html>",
+    assets=(HTMLAsset("logo.png", logo_bytes, "image/png"),),
+    output_filename="report",
+)
+```
+
+По умолчанию клиент генерирует A4, печатает CSS-фоны, учитывает `@page` и
+завершает запрос ошибкой, если локальный ресурс не загрузился. Дополнительные
+поля Chromium route можно передать через `form_fields`.
 
 ## API documentation
 

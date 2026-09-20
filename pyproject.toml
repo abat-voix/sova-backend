@@ -20,6 +20,7 @@ django-filter = "26.1"
 
 [tool.poetry.group.dev.dependencies]
 factory-boy = "3.3.3"
+requests = "2.34.2"
 
 [build-system]
 requires = ["poetry-core"]

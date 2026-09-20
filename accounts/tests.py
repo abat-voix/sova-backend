@@ -7,6 +7,7 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
 from accounts.auth import KeycloakOIDCAuthenticationBackend
+from accounts.models import SystemRole, UserRole
 from accounts.oidc import provider_logout_url
 
 
@@ -64,7 +65,37 @@ class SessionViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["authenticated"])
         self.assertEqual(response.json()["user"]["displayName"], "Сова")
+        self.assertIsNone(response.json()["user"]["role"])
+        self.assertIsNone(response.json()["user"]["roleDisplay"])
         self.assertEqual(response.json()["user"]["roles"], [])
+
+    def test_authenticated_session_returns_selected_system_role(self) -> None:
+        user = get_user_model().objects.create_user(username="kam-subject")
+        UserRole.objects.create(user=user, role=SystemRole.KAM)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("accounts:session"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["user"]["role"], "kam")
+        self.assertEqual(response.json()["user"]["roleDisplay"], "КАМ")
+        self.assertEqual(response.json()["user"]["roles"], ["kam"])
+
+
+class UserRoleTests(TestCase):
+    def test_user_can_have_only_one_system_role(self) -> None:
+        user = get_user_model().objects.create_user(username="role-subject")
+
+        UserRole.objects.create(user=user, role=SystemRole.HEAD)
+
+        self.assertEqual(user.system_role.role, SystemRole.HEAD)
+
+    def test_system_role_does_not_make_user_django_superuser(self) -> None:
+        user = get_user_model().objects.create_user(username="admin-subject")
+        UserRole.objects.create(user=user, role=SystemRole.PLATFORM_ADMIN)
+
+        self.assertFalse(user.is_superuser)
+        self.assertFalse(user.is_staff)
 
 
 class OIDCFlowTests(TestCase):
