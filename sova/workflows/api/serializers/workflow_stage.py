@@ -27,7 +27,6 @@ class WorkflowStageSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "name",
-            "type",
             "description",
             "sort_order",
             "is_initial",
@@ -48,7 +47,6 @@ class WriteWorkflowStageSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "name",
-            "type",
             "description",
             "sort_order",
             "is_initial",
