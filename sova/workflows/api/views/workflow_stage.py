@@ -11,5 +11,5 @@ class WorkflowStageViewSet(WorkflowAuditMixin, SovaBaseViewSet):
     serializer_class = serializers.WriteWorkflowStageSerializer
     queryset = WorkflowStage.objects.select_related("workflow")
     ordering_fields = "__all__"
-    search_fields = ("name", "type", "description")
+    search_fields = ("name", "description")
     filterset_class = filters.WorkflowStageFilter
