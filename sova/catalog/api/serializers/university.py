@@ -32,6 +32,14 @@ class UniversitySerializer(serializers.ModelSerializer):
         )
 
 
+class UniversityMapPointSerializer(serializers.ModelSerializer):
+    """Вуз — облегчённая точка для карты без карточных данных."""
+
+    class Meta:
+        model = University
+        fields = ("id", "lat", "lon")
+
+
 class WriteUniversitySerializer(serializers.ModelSerializer):
     """Вуз — валидация входных данных (create/update)."""
 

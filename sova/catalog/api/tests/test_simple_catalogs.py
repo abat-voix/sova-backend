@@ -1,3 +1,4 @@
+from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -206,6 +207,26 @@ class UniversityApiTestCase(BaseApiTestMixin, APITestCase):
         self.assertEqual(
             [item["id"] for item in response.data["results"]],
             [str(target.pk)],
+        )
+
+    def test_map_returns_only_ids_and_coordinates(self) -> None:
+        """Карта получает только координаты вузов, у которых они заполнены."""
+        target = UniversityFactory(lat="57.160488", lon="65.527412")
+        UniversityFactory(lat=None, lon=None)
+        UniversityFactory(lat="55.755864", lon=None)
+
+        response = self.client.get(path=reverse("catalog:university-map-points"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data,
+            [
+                {
+                    "id": str(target.pk),
+                    "lat": "57.160488",
+                    "lon": "65.527412",
+                }
+            ],
         )
 
 

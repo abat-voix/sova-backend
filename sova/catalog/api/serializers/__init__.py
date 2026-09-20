@@ -23,6 +23,7 @@ from sova.catalog.api.serializers.it_program import (
     WriteITProgramSerializer,
 )
 from sova.catalog.api.serializers.university import (
+    UniversityMapPointSerializer,
     UniversitySerializer,
     UniversityShortSerializer,
     WriteUniversitySerializer,
@@ -44,6 +45,7 @@ __all__ = [
     "ITProgramSerializer",
     "ITProgramShortSerializer",
     "UniversitySerializer",
+    "UniversityMapPointSerializer",
     "UniversityShortSerializer",
     "VendorSerializer",
     "VendorShortSerializer",
