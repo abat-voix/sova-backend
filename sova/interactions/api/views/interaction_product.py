@@ -4,11 +4,11 @@ from sova.interactions.models import InteractionProduct
 
 
 class InteractionProductViewSet(SovaBaseViewSet):
-    """ИТ-продукты во взаимодействиях. Доступны CRUD операции."""
+    """Продукты во взаимодействиях. Доступны CRUD операции."""
 
     read_serializer_class = serializers.InteractionProductSerializer
     serializer_class = serializers.WriteInteractionProductSerializer
-    queryset = InteractionProduct.objects.select_related("it_product")
+    queryset = InteractionProduct.objects.select_related("product")
     ordering_fields = "__all__"
-    search_fields = ("it_product__name",)
+    search_fields = ("product__name",)
     filterset_class = filters.InteractionProductFilter

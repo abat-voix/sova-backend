@@ -12,16 +12,16 @@ class InteractionProgramFilter(SearchFilterMixin):
         label=_("Взаимодействия"),
         help_text=_("Фильтр по списку ID взаимодействий через запятую"),
     )
-    it_program__ids = UUIDInFilter(
-        field_name="it_program",
-        label=_("ИТ-программы"),
-        help_text=_("Фильтр по списку ID ИТ-программ через запятую"),
+    program__ids = UUIDInFilter(
+        field_name="program",
+        label=_("Программы"),
+        help_text=_("Фильтр по списку ID программ через запятую"),
     )
-    it_direction__ids = UUIDInFilter(
-        field_name="it_program__it_direction",
-        label=_("ИТ-направления"),
+    direction__ids = UUIDInFilter(
+        field_name="program__direction",
+        label=_("Направления"),
         help_text=_(
-            "Фильтр по списку ID ИТ-направлений через запятую; "
+            "Фильтр по списку ID направлений через запятую; "
             "направление определяется по каталожной программе",
         ),
     )

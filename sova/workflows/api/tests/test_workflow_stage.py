@@ -169,12 +169,12 @@ class WorkflowStageApiTestCase(BaseApiTestMixin, APITestCase):
     def test_filter_by_type(self) -> None:
         """Фильтр type возвращает этапы указанного типа."""
         workflow = WorkflowFactory()
-        product = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.IT_PRODUCT)
-        WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.IT_PROGRAM)
+        product = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.PRODUCT)
+        WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.PROGRAM)
 
         response = self.client.get(
             path=self.list_url,
-            data={"type": StageInstanceContextType.IT_PRODUCT},
+            data={"type": StageInstanceContextType.PRODUCT},
         )
 
         # Проверяем, что найден только этап продукта
@@ -249,7 +249,7 @@ class WorkflowStageApiTestCase(BaseApiTestMixin, APITestCase):
         """Источник связи можно сделать этапом продукта, даже если после него идёт этап взаимодействия."""
         transition = StageTransitionFactory()
 
-        response = self.patch_stage(transition.from_stage, type=StageInstanceContextType.IT_PRODUCT)
+        response = self.patch_stage(transition.from_stage, type=StageInstanceContextType.PRODUCT)
 
         # Проверяем, что смена типа выполнена
         self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
@@ -257,8 +257,8 @@ class WorkflowStageApiTestCase(BaseApiTestMixin, APITestCase):
     def test_change_allows_target_type_to_become_interaction_after_product_stage(self) -> None:
         """Цель связи можно сделать этапом взаимодействия, даже если перед ней идёт этап продукта."""
         workflow = WorkflowFactory()
-        source = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.IT_PRODUCT)
-        target = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.IT_PRODUCT)
+        source = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.PRODUCT)
+        target = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.PRODUCT)
         StageTransitionFactory(from_stage=source, to_stage=target)
 
         response = self.patch_stage(target, type=StageInstanceContextType.INTERACTION)
@@ -270,10 +270,10 @@ class WorkflowStageApiTestCase(BaseApiTestMixin, APITestCase):
         """Смена типа, не нарушающая правило, проходит."""
         workflow = WorkflowFactory()
         source = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.INTERACTION)
-        target = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.IT_PRODUCT)
+        target = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.PRODUCT)
         StageTransitionFactory(from_stage=source, to_stage=target)
 
-        response = self.patch_stage(source, type=StageInstanceContextType.IT_PRODUCT)
+        response = self.patch_stage(source, type=StageInstanceContextType.PRODUCT)
 
         # Проверяем, что смена типа выполнена
         self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)

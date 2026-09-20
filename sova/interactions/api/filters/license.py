@@ -23,10 +23,10 @@ class LicenseFilter(SearchFilterMixin):
         label=_("Продукты взаимодействия"),
         help_text=_("Фильтр по списку ID продуктов взаимодействия через запятую"),
     )
-    it_product__ids = UUIDInFilter(
-        field_name="interaction_product__it_product",
-        label=_("ИТ-продукты"),
-        help_text=_("Фильтр по списку ID каталожных ИТ-продуктов через запятую"),
+    product__ids = UUIDInFilter(
+        field_name="interaction_product__product",
+        label=_("Продукты"),
+        help_text=_("Фильтр по списку ID каталожных продуктов через запятую"),
     )
     valid_until_year__gte = filters.NumberFilter(
         field_name="valid_until_year",

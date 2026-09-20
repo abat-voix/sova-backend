@@ -35,9 +35,9 @@ class LicenseApiTestCase(BaseApiTestMixin, APITestCase):
             "interaction_product": {
                 "id": str(instance.interaction_product_id),
                 "interaction": str(instance.interaction_product.interaction_id),
-                "it_product": {
-                    "id": str(instance.interaction_product.it_product_id),
-                    "name": instance.interaction_product.it_product.name,
+                "product": {
+                    "id": str(instance.interaction_product.product_id),
+                    "name": instance.interaction_product.product.name,
                 },
             },
             "created_by": (
@@ -174,13 +174,13 @@ class LicenseApiTestCase(BaseApiTestMixin, APITestCase):
             expected=[target],
         )
 
-    def test_filter_by_it_product_ids(self) -> None:
-        """Фильтр it_product__ids возвращает лицензии на указанный каталожный продукт."""
+    def test_filter_by_product_ids(self) -> None:
+        """Фильтр product__ids возвращает лицензии на указанный каталожный продукт."""
         target = LicenseFactory()
         LicenseFactory()
 
         self.assert_filter_returns(
-            params={"it_product__ids": str(target.interaction_product.it_product_id)},
+            params={"product__ids": str(target.interaction_product.product_id)},
             expected=[target],
         )
 

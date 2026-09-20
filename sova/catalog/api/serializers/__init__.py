@@ -7,20 +7,20 @@ from sova.catalog.api.serializers.contact_person import (
     ContactPersonSerializer,
     WriteContactPersonSerializer,
 )
-from sova.catalog.api.serializers.it_direction import (
-    ITDirectionSerializer,
-    ITDirectionShortSerializer,
-    WriteITDirectionSerializer,
+from sova.catalog.api.serializers.direction import (
+    DirectionSerializer,
+    DirectionShortSerializer,
+    WriteDirectionSerializer,
 )
-from sova.catalog.api.serializers.it_product import (
-    ITProductSerializer,
-    ITProductShortSerializer,
-    WriteITProductSerializer,
+from sova.catalog.api.serializers.product import (
+    ProductSerializer,
+    ProductShortSerializer,
+    WriteProductSerializer,
 )
-from sova.catalog.api.serializers.it_program import (
-    ITProgramSerializer,
-    ITProgramShortSerializer,
-    WriteITProgramSerializer,
+from sova.catalog.api.serializers.program import (
+    ProgramSerializer,
+    ProgramShortSerializer,
+    WriteProgramSerializer,
 )
 from sova.catalog.api.serializers.university import (
     UniversityMapPointSerializer,
@@ -38,12 +38,12 @@ __all__ = [
     "B2CClientSerializer",
     "B2CClientShortSerializer",
     "ContactPersonSerializer",
-    "ITDirectionSerializer",
-    "ITDirectionShortSerializer",
-    "ITProductSerializer",
-    "ITProductShortSerializer",
-    "ITProgramSerializer",
-    "ITProgramShortSerializer",
+    "DirectionSerializer",
+    "DirectionShortSerializer",
+    "ProductSerializer",
+    "ProductShortSerializer",
+    "ProgramSerializer",
+    "ProgramShortSerializer",
     "UniversitySerializer",
     "UniversityMapPointSerializer",
     "UniversityShortSerializer",
@@ -51,9 +51,9 @@ __all__ = [
     "VendorShortSerializer",
     "WriteB2CClientSerializer",
     "WriteContactPersonSerializer",
-    "WriteITDirectionSerializer",
-    "WriteITProductSerializer",
-    "WriteITProgramSerializer",
+    "WriteDirectionSerializer",
+    "WriteProductSerializer",
+    "WriteProgramSerializer",
     "WriteUniversitySerializer",
     "WriteVendorSerializer",
 ]

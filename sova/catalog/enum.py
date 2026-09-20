@@ -12,6 +12,6 @@ class CatalogType(TextChoices):
     """Тип каталога для настраиваемого маппинга полей при импорте xls/xlsx."""
 
     UNIVERSITY = "university", "Вузы"
-    IT_PRODUCT = "it_product", "ИТ-продукты"
-    IT_DIRECTION = "it_direction", "ИТ-направления"
+    PRODUCT = "product", "Продукты"
+    DIRECTION = "direction", "Направления"
     RESPONSIBLE = "responsible", "Ответственные"

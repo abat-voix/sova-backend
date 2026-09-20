@@ -14,7 +14,7 @@ class StageInstance(UUIDModel):
     `context_id` — полиморфный указатель (Interaction.id | InteractionDirection.id |
     InteractionProgram.id | InteractionProduct.id в зависимости от context_type), поэтому
     обычным ForeignKey не моделируется. Указывает на записи, уникальные для взаимодействия,
-    а не на общий каталог ИТ-направлений/программ/продуктов.
+    а не на общий каталог направлений/программ/продуктов.
     """
 
     context_type = models.CharField(
@@ -107,9 +107,9 @@ class StageInstance(UUIDModel):
             interaction_id = self.context_id
         else:
             model_name = {
-                StageInstanceContextType.IT_DIRECTION: "InteractionDirection",
-                StageInstanceContextType.IT_PROGRAM: "InteractionProgram",
-                StageInstanceContextType.IT_PRODUCT: "InteractionProduct",
+                StageInstanceContextType.DIRECTION: "InteractionDirection",
+                StageInstanceContextType.PROGRAM: "InteractionProgram",
+                StageInstanceContextType.PRODUCT: "InteractionProduct",
             }[self.context_type]
             context = apps.get_model("interactions", model_name).objects.filter(pk=self.context_id).first()
             if context is None:

@@ -6,9 +6,9 @@ from rest_framework.test import APITestCase
 
 from sova.catalog.tests.factories import (
     B2CClientFactory,
-    ITDirectionFactory,
-    ITProductFactory,
-    ITProgramFactory,
+    DirectionFactory,
+    ProductFactory,
+    ProgramFactory,
     UniversityFactory,
 )
 from sova.core.tests.factories import UserFactory
@@ -197,44 +197,44 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
             expected=[target],
         )
 
-    def test_filter_by_it_direction_ids_ignores_inactive_links(self) -> None:
-        """Фильтр it_direction__ids учитывает только активные направления."""
-        direction = ITDirectionFactory()
+    def test_filter_by_direction_ids_ignores_inactive_links(self) -> None:
+        """Фильтр direction__ids учитывает только активные направления."""
+        direction = DirectionFactory()
         target = InteractionFactory()
-        InteractionDirectionFactory(interaction=target, it_direction=direction)
+        InteractionDirectionFactory(interaction=target, direction=direction)
         removed = InteractionFactory()
         InteractionDirectionFactory(
             interaction=removed,
-            it_direction=direction,
+            direction=direction,
             is_active=False,
         )
 
         self.assert_filter_returns(
-            params={"it_direction__ids": str(direction.pk)},
+            params={"direction__ids": str(direction.pk)},
             expected=[target],
         )
 
-    def test_filter_by_it_program_ids(self) -> None:
-        """Фильтр it_program__ids возвращает взаимодействия с указанной программой."""
-        program = ITProgramFactory()
+    def test_filter_by_program_ids(self) -> None:
+        """Фильтр program__ids возвращает взаимодействия с указанной программой."""
+        program = ProgramFactory()
         target = InteractionFactory()
-        InteractionProgramFactory(interaction=target, it_program=program)
-        InteractionProgramFactory(it_program=ITProgramFactory())
+        InteractionProgramFactory(interaction=target, program=program)
+        InteractionProgramFactory(program=ProgramFactory())
 
         self.assert_filter_returns(
-            params={"it_program__ids": str(program.pk)},
+            params={"program__ids": str(program.pk)},
             expected=[target],
         )
 
-    def test_filter_by_it_product_ids(self) -> None:
-        """Фильтр it_product__ids возвращает взаимодействия с указанным продуктом."""
-        product = ITProductFactory()
+    def test_filter_by_product_ids(self) -> None:
+        """Фильтр product__ids возвращает взаимодействия с указанным продуктом."""
+        product = ProductFactory()
         target = InteractionFactory()
-        InteractionProductFactory(interaction=target, it_product=product)
+        InteractionProductFactory(interaction=target, product=product)
         InteractionProductFactory()
 
         self.assert_filter_returns(
-            params={"it_product__ids": str(product.pk)},
+            params={"product__ids": str(product.pk)},
             expected=[target],
         )
 

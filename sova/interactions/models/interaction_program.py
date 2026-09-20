@@ -5,10 +5,10 @@ from sova.core.models import UUIDModel
 
 class InteractionProgram(UUIDModel):
     """
-    ИТ-программа в рамках конкретного взаимодействия.
+    Программа в рамках конкретного взаимодействия.
 
     Направление программы не дублируется отдельным FK — оно выводится через
-    `it_program.it_direction` (ITProgram.it_direction обязателен в каталоге).
+    `program.direction` (Program.direction обязателен в каталоге).
     """
 
     added_at = models.DateTimeField(
@@ -26,11 +26,11 @@ class InteractionProgram(UUIDModel):
         related_name="interaction_programs",
         verbose_name="Взаимодействие",
     )
-    it_program = models.ForeignKey(
-        to="catalog.ITProgram",
+    program = models.ForeignKey(
+        to="catalog.Program",
         on_delete=models.PROTECT,
         related_name="interaction_programs",
-        verbose_name="ИТ-программа",
+        verbose_name="Программа",
     )
 
     class Meta:
@@ -39,10 +39,10 @@ class InteractionProgram(UUIDModel):
         ordering = ["interaction", "added_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["interaction", "it_program"],
+                fields=["interaction", "program"],
                 name="unique_program_per_interaction",
             ),
         ]
 
     def __str__(self):
-        return f"{self.interaction} — {self.it_program}"
+        return f"{self.interaction} — {self.program}"

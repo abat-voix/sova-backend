@@ -44,20 +44,20 @@ class InteractionFilter(SearchFilterMixin):
         help_text=_("Конец периода по дате создания, включительно (ГГГГ-ММ-ДД)"),
     )
 
-    it_direction__ids = UUIDInFilter(
-        method="filter_it_direction_ids",
-        label=_("ИТ-направления"),
-        help_text=_("Взаимодействия с указанными активными ИТ-направлениями, ID через запятую"),
+    direction__ids = UUIDInFilter(
+        method="filter_direction_ids",
+        label=_("Направления"),
+        help_text=_("Взаимодействия с указанными активными направлениями, ID через запятую"),
     )
-    it_program__ids = UUIDInFilter(
-        method="filter_it_program_ids",
-        label=_("ИТ-программы"),
-        help_text=_("Взаимодействия с указанными активными ИТ-программами, ID через запятую"),
+    program__ids = UUIDInFilter(
+        method="filter_program_ids",
+        label=_("Программы"),
+        help_text=_("Взаимодействия с указанными активными программами, ID через запятую"),
     )
-    it_product__ids = UUIDInFilter(
-        method="filter_it_product_ids",
-        label=_("ИТ-продукты"),
-        help_text=_("Взаимодействия с указанными активными ИТ-продуктами, ID через запятую"),
+    product__ids = UUIDInFilter(
+        method="filter_product_ids",
+        label=_("Продукты"),
+        help_text=_("Взаимодействия с указанными активными продуктами, ID через запятую"),
     )
     manager__ids = NumberInFilter(
         method="filter_manager_ids",
@@ -69,52 +69,52 @@ class InteractionFilter(SearchFilterMixin):
         model = Interaction
         fields = ("is_active",)
 
-    def filter_it_direction_ids(
+    def filter_direction_ids(
         self,
         queryset: QuerySet,
         name: str,
         value: list,
     ) -> QuerySet:
-        """Фильтрует взаимодействия по активным ИТ-направлениям."""
+        """Фильтрует взаимодействия по активным направлениям."""
         return queryset.filter(
             Exists(
                 InteractionDirection.objects.filter(
                     interaction=OuterRef("pk"),
-                    it_direction__in=value,
+                    direction__in=value,
                     is_active=True,
                 ),
             ),
         )
 
-    def filter_it_program_ids(
+    def filter_program_ids(
         self,
         queryset: QuerySet,
         name: str,
         value: list,
     ) -> QuerySet:
-        """Фильтрует взаимодействия по активным ИТ-программам."""
+        """Фильтрует взаимодействия по активным программам."""
         return queryset.filter(
             Exists(
                 InteractionProgram.objects.filter(
                     interaction=OuterRef("pk"),
-                    it_program__in=value,
+                    program__in=value,
                     is_active=True,
                 ),
             ),
         )
 
-    def filter_it_product_ids(
+    def filter_product_ids(
         self,
         queryset: QuerySet,
         name: str,
         value: list,
     ) -> QuerySet:
-        """Фильтрует взаимодействия по активным ИТ-продуктам."""
+        """Фильтрует взаимодействия по активным продуктам."""
         return queryset.filter(
             Exists(
                 InteractionProduct.objects.filter(
                     interaction=OuterRef("pk"),
-                    it_product__in=value,
+                    product__in=value,
                     is_active=True,
                 ),
             ),

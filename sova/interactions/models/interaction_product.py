@@ -6,10 +6,10 @@ from sova.core.models import UUIDModel
 
 class InteractionProduct(UUIDModel):
     """
-    ИТ-продукт в рамках конкретного взаимодействия.
+    Продукт в рамках конкретного взаимодействия.
 
     `interaction_program` пуст, если продукт добавлен вне привязки к программе: в каталоге
-    ITProduct.programs может быть пустым, а состав продуктов договора расширяется со временем.
+    Product.programs может быть пустым, а состав продуктов договора расширяется со временем.
     """
 
     added_at = models.DateTimeField(
@@ -36,11 +36,11 @@ class InteractionProduct(UUIDModel):
         verbose_name="Программа взаимодействия",
         help_text="Пусто — продукт добавлен вне привязки к программе.",
     )
-    it_product = models.ForeignKey(
-        to="catalog.ITProduct",
+    product = models.ForeignKey(
+        to="catalog.Product",
         on_delete=models.PROTECT,
         related_name="interaction_products",
-        verbose_name="ИТ-продукт",
+        verbose_name="Продукт",
     )
 
     class Meta:
@@ -49,7 +49,7 @@ class InteractionProduct(UUIDModel):
         ordering = ["interaction", "added_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["interaction", "it_product"],
+                fields=["interaction", "product"],
                 name="unique_product_per_interaction",
             ),
         ]
@@ -62,10 +62,10 @@ class InteractionProduct(UUIDModel):
             raise ValidationError(
                 {"interaction_program": "Программа принадлежит другому взаимодействию."}
             )
-        if not program.it_program.it_products.filter(pk=self.it_product_id).exists():
+        if not program.program.products.filter(pk=self.product_id).exists():
             raise ValidationError(
-                {"it_product": "Продукт не входит в каталог выбранной ИТ-программы."}
+                {"product": "Продукт не входит в каталог выбранной программы."}
             )
 
     def __str__(self):
-        return f"{self.interaction} — {self.it_product}"
+        return f"{self.interaction} — {self.product}"

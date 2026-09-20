@@ -3,12 +3,12 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from sova.catalog.enum import ClientKind
-from sova.catalog.models import B2CClient, ITDirection, University, Vendor
+from sova.catalog.models import B2CClient, Direction, University, Vendor
 from sova.catalog.tests.factories import (
     B2CClientFactory,
-    ITDirectionFactory,
-    ITProductFactory,
-    ITProgramFactory,
+    DirectionFactory,
+    ProductFactory,
+    ProgramFactory,
     UniversityFactory,
     VendorFactory,
 )
@@ -92,7 +92,7 @@ class VendorApiTestCase(BaseApiTestMixin, APITestCase):
     def test_delete_keeps_products_without_vendor(self) -> None:
         """Удаление вендора не удаляет его продукты (SET_NULL)."""
         vendor = VendorFactory()
-        product = ITProductFactory(vendor=vendor)
+        product = ProductFactory(vendor=vendor)
 
         response = self.client.delete(path=self.detail_url(vendor))
         product.refresh_from_db()
@@ -103,17 +103,17 @@ class VendorApiTestCase(BaseApiTestMixin, APITestCase):
         self.assertIsNone(product.vendor)
 
 
-class ITDirectionApiTestCase(BaseApiTestMixin, APITestCase):
-    """Тесты CRUD /api/catalog/it-directions/."""
+class DirectionApiTestCase(BaseApiTestMixin, APITestCase):
+    """Тесты CRUD /api/catalog/directions/."""
 
-    url_basename = "catalog:it-direction"
-    model = ITDirection
+    url_basename = "catalog:direction"
+    model = Direction
 
-    def create_instance(self, **kwargs) -> ITDirection:
-        """Создаёт ИТ-направление."""
-        return ITDirectionFactory(**kwargs)
+    def create_instance(self, **kwargs) -> Direction:
+        """Создаёт направление."""
+        return DirectionFactory(**kwargs)
 
-    def get_expected_data(self, instance: ITDirection) -> dict:
+    def get_expected_data(self, instance: Direction) -> dict:
         """Поля read-представления направления."""
         return {
             "id": str(instance.pk),
@@ -130,14 +130,14 @@ class ITDirectionApiTestCase(BaseApiTestMixin, APITestCase):
         """Данные обновления направления."""
         return {"name": "QA", "is_active": False}
 
-    def get_search_term(self, instance: ITDirection) -> str:
+    def get_search_term(self, instance: Direction) -> str:
         """Поиск по названию."""
         return instance.name
 
     def test_delete_returns_409_when_direction_has_programs(self) -> None:
         """Удаление направления с программами возвращает 409 с кодом protected."""
-        direction = ITDirectionFactory()
-        ITProgramFactory(it_direction=direction)
+        direction = DirectionFactory()
+        ProgramFactory(direction=direction)
 
         response = self.client.delete(path=self.detail_url(direction))
 

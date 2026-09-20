@@ -43,9 +43,9 @@ from sova.workflows.models import (
 
 # Модели контекстов этапа: для каждого типа этапа — записи взаимодействия, по одной на этап
 _CONTEXT_MODELS = {
-    StageInstanceContextType.IT_DIRECTION: InteractionDirection,
-    StageInstanceContextType.IT_PROGRAM: InteractionProgram,
-    StageInstanceContextType.IT_PRODUCT: InteractionProduct,
+    StageInstanceContextType.DIRECTION: InteractionDirection,
+    StageInstanceContextType.PROGRAM: InteractionProgram,
+    StageInstanceContextType.PRODUCT: InteractionProduct,
 }
 
 

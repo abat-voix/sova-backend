@@ -1,7 +1,7 @@
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from sova.catalog.api.serializers import ITProductShortSerializer
+from sova.catalog.api.serializers import ProductShortSerializer
 from sova.core.api.validators import validate_model_clean
 from sova.interactions.models import InteractionProduct
 
@@ -9,23 +9,23 @@ from sova.interactions.models import InteractionProduct
 class InteractionProductShortSerializer(serializers.ModelSerializer):
     """Продукт взаимодействия — краткое представление для вложенного использования."""
 
-    it_product = ITProductShortSerializer(
+    product = ProductShortSerializer(
         read_only=True,
-        label=_("ИТ-продукт"),
+        label=_("Продукт"),
         help_text=_("Показывается развёрнуто, для записи см. write-сериализатор"),
     )
 
     class Meta:
         model = InteractionProduct
-        fields = ("id", "interaction", "it_product")
+        fields = ("id", "interaction", "product")
 
 
 class InteractionProductSerializer(serializers.ModelSerializer):
     """Продукт взаимодействия — представление для чтения (list/retrieve)."""
 
-    it_product = ITProductShortSerializer(
+    product = ProductShortSerializer(
         read_only=True,
-        label=_("ИТ-продукт"),
+        label=_("Продукт"),
         help_text=_("Показывается развёрнуто, для записи см. write-сериализатор"),
     )
 
@@ -35,7 +35,7 @@ class InteractionProductSerializer(serializers.ModelSerializer):
             "id",
             "interaction",
             "interaction_program",
-            "it_product",
+            "product",
             "is_active",
             "added_at",
         )
@@ -50,7 +50,7 @@ class WriteInteractionProductSerializer(serializers.ModelSerializer):
             "id",
             "interaction",
             "interaction_program",
-            "it_product",
+            "product",
             "is_active",
         )
 

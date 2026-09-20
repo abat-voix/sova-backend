@@ -5,9 +5,9 @@ from sova.core.models import UUIDModel
 
 class InteractionDirection(UUIDModel):
     """
-    ИТ-направление в рамках конкретного взаимодействия.
+    Направление в рамках конкретного взаимодействия.
 
-    Каталожный ITDirection общий для всех взаимодействий, поэтому прогресс (StageInstance)
+    Каталожный Direction общий для всех взаимодействий, поэтому прогресс (StageInstance)
     привязывается не к нему, а к этой записи — уникальной для взаимодействия.
     """
 
@@ -26,11 +26,11 @@ class InteractionDirection(UUIDModel):
         related_name="interaction_directions",
         verbose_name="Взаимодействие",
     )
-    it_direction = models.ForeignKey(
-        to="catalog.ITDirection",
+    direction = models.ForeignKey(
+        to="catalog.Direction",
         on_delete=models.PROTECT,
         related_name="interaction_directions",
-        verbose_name="ИТ-направление",
+        verbose_name="Направление",
     )
 
     class Meta:
@@ -39,10 +39,10 @@ class InteractionDirection(UUIDModel):
         ordering = ["interaction", "added_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["interaction", "it_direction"],
+                fields=["interaction", "direction"],
                 name="unique_direction_per_interaction",
             ),
         ]
 
     def __str__(self):
-        return f"{self.interaction} — {self.it_direction}"
+        return f"{self.interaction} — {self.direction}"

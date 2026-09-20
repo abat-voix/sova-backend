@@ -135,7 +135,7 @@ class StageTransitionTest(TestCase):
         """Этап взаимодействия может идти после этапа продукта — ждёт закрытия всех его активных экземпляров."""
         workflow = WorkflowFactory()
         transition = StageTransition(
-            from_stage=WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.IT_PRODUCT),
+            from_stage=WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.PRODUCT),
             to_stage=WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.INTERACTION),
         )
 
@@ -147,13 +147,13 @@ class StageTransitionTest(TestCase):
         workflow = WorkflowFactory()
         allowed = (
             (StageInstanceContextType.INTERACTION, StageInstanceContextType.INTERACTION),
-            (StageInstanceContextType.INTERACTION, StageInstanceContextType.IT_PRODUCT),
-            (StageInstanceContextType.INTERACTION, StageInstanceContextType.IT_PROGRAM),
-            (StageInstanceContextType.IT_PRODUCT, StageInstanceContextType.IT_PRODUCT),
-            (StageInstanceContextType.IT_PRODUCT, StageInstanceContextType.INTERACTION),
-            (StageInstanceContextType.IT_PROGRAM, StageInstanceContextType.INTERACTION),
-            (StageInstanceContextType.IT_DIRECTION, StageInstanceContextType.INTERACTION),
-            (StageInstanceContextType.IT_PRODUCT, StageInstanceContextType.IT_PROGRAM),
+            (StageInstanceContextType.INTERACTION, StageInstanceContextType.PRODUCT),
+            (StageInstanceContextType.INTERACTION, StageInstanceContextType.PROGRAM),
+            (StageInstanceContextType.PRODUCT, StageInstanceContextType.PRODUCT),
+            (StageInstanceContextType.PRODUCT, StageInstanceContextType.INTERACTION),
+            (StageInstanceContextType.PROGRAM, StageInstanceContextType.INTERACTION),
+            (StageInstanceContextType.DIRECTION, StageInstanceContextType.INTERACTION),
+            (StageInstanceContextType.PRODUCT, StageInstanceContextType.PROGRAM),
         )
         for source_type, target_type in allowed:
             with self.subTest(source=source_type, target=target_type):

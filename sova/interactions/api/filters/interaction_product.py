@@ -1,7 +1,7 @@
 from django.db.models import Exists, OuterRef, QuerySet
 from django.utils.translation import gettext_lazy as _
 
-from sova.catalog.models import ITProgram
+from sova.catalog.models import Program
 from sova.core.api.filters import SearchFilterMixin, UUIDInFilter
 from sova.interactions.models import InteractionProduct
 
@@ -23,17 +23,17 @@ class InteractionProductFilter(SearchFilterMixin):
         label=_("Программы взаимодействия"),
         help_text=_("Фильтр по списку ID программ взаимодействия через запятую"),
     )
-    it_product__ids = UUIDInFilter(
-        field_name="it_product",
-        label=_("ИТ-продукты"),
-        help_text=_("Фильтр по списку ID ИТ-продуктов через запятую"),
+    product__ids = UUIDInFilter(
+        field_name="product",
+        label=_("Продукты"),
+        help_text=_("Фильтр по списку ID продуктов через запятую"),
     )
 
-    it_direction__ids = UUIDInFilter(
-        method="filter_it_direction_ids",
-        label=_("ИТ-направления"),
+    direction__ids = UUIDInFilter(
+        method="filter_direction_ids",
+        label=_("Направления"),
         help_text=_(
-            "Фильтр по списку ID ИТ-направлений через запятую; "
+            "Фильтр по списку ID направлений через запятую; "
             "направление определяется по программам каталога продукта",
         ),
     )
@@ -42,7 +42,7 @@ class InteractionProductFilter(SearchFilterMixin):
         model = InteractionProduct
         fields = ("is_active",)
 
-    def filter_it_direction_ids(
+    def filter_direction_ids(
         self,
         queryset: QuerySet,
         name: str,
@@ -51,9 +51,9 @@ class InteractionProductFilter(SearchFilterMixin):
         """Фильтрует продукты по направлениям программ каталога."""
         return queryset.filter(
             Exists(
-                ITProgram.objects.filter(
-                    it_products=OuterRef("it_product"),
-                    it_direction__in=value,
+                Program.objects.filter(
+                    products=OuterRef("product"),
+                    direction__in=value,
                 ),
             ),
         )

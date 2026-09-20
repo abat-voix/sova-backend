@@ -4,7 +4,7 @@ from sova.core.api.views import SovaBaseViewSet
 
 
 class VendorViewSet(SovaBaseViewSet):
-    """Вендоры ИТ-продуктов. Доступны CRUD операции."""
+    """Вендоры продуктов. Доступны CRUD операции."""
 
     read_serializer_class = serializers.VendorSerializer
     serializer_class = serializers.WriteVendorSerializer

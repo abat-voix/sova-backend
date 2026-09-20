@@ -3,8 +3,8 @@ from django.db import models
 from sova.core.models import TimeStampedModel
 
 
-class ITDirection(TimeStampedModel):
-    """ИТ-направление обучения, например DevOps, QA."""
+class Direction(TimeStampedModel):
+    """Направление обучения, например DevOps, QA."""
 
     name = models.CharField(
         max_length=255,
@@ -24,8 +24,8 @@ class ITDirection(TimeStampedModel):
     )
 
     class Meta:
-        verbose_name = "ИТ-направление"
-        verbose_name_plural = "ИТ-направления"
+        verbose_name = "Направление"
+        verbose_name_plural = "Направления"
         ordering = ["name"]
 
     def __str__(self):

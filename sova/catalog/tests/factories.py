@@ -4,9 +4,9 @@ from sova.catalog.enum import ClientKind
 from sova.catalog.models import (
     B2CClient,
     ContactPerson,
-    ITDirection,
-    ITProduct,
-    ITProgram,
+    Direction,
+    Product,
+    Program,
     University,
     Vendor,
 )
@@ -21,37 +21,37 @@ class VendorFactory(factory.django.DjangoModelFactory):
     name = factory.Sequence(lambda n: f"Вендор {n}")
 
 
-class ITDirectionFactory(factory.django.DjangoModelFactory):
-    """Фабрика ИТ-направления."""
+class DirectionFactory(factory.django.DjangoModelFactory):
+    """Фабрика направления."""
 
     class Meta:
-        model = ITDirection
+        model = Direction
 
     name = factory.Sequence(lambda n: f"Направление {n}")
 
 
-class ITProgramFactory(factory.django.DjangoModelFactory):
-    """Фабрика ИТ-программы."""
+class ProgramFactory(factory.django.DjangoModelFactory):
+    """Фабрика программы."""
 
     class Meta:
-        model = ITProgram
+        model = Program
 
     name = factory.Sequence(lambda n: f"Программа {n}")
-    it_direction = factory.SubFactory(ITDirectionFactory)
+    direction = factory.SubFactory(DirectionFactory)
 
 
-class ITProductFactory(factory.django.DjangoModelFactory):
-    """Фабрика ИТ-продукта. Каталожные программы передаются через `programs=[...]`."""
+class ProductFactory(factory.django.DjangoModelFactory):
+    """Фабрика продукта. Каталожные программы передаются через `programs=[...]`."""
 
     class Meta:
-        model = ITProduct
+        model = Product
 
     name = factory.Sequence(lambda n: f"Продукт {n}")
     vendor = factory.SubFactory(VendorFactory)
 
     @factory.post_generation
     def programs(self, create: bool, extracted: list | None, **kwargs) -> None:
-        """Привязывает переданные ИТ-программы."""
+        """Привязывает переданные программы."""
         if create and extracted:
             self.programs.set(extracted)
 

@@ -1,16 +1,16 @@
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from sova.catalog.api.serializers import ITDirectionShortSerializer
+from sova.catalog.api.serializers import DirectionShortSerializer
 from sova.interactions.models import InteractionDirection
 
 
 class InteractionDirectionSerializer(serializers.ModelSerializer):
     """Направление взаимодействия — представление для чтения (list/retrieve)."""
 
-    it_direction = ITDirectionShortSerializer(
+    direction = DirectionShortSerializer(
         read_only=True,
-        label=_("ИТ-направление"),
+        label=_("Направление"),
         help_text=_("Показывается развёрнуто, для записи см. write-сериализатор"),
     )
 
@@ -19,7 +19,7 @@ class InteractionDirectionSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "interaction",
-            "it_direction",
+            "direction",
             "is_active",
             "added_at",
         )
@@ -33,6 +33,6 @@ class WriteInteractionDirectionSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "interaction",
-            "it_direction",
+            "direction",
             "is_active",
         )

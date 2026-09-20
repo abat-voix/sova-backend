@@ -10,9 +10,9 @@ from sova.processes.services import workflow_engine_service as engine
 from sova.workflows.models import ActionOutcome
 from sova.workflows.tests.builders import WorkflowBuilder
 
-PRODUCT = StageInstanceContextType.IT_PRODUCT
-PROGRAM = StageInstanceContextType.IT_PROGRAM
-DIRECTION = StageInstanceContextType.IT_DIRECTION
+PRODUCT = StageInstanceContextType.PRODUCT
+PROGRAM = StageInstanceContextType.PROGRAM
+DIRECTION = StageInstanceContextType.DIRECTION
 PENDING = ActionInstanceStatus.PENDING
 IN_PROGRESS = ActionInstanceStatus.IN_PROGRESS
 COMPLETED = ActionInstanceStatus.COMPLETED

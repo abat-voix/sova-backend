@@ -247,13 +247,13 @@ class BoardContextsTest(EngineTestCase):
         program_group = groups[self.program.pk]
         # Проверяем группу продукта
         self.assertEqual(product_group["context_type"], PRODUCT)
-        self.assertEqual(product_group["title"], self.product.it_product.name)
+        self.assertEqual(product_group["title"], self.product.product.name)
         self.assertEqual(product_group["parent_id"], self.program.pk)
         self.assertEqual([card["stage"]["name"] for card in product_group["stages"]], ["Продукт"])
         self.assertEqual(product_group["stages"][0]["status"], StageInstanceStatus.PENDING)
         # Проверяем группу программы
         self.assertEqual(program_group["context_type"], PROGRAM)
-        self.assertEqual(program_group["title"], self.program.it_program.name)
+        self.assertEqual(program_group["title"], self.program.program.name)
         self.assertIsNone(program_group["parent_id"])
 
     def test_product_without_program_has_no_parent(self) -> None:

@@ -4,11 +4,11 @@ from sova.interactions.models import InteractionProgram
 
 
 class InteractionProgramViewSet(SovaBaseViewSet):
-    """ИТ-программы во взаимодействиях. Доступны CRUD операции."""
+    """Программы во взаимодействиях. Доступны CRUD операции."""
 
     read_serializer_class = serializers.InteractionProgramSerializer
     serializer_class = serializers.WriteInteractionProgramSerializer
-    queryset = InteractionProgram.objects.select_related("it_program")
+    queryset = InteractionProgram.objects.select_related("program")
     ordering_fields = "__all__"
-    search_fields = ("it_program__name",)
+    search_fields = ("program__name",)
     filterset_class = filters.InteractionProgramFilter

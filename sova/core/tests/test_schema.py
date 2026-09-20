@@ -23,17 +23,17 @@ class OpenApiSchemaTest(TestCase):
 
     def test_write_methods_describe_request_with_write_and_response_with_read(self) -> None:
         """POST/PUT/PATCH принимают write-сериализатор, а отвечают read-сериализатором."""
-        list_path = "/api/catalog/it-programs/"
-        detail_path = "/api/catalog/it-programs/{id}/"
+        list_path = "/api/catalog/programs/"
+        detail_path = "/api/catalog/programs/{id}/"
 
         # Проверяем тело запроса — write-сериализатор
-        self.assertEqual(self.request_ref(list_path, "post"), "WriteITProgram")
-        self.assertEqual(self.request_ref(detail_path, "patch"), "PatchedWriteITProgram")
+        self.assertEqual(self.request_ref(list_path, "post"), "WriteProgram")
+        self.assertEqual(self.request_ref(detail_path, "patch"), "PatchedWriteProgram")
         # Проверяем ответ — read-сериализатор, как и фактически возвращает API
-        self.assertEqual(self.response_ref(list_path, "post", "201"), "ITProgram")
-        self.assertEqual(self.response_ref(detail_path, "put", "200"), "ITProgram")
-        self.assertEqual(self.response_ref(detail_path, "patch", "200"), "ITProgram")
-        self.assertEqual(self.response_ref(detail_path, "get", "200"), "ITProgram")
+        self.assertEqual(self.response_ref(list_path, "post", "201"), "Program")
+        self.assertEqual(self.response_ref(detail_path, "put", "200"), "Program")
+        self.assertEqual(self.response_ref(detail_path, "patch", "200"), "Program")
+        self.assertEqual(self.response_ref(detail_path, "get", "200"), "Program")
 
     def test_custom_action_keeps_its_own_response(self) -> None:
         """Ответ @action со своим сериализатором не подменяется read-сериализатором."""

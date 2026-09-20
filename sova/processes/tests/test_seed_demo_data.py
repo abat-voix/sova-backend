@@ -6,7 +6,7 @@ from django.core.management import CommandError, call_command
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
-from sova.catalog.models import ITProduct, University, Vendor
+from sova.catalog.models import Product, University, Vendor
 from sova.core.tests.factories import UserFactory
 from sova.core.tests.media import TemporaryMediaMixin
 from sova.interactions.models import Interaction
@@ -57,7 +57,7 @@ class SeedDemoDataTestCase(TemporaryMediaMixin, TestCase):
         # Проверяем справочники
         self.assertTrue(University.objects.filter(name="Демо-университет").exists())
         self.assertTrue(Vendor.objects.filter(name="Демо-вендор").exists())
-        self.assertEqual(ITProduct.objects.filter(name__startswith="Демо-ПО").count(), 3)
+        self.assertEqual(Product.objects.filter(name__startswith="Демо-ПО").count(), 3)
         # Проверяем workflow и взаимодействия
         self.assertEqual(set(Workflow.objects.values_list("code", flat=True)), DEMO_WORKFLOW_CODES)
         self.assertEqual(Interaction.objects.count(), 8)

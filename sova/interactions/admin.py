@@ -38,33 +38,33 @@ class InteractionAdmin(AbstractBaseModelAdmin[Interaction]):
 class InteractionDirectionAdmin(AbstractBaseModelAdmin[InteractionDirection]):
     """Админка направлений взаимодействия."""
 
-    list_display = ("id", "interaction", "it_direction", "is_active", "added_at")
-    list_select_related = ("interaction", "it_direction")
-    search_fields = ("id", "it_direction__name")
+    list_display = ("id", "interaction", "direction", "is_active", "added_at")
+    list_select_related = ("interaction", "direction")
+    search_fields = ("id", "direction__name")
     list_filter = ("is_active",)
-    autocomplete_fields = ("interaction", "it_direction")
+    autocomplete_fields = ("interaction", "direction")
 
 
 @admin.register(InteractionProduct)
 class InteractionProductAdmin(AbstractBaseModelAdmin[InteractionProduct]):
     """Админка продуктов взаимодействия."""
 
-    list_display = ("id", "interaction", "interaction_program", "it_product", "is_active", "added_at")
-    list_select_related = ("interaction", "interaction_program", "it_product")
-    search_fields = ("id", "it_product__name")
+    list_display = ("id", "interaction", "interaction_program", "product", "is_active", "added_at")
+    list_select_related = ("interaction", "interaction_program", "product")
+    search_fields = ("id", "product__name")
     list_filter = ("is_active",)
-    autocomplete_fields = ("interaction", "interaction_program", "it_product")
+    autocomplete_fields = ("interaction", "interaction_program", "product")
 
 
 @admin.register(InteractionProgram)
 class InteractionProgramAdmin(AbstractBaseModelAdmin[InteractionProgram]):
     """Админка программ взаимодействия."""
 
-    list_display = ("id", "interaction", "it_program", "is_active", "added_at")
-    list_select_related = ("interaction", "it_program")
-    search_fields = ("id", "it_program__name")
+    list_display = ("id", "interaction", "program", "is_active", "added_at")
+    list_select_related = ("interaction", "program")
+    search_fields = ("id", "program__name")
     list_filter = ("is_active",)
-    autocomplete_fields = ("interaction", "it_program")
+    autocomplete_fields = ("interaction", "program")
 
 
 @admin.register(License)

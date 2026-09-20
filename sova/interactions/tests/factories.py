@@ -1,9 +1,9 @@
 import factory
 
 from sova.catalog.tests.factories import (
-    ITDirectionFactory,
-    ITProductFactory,
-    ITProgramFactory,
+    DirectionFactory,
+    ProductFactory,
+    ProgramFactory,
     UniversityFactory,
 )
 from sova.core.tests.factories import UserFactory
@@ -44,7 +44,7 @@ class InteractionDirectionFactory(factory.django.DjangoModelFactory):
         model = InteractionDirection
 
     interaction = factory.SubFactory(InteractionFactory)
-    it_direction = factory.SubFactory(ITDirectionFactory)
+    direction = factory.SubFactory(DirectionFactory)
 
 
 class InteractionProgramFactory(factory.django.DjangoModelFactory):
@@ -54,7 +54,7 @@ class InteractionProgramFactory(factory.django.DjangoModelFactory):
         model = InteractionProgram
 
     interaction = factory.SubFactory(InteractionFactory)
-    it_program = factory.SubFactory(ITProgramFactory)
+    program = factory.SubFactory(ProgramFactory)
 
 
 class InteractionProductFactory(factory.django.DjangoModelFactory):
@@ -64,7 +64,7 @@ class InteractionProductFactory(factory.django.DjangoModelFactory):
         model = InteractionProduct
 
     interaction = factory.SubFactory(InteractionFactory)
-    it_product = factory.SubFactory(ITProductFactory)
+    product = factory.SubFactory(ProductFactory)
 
 
 class LicenseFactory(factory.django.DjangoModelFactory):

@@ -182,7 +182,7 @@ class StageTransitionApiTestCase(BaseApiTestMixin, APITestCase):
     def test_add_allows_transition_from_product_stage_to_interaction_stage(self) -> None:
         """Этап взаимодействия может идти после этапа программы, продукта или направления."""
         workflow = WorkflowFactory()
-        product = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.IT_PRODUCT)
+        product = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.PRODUCT)
         interaction = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.INTERACTION)
 
         response = self.post_transition(source=product, target=interaction)
@@ -194,7 +194,7 @@ class StageTransitionApiTestCase(BaseApiTestMixin, APITestCase):
         """Этап продукта открывается после этапа взаимодействия."""
         workflow = WorkflowFactory()
         interaction = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.INTERACTION)
-        product = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.IT_PRODUCT)
+        product = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.PRODUCT)
 
         response = self.post_transition(source=interaction, target=product)
 

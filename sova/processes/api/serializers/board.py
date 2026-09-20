@@ -149,7 +149,7 @@ class BoardContextGroupSerializer(serializers.Serializer):
 
     context_type = serializers.CharField(
         label=_("Тип контекста"),
-        help_text=_("it_direction, it_program или it_product"),
+        help_text=_("direction, program или product"),
     )
     context_id = serializers.UUIDField(
         label=_("ID контекста"),

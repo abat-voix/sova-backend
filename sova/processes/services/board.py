@@ -11,9 +11,9 @@ from sova.workflows.models import ActionOutcome
 
 # Порядок групп контекстов на доске: направления, программы, продукты
 _CONTEXT_ORDER = {
-    StageInstanceContextType.IT_DIRECTION: 0,
-    StageInstanceContextType.IT_PROGRAM: 1,
-    StageInstanceContextType.IT_PRODUCT: 2,
+    StageInstanceContextType.DIRECTION: 0,
+    StageInstanceContextType.PROGRAM: 1,
+    StageInstanceContextType.PRODUCT: 2,
 }
 
 
@@ -181,17 +181,17 @@ class WorkflowBoardService:
         """Названия контекстов и родитель продукта: тип контекста → id → (название, id программы взаимодействия)."""
         interaction = process.interaction
         titles: dict = {
-            StageInstanceContextType.IT_DIRECTION: {
-                item.pk: (item.it_direction.name, None)
-                for item in InteractionDirection.objects.filter(interaction=interaction).select_related("it_direction")
+            StageInstanceContextType.DIRECTION: {
+                item.pk: (item.direction.name, None)
+                for item in InteractionDirection.objects.filter(interaction=interaction).select_related("direction")
             },
-            StageInstanceContextType.IT_PROGRAM: {
-                item.pk: (item.it_program.name, None)
-                for item in InteractionProgram.objects.filter(interaction=interaction).select_related("it_program")
+            StageInstanceContextType.PROGRAM: {
+                item.pk: (item.program.name, None)
+                for item in InteractionProgram.objects.filter(interaction=interaction).select_related("program")
             },
-            StageInstanceContextType.IT_PRODUCT: {
-                item.pk: (item.it_product.name, item.interaction_program_id)
-                for item in InteractionProduct.objects.filter(interaction=interaction).select_related("it_product")
+            StageInstanceContextType.PRODUCT: {
+                item.pk: (item.product.name, item.interaction_program_id)
+                for item in InteractionProduct.objects.filter(interaction=interaction).select_related("product")
             },
         }
         return titles

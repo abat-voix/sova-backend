@@ -4,9 +4,9 @@ from sova.core.admin import AbstractBaseModelAdmin
 from sova.catalog.models import (
     B2CClient,
     ContactPerson,
-    ITDirection,
-    ITProduct,
-    ITProgram,
+    Direction,
+    Product,
+    Program,
     University,
     Vendor,
 )
@@ -42,9 +42,9 @@ class ContactPersonAdmin(AbstractBaseModelAdmin[ContactPerson]):
     autocomplete_fields = ("university", "b2c_client")
 
 
-@admin.register(ITDirection)
-class ITDirectionAdmin(AbstractBaseModelAdmin[ITDirection]):
-    """Админка ИТ-направлений."""
+@admin.register(Direction)
+class DirectionAdmin(AbstractBaseModelAdmin[Direction]):
+    """Админка направлений."""
 
     list_display = ("id", "name", "external_code", "is_active", "created_at")
     list_display_links = ("name",)
@@ -52,9 +52,9 @@ class ITDirectionAdmin(AbstractBaseModelAdmin[ITDirection]):
     list_filter = ("is_active",)
 
 
-@admin.register(ITProduct)
-class ITProductAdmin(AbstractBaseModelAdmin[ITProduct]):
-    """Админка ИТ-продуктов."""
+@admin.register(Product)
+class ProductAdmin(AbstractBaseModelAdmin[Product]):
+    """Админка продуктов."""
 
     list_display = ("id", "name", "vendor", "is_active", "created_at")
     list_display_links = ("name",)
@@ -64,16 +64,16 @@ class ITProductAdmin(AbstractBaseModelAdmin[ITProduct]):
     autocomplete_fields = ("vendor", "programs")
 
 
-@admin.register(ITProgram)
-class ITProgramAdmin(AbstractBaseModelAdmin[ITProgram]):
-    """Админка ИТ-программ."""
+@admin.register(Program)
+class ProgramAdmin(AbstractBaseModelAdmin[Program]):
+    """Админка программ."""
 
-    list_display = ("id", "name", "it_direction", "is_active", "created_at")
+    list_display = ("id", "name", "direction", "is_active", "created_at")
     list_display_links = ("name",)
-    list_select_related = ("it_direction",)
+    list_select_related = ("direction",)
     search_fields = ("id", "name")
     list_filter = ("is_active",)
-    autocomplete_fields = ("it_direction",)
+    autocomplete_fields = ("direction",)
 
 
 @admin.register(University)

@@ -1,16 +1,16 @@
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from sova.catalog.api.serializers import ITProgramShortSerializer
+from sova.catalog.api.serializers import ProgramShortSerializer
 from sova.interactions.models import InteractionProgram
 
 
 class InteractionProgramSerializer(serializers.ModelSerializer):
     """Программа взаимодействия — представление для чтения (list/retrieve)."""
 
-    it_program = ITProgramShortSerializer(
+    program = ProgramShortSerializer(
         read_only=True,
-        label=_("ИТ-программа"),
+        label=_("Программа"),
         help_text=_("Показывается развёрнуто, для записи см. write-сериализатор"),
     )
 
@@ -19,7 +19,7 @@ class InteractionProgramSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "interaction",
-            "it_program",
+            "program",
             "is_active",
             "added_at",
         )
@@ -33,6 +33,6 @@ class WriteInteractionProgramSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "interaction",
-            "it_program",
+            "program",
             "is_active",
         )

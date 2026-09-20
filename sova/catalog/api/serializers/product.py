@@ -1,36 +1,36 @@
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from sova.catalog.api.serializers.it_program import ITProgramShortSerializer
+from sova.catalog.api.serializers.program import ProgramShortSerializer
 from sova.catalog.api.serializers.vendor import VendorShortSerializer
-from sova.catalog.models import ITProduct
+from sova.catalog.models import Product
 
 
-class ITProductShortSerializer(serializers.ModelSerializer):
-    """ИТ-продукт — краткое представление для вложенного использования."""
+class ProductShortSerializer(serializers.ModelSerializer):
+    """Продукт — краткое представление для вложенного использования."""
 
     class Meta:
-        model = ITProduct
+        model = Product
         fields = ("id", "name")
 
 
-class ITProductSerializer(serializers.ModelSerializer):
-    """ИТ-продукт — представление для чтения (list/retrieve)."""
+class ProductSerializer(serializers.ModelSerializer):
+    """Продукт — представление для чтения (list/retrieve)."""
 
     vendor = VendorShortSerializer(
         read_only=True,
         label=_("Вендор"),
         help_text=_("Показывается развёрнуто, для записи см. write-сериализатор"),
     )
-    programs = ITProgramShortSerializer(
+    programs = ProgramShortSerializer(
         many=True,
         read_only=True,
-        label=_("ИТ-программы"),
+        label=_("Программы"),
         help_text=_("Показываются развёрнуто, для записи см. write-сериализатор"),
     )
 
     class Meta:
-        model = ITProduct
+        model = Product
         fields = (
             "id",
             "name",
@@ -43,9 +43,9 @@ class ITProductSerializer(serializers.ModelSerializer):
         )
 
 
-class WriteITProductSerializer(serializers.ModelSerializer):
+class WriteProductSerializer(serializers.ModelSerializer):
     """
-    ИТ-продукт — валидация входных данных (create/update).
+    Продукт — валидация входных данных (create/update).
 
     Уникальность названия проверяется и у продуктов вендора, и среди продуктов
     без вендора — модель гарантирует её двумя ограничениями, из которых DRF
@@ -53,7 +53,7 @@ class WriteITProductSerializer(serializers.ModelSerializer):
     """
 
     class Meta:
-        model = ITProduct
+        model = Product
         fields = (
             "id",
             "name",
@@ -68,7 +68,7 @@ class WriteITProductSerializer(serializers.ModelSerializer):
         name = attrs.get("name", getattr(self.instance, "name", None))
         vendor = attrs.get("vendor", getattr(self.instance, "vendor", None))
 
-        duplicates = ITProduct.objects.filter(name=name, vendor=vendor)
+        duplicates = Product.objects.filter(name=name, vendor=vendor)
         if self.instance is not None:
             duplicates = duplicates.exclude(pk=self.instance.pk)
         if duplicates.exists():

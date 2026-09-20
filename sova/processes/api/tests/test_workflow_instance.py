@@ -260,7 +260,7 @@ class WorkflowBoardApiTestCase(EngineApiTestCase):
         group = response.data["context_groups"][0]
         self.assertEqual(group["context_type"], PRODUCT)
         self.assertEqual(group["context_id"], str(self.product.pk))
-        self.assertEqual(group["title"], self.product.it_product.name)
+        self.assertEqual(group["title"], self.product.product.name)
         self.assertEqual(group["stages"][0]["status"], StageInstanceStatus.PENDING)
 
     def test_board_reflects_progress_after_completing_action(self) -> None:

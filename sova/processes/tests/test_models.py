@@ -97,14 +97,14 @@ class StageInstanceUniquenessTest(TestCase):
     def test_same_stage_cannot_be_created_twice_for_one_context(self) -> None:
         """Повторный экземпляр этапа для того же продукта отвергается базой."""
         context_id = uuid.uuid4()
-        first = StageInstanceFactory(context_type=StageInstanceContextType.IT_PRODUCT, context_id=context_id)
+        first = StageInstanceFactory(context_type=StageInstanceContextType.PRODUCT, context_id=context_id)
 
         # Проверяем, что база отвергает дубликат
         with self.assertRaises(IntegrityError), transaction.atomic():
             StageInstanceFactory(
                 workflow_instance=first.workflow_instance,
                 stage=first.stage,
-                context_type=StageInstanceContextType.IT_PRODUCT,
+                context_type=StageInstanceContextType.PRODUCT,
                 context_id=context_id,
             )
 
@@ -122,12 +122,12 @@ class StageInstanceUniquenessTest(TestCase):
 
     def test_same_stage_is_allowed_for_different_contexts(self) -> None:
         """Один этап продукта создаётся отдельно для каждого продукта."""
-        first = StageInstanceFactory(context_type=StageInstanceContextType.IT_PRODUCT, context_id=uuid.uuid4())
+        first = StageInstanceFactory(context_type=StageInstanceContextType.PRODUCT, context_id=uuid.uuid4())
 
         second = StageInstanceFactory(
             workflow_instance=first.workflow_instance,
             stage=first.stage,
-            context_type=StageInstanceContextType.IT_PRODUCT,
+            context_type=StageInstanceContextType.PRODUCT,
             context_id=uuid.uuid4(),
         )
 

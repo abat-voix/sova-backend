@@ -1,57 +1,57 @@
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from sova.catalog.models import ITProgram
+from sova.catalog.models import Program
 from sova.catalog.tests.factories import (
-    ITDirectionFactory,
-    ITProductFactory,
-    ITProgramFactory,
+    DirectionFactory,
+    ProductFactory,
+    ProgramFactory,
 )
 from sova.core.tests.base import BaseApiTestMixin
 
 
-class ITProgramApiTestCase(BaseApiTestMixin, APITestCase):
-    """Тесты CRUD /api/catalog/it-programs/."""
+class ProgramApiTestCase(BaseApiTestMixin, APITestCase):
+    """Тесты CRUD /api/catalog/programs/."""
 
-    url_basename = "catalog:it-program"
-    model = ITProgram
+    url_basename = "catalog:program"
+    model = Program
 
-    def create_instance(self, **kwargs) -> ITProgram:
-        """Создаёт ИТ-программу."""
-        return ITProgramFactory(**kwargs)
+    def create_instance(self, **kwargs) -> Program:
+        """Создаёт программу."""
+        return ProgramFactory(**kwargs)
 
-    def get_expected_data(self, instance: ITProgram) -> dict:
+    def get_expected_data(self, instance: Program) -> dict:
         """Поля read-представления программы."""
         return {
             "id": str(instance.pk),
             "name": instance.name,
             "is_active": instance.is_active,
-            "it_direction": {
-                "id": str(instance.it_direction_id),
-                "name": instance.it_direction.name,
+            "direction": {
+                "id": str(instance.direction_id),
+                "name": instance.direction.name,
             },
-            "products_count": instance.it_products.count(),
+            "products_count": instance.products.count(),
         }
 
     def get_post_data(self) -> dict:
         """Данные создания программы (направление — по id)."""
         return {
             "name": "Основы DevOps",
-            "it_direction": str(ITDirectionFactory().pk),
+            "direction": str(DirectionFactory().pk),
         }
 
     def get_change_data(self) -> dict:
         """Данные обновления программы."""
-        return {"name": "Основы QA", "it_direction": str(ITDirectionFactory().pk)}
+        return {"name": "Основы QA", "direction": str(DirectionFactory().pk)}
 
-    def get_search_term(self, instance: ITProgram) -> str:
+    def get_search_term(self, instance: Program) -> str:
         """Поиск по названию."""
         return instance.name
 
     def test_list_counts_products(self) -> None:
         """products_count в списке равен числу продуктов программы."""
-        program = ITProgramFactory()
-        ITProductFactory.create_batch(size=2, programs=[program])
+        program = ProgramFactory()
+        ProductFactory.create_batch(size=2, programs=[program])
 
         response = self.client.get(path=self.list_url)
 
@@ -70,14 +70,14 @@ class ITProgramApiTestCase(BaseApiTestMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["products_count"], 0)
 
-    def test_filter_by_it_direction_ids_returns_only_matching(self) -> None:
-        """Фильтр it_direction__ids возвращает программы указанных направлений."""
-        target = ITProgramFactory()
-        ITProgramFactory()
+    def test_filter_by_direction_ids_returns_only_matching(self) -> None:
+        """Фильтр direction__ids возвращает программы указанных направлений."""
+        target = ProgramFactory()
+        ProgramFactory()
 
         response = self.client.get(
             path=self.list_url,
-            data={"it_direction__ids": str(target.it_direction_id)},
+            data={"direction__ids": str(target.direction_id)},
         )
 
         # Проверяем, что найдена только программа выбранного направления
@@ -88,9 +88,9 @@ class ITProgramApiTestCase(BaseApiTestMixin, APITestCase):
 
     def test_filter_has_products_returns_only_programs_with_products(self) -> None:
         """Фильтр has_products=true возвращает только программы с продуктами."""
-        with_products = ITProgramFactory()
-        ITProgramFactory()
-        ITProductFactory.create_batch(size=2, programs=[with_products])
+        with_products = ProgramFactory()
+        ProgramFactory()
+        ProductFactory.create_batch(size=2, programs=[with_products])
 
         response = self.client.get(path=self.list_url, data={"has_products": "true"})
 

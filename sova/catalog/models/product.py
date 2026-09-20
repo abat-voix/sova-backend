@@ -4,11 +4,11 @@ from django.db.models import Q
 from sova.core.models import TimeStampedModel
 
 
-class ITProduct(TimeStampedModel):
+class Product(TimeStampedModel):
     """
-    ИТ-продукт — ПО, помогающее в обучении.
+    Продукт — ПО, помогающее в обучении.
 
-    Связан с ИТ-направлением транзитивно через ITProgram.it_direction, а не напрямую.
+    Связан с направлением транзитивно через Program.direction, а не напрямую.
     """
 
     name = models.CharField(
@@ -30,21 +30,21 @@ class ITProduct(TimeStampedModel):
     vendor = models.ForeignKey(
         to="catalog.Vendor",
         on_delete=models.SET_NULL,
-        related_name="it_products",
+        related_name="products",
         null=True,
         blank=True,
         verbose_name="Вендор",
     )
     programs = models.ManyToManyField(
-        to="catalog.ITProgram",
-        related_name="it_products",
+        to="catalog.Program",
+        related_name="products",
         blank=True,
-        verbose_name="ИТ-программы",
+        verbose_name="Программы",
     )
 
     class Meta:
-        verbose_name = "ИТ-продукт"
-        verbose_name_plural = "ИТ-продукты"
+        verbose_name = "Продукт"
+        verbose_name_plural = "Продукты"
         ordering = ["name"]
         constraints = [
             models.UniqueConstraint(

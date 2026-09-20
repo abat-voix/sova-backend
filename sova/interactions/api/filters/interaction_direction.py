@@ -12,10 +12,10 @@ class InteractionDirectionFilter(SearchFilterMixin):
         label=_("Взаимодействия"),
         help_text=_("Фильтр по списку ID взаимодействий через запятую"),
     )
-    it_direction__ids = UUIDInFilter(
-        field_name="it_direction",
-        label=_("ИТ-направления"),
-        help_text=_("Фильтр по списку ID ИТ-направлений через запятую"),
+    direction__ids = UUIDInFilter(
+        field_name="direction",
+        label=_("Направления"),
+        help_text=_("Фильтр по списку ID направлений через запятую"),
     )
 
     class Meta:

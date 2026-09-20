@@ -16,13 +16,13 @@ class LicenseViewSet(SovaBaseViewSet):
     serializer_class = serializers.WriteLicenseSerializer
     queryset = License.objects.select_related(
         "contract",
-        "interaction_product__it_product",
+        "interaction_product__product",
         "created_by",
     )
     ordering_fields = "__all__"
     search_fields = (
         "contract__contract_number",
-        "interaction_product__it_product__name",
+        "interaction_product__product__name",
     )
     filterset_class = filters.LicenseFilter
 

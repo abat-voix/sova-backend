@@ -4,7 +4,7 @@ from sova.core.models import TimeStampedModel
 
 
 class Vendor(TimeStampedModel):
-    """Вендор ИТ-продукта (например, 1С, JetBrains)."""
+    """Вендор продукта (например, 1С, JetBrains)."""
 
     name = models.CharField(
         max_length=255,
