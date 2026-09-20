@@ -1,0 +1,88 @@
+from django.contrib import admin
+
+from sova.core.admin import AbstractBaseModelAdmin
+from sova.interactions.models import (
+    Contract,
+    Interaction,
+    InteractionDirection,
+    InteractionProduct,
+    InteractionProgram,
+    License,
+    Responsible,
+)
+
+
+@admin.register(Contract)
+class ContractAdmin(AbstractBaseModelAdmin[Contract]):
+    """Админка договоров."""
+
+    list_display = ("id", "contract_number", "interaction", "signed_at", "created_at")
+    list_display_links = ("contract_number",)
+    list_select_related = ("interaction",)
+    search_fields = ("id", "contract_number")
+    autocomplete_fields = ("interaction",)
+
+
+@admin.register(Interaction)
+class InteractionAdmin(AbstractBaseModelAdmin[Interaction]):
+    """Админка взаимодействий."""
+
+    list_display = ("id", "university", "b2c_client", "is_active", "created_at")
+    list_select_related = ("university", "b2c_client")
+    search_fields = ("id", "comment", "university__name", "b2c_client__full_name")
+    list_filter = ("is_active",)
+    autocomplete_fields = ("university", "b2c_client")
+
+
+@admin.register(InteractionDirection)
+class InteractionDirectionAdmin(AbstractBaseModelAdmin[InteractionDirection]):
+    """Админка направлений взаимодействия."""
+
+    list_display = ("id", "interaction", "it_direction", "is_active", "added_at")
+    list_select_related = ("interaction", "it_direction")
+    search_fields = ("id", "it_direction__name")
+    list_filter = ("is_active",)
+    autocomplete_fields = ("interaction", "it_direction")
+
+
+@admin.register(InteractionProduct)
+class InteractionProductAdmin(AbstractBaseModelAdmin[InteractionProduct]):
+    """Админка продуктов взаимодействия."""
+
+    list_display = ("id", "interaction", "interaction_program", "it_product", "is_active", "added_at")
+    list_select_related = ("interaction", "interaction_program", "it_product")
+    search_fields = ("id", "it_product__name")
+    list_filter = ("is_active",)
+    autocomplete_fields = ("interaction", "interaction_program", "it_product")
+
+
+@admin.register(InteractionProgram)
+class InteractionProgramAdmin(AbstractBaseModelAdmin[InteractionProgram]):
+    """Админка программ взаимодействия."""
+
+    list_display = ("id", "interaction", "it_program", "is_active", "added_at")
+    list_select_related = ("interaction", "it_program")
+    search_fields = ("id", "it_program__name")
+    list_filter = ("is_active",)
+    autocomplete_fields = ("interaction", "it_program")
+
+
+@admin.register(License)
+class LicenseAdmin(AbstractBaseModelAdmin[License]):
+    """Админка лицензий."""
+
+    list_display = ("id", "contract", "interaction_product", "is_signed", "is_active", "created_at")
+    list_select_related = ("contract", "interaction_product")
+    search_fields = ("id",)
+    list_filter = ("is_signed", "is_active")
+    autocomplete_fields = ("contract", "interaction_product", "created_by")
+
+
+@admin.register(Responsible)
+class ResponsibleAdmin(AbstractBaseModelAdmin[Responsible]):
+    """Админка назначений ответственных на взаимодействие."""
+
+    list_display = ("id", "interaction", "manager", "assigned_by", "assigned_at")
+    list_select_related = ("interaction", "manager", "assigned_by")
+    search_fields = ("id",)
+    autocomplete_fields = ("interaction", "manager", "assigned_by")

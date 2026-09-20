@@ -14,4 +14,8 @@ urlpatterns = [
         name="swagger-ui",
     ),
     path("api/health/", include("health.urls")),
+    path("api/catalog/", include("sova.catalog.api.routers")),
+    path("api/interactions/", include("sova.interactions.api.routers")),
+    path("api/workflows/", include("sova.workflows.api.routers")),
+    path("api/processes/", include("sova.processes.api.routers")),
 ]
