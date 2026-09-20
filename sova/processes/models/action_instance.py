@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models
 
 from sova.core.models import UUIDModel
+from sova.processes.enum import ActionInstanceStatus
 
 
 class ActionInstance(UUIDModel):
@@ -16,6 +17,8 @@ class ActionInstance(UUIDModel):
     )
     status = models.CharField(
         max_length=50,
+        choices=ActionInstanceStatus.choices,
+        default=ActionInstanceStatus.PENDING,
         verbose_name="Статус",
     )
     planned_start = models.DateTimeField(
@@ -37,6 +40,15 @@ class ActionInstance(UUIDModel):
         null=True,
         blank=True,
         verbose_name="Фактическое окончание",
+    )
+    triggered_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Запущено переходом",
+        help_text=(
+            "Момент запуска переходом по исходу другого действия. Отличает запущенное, но ждущее "
+            "зависимостей действие от ещё не запущенного."
+        ),
     )
     execution_no = models.PositiveIntegerField(
         default=1,
@@ -68,6 +80,12 @@ class ActionInstance(UUIDModel):
         verbose_name = "Экземпляр действия"
         verbose_name_plural = "Экземпляры действий"
         ordering = ["stage_instance", "planned_start"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["stage_instance", "action", "execution_no"],
+                name="unique_action_execution",
+            ),
+        ]
 
     def __str__(self):
         return self.action_name_snapshot

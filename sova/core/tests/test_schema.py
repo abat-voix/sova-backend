@@ -41,3 +41,27 @@ class OpenApiSchemaTest(TestCase):
 
         # Проверяем, что ответ описан назначением ответственного, а не взаимодействием
         self.assertEqual(self.response_ref(path, "post", "201"), "Responsible")
+
+    def test_engine_endpoints_are_documented_with_their_own_schemas(self) -> None:
+        """Эндпоинты движка описаны своими сериализаторами запроса и ответа."""
+        base = "/api/processes"
+        # Проверяем запуск процесса: write на входе, read на выходе
+        self.assertEqual(self.request_ref(f"{base}/workflow-instances/", "post"), "WriteWorkflowInstance")
+        self.assertEqual(self.response_ref(f"{base}/workflow-instances/", "post", "201"), "WorkflowInstance")
+        # Проверяем завершение действия
+        complete = f"{base}/action-instances/{{id}}/complete/"
+        self.assertEqual(self.request_ref(complete, "post"), "CompleteAction")
+        self.assertEqual(self.response_ref(complete, "post", "200"), "CompleteActionResult")
+        # Проверяем отмену этапа
+        cancel = f"{base}/stage-instances/{{id}}/cancel/"
+        self.assertEqual(self.request_ref(cancel, "post"), "CancelStage")
+        self.assertEqual(self.response_ref(cancel, "post", "200"), "CancelStageResult")
+        # Проверяем доску процесса
+        self.assertEqual(self.response_ref(f"{base}/workflow-instances/{{id}}/board/", "get", "200"), "WorkflowBoard")
+
+    def test_stages_actions_and_results_are_read_only(self) -> None:
+        """Этапы, действия и результаты процесса доступны только для чтения."""
+        for path in ("stage-instances", "action-instances", "action-results"):
+            with self.subTest(path=path):
+                # Проверяем, что создания нет
+                self.assertNotIn("post", self.paths[f"/api/processes/{path}/"])

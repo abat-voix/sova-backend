@@ -7,8 +7,10 @@ from sova.processes.models import (
     ActionInstance,
     ActionResult,
     StageInstance,
+    StageRollback,
     WorkflowInstance,
 )
+from sova.processes.enum import RollbackMode
 from sova.workflows.tests.factories import (
     ActionOutcomeFactory,
     WorkflowActionFactory,
@@ -39,6 +41,25 @@ class StageInstanceFactory(factory.django.DjangoModelFactory):
     stage = factory.SubFactory(
         WorkflowStageFactory,
         workflow=factory.SelfAttribute("..workflow_instance.workflow"),
+    )
+
+
+class StageRollbackFactory(factory.django.DjangoModelFactory):
+    """Фабрика записи об откате: оба экземпляра этапа принадлежат процессу записи."""
+
+    class Meta:
+        model = StageRollback
+
+    reason = factory.Sequence(lambda n: f"Причина отката {n}")
+    mode = RollbackMode.RESTART
+    workflow_instance = factory.SubFactory(WorkflowInstanceFactory)
+    from_stage_instance = factory.SubFactory(
+        StageInstanceFactory,
+        workflow_instance=factory.SelfAttribute("..workflow_instance"),
+    )
+    to_stage_instance = factory.SubFactory(
+        StageInstanceFactory,
+        workflow_instance=factory.SelfAttribute("..workflow_instance"),
     )
 
 

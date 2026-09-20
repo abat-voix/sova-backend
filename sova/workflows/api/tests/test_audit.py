@@ -7,6 +7,7 @@ from sova.workflows.tests.factories import (
     ActionDependencyFactory,
     ActionOutcomeFactory,
     ActionTransitionFactory,
+    StageTransitionFactory,
     WorkflowActionFactory,
     WorkflowFactory,
     WorkflowStageFactory,
@@ -155,3 +156,48 @@ class WorkflowAuditTestCase(APITestCase):
         self.assertEqual(response.status_code, 204)
         self.assertFalse(WorkflowChange.objects.exists())
 
+
+    def test_create_stage_transition_records_change(self) -> None:
+        """Создание связи между этапами пишет запись created для её workflow."""
+        target = WorkflowStageFactory(workflow=self.workflow)
+
+        response = self.client.post(
+            path="/api/workflows/stage-transitions/",
+            data={"from_stage": str(self.stage.pk), "to_stage": str(target.pk)},
+            format="json",
+        )
+
+        self.assert_single_change(
+            change_type=WorkflowChangeType.CREATED,
+            entity_type="stagetransition",
+            entity_id=response.data["id"],
+        )
+
+    def test_update_stage_transition_records_change(self) -> None:
+        """Изменение связи между этапами пишет запись updated."""
+        transition = StageTransitionFactory(from_stage=self.stage)
+
+        self.client.patch(
+            path=f"/api/workflows/stage-transitions/{transition.pk}/",
+            data={"active": False},
+            format="json",
+        )
+
+        self.assert_single_change(
+            change_type=WorkflowChangeType.UPDATED,
+            entity_type="stagetransition",
+            entity_id=transition.pk,
+        )
+
+    def test_delete_stage_transition_records_change_before_removal(self) -> None:
+        """Удаление связи между этапами пишет запись deleted и не теряет id."""
+        transition = StageTransitionFactory(from_stage=self.stage)
+        transition_id = transition.pk
+
+        self.client.delete(path=f"/api/workflows/stage-transitions/{transition_id}/")
+
+        self.assert_single_change(
+            change_type=WorkflowChangeType.DELETED,
+            entity_type="stagetransition",
+            entity_id=transition_id,
+        )

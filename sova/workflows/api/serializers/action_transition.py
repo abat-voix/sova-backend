@@ -45,15 +45,20 @@ class WriteActionTransitionSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs: dict) -> dict:
-        """Проверка, что исход и целевое действие принадлежат одному workflow."""
+        """
+        Проверка, что исход и целевое действие принадлежат одному этапу.
+
+        Переход на действие другого этапа означал бы ветвление по этапам, а порядок этапов
+        задаётся только связями между этапами.
+        """
         outcome = attrs.get("outcome", getattr(self.instance, "outcome", None))
         target_action = attrs.get(
             "target_action",
             getattr(self.instance, "target_action", None),
         )
 
-        if outcome.action.stage.workflow_id != target_action.stage.workflow_id:
+        if outcome.action.stage_id != target_action.stage_id:
             raise serializers.ValidationError(
-                {"target_action": _("Целевое действие относится к другому workflow.")},
+                {"target_action": _("Целевое действие относится к другому этапу.")},
             )
         return attrs

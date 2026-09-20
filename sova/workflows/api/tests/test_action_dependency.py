@@ -6,6 +6,7 @@ from sova.workflows.models import ActionDependency
 from sova.workflows.tests.factories import (
     ActionDependencyFactory,
     WorkflowActionFactory,
+    WorkflowFactory,
     WorkflowStageFactory,
 )
 
@@ -67,6 +68,89 @@ class ActionDependencyApiTestCase(BaseApiTestMixin, APITestCase):
         )
 
         # Проверяем, что граф зависимостей не выходит за пределы workflow
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_add_returns_400_for_actions_from_different_stages(self) -> None:
+        """Зависимость между действиями разных этапов одного workflow отклоняется."""
+        workflow = WorkflowFactory()
+        action = WorkflowActionFactory(stage=WorkflowStageFactory(workflow=workflow))
+        other = WorkflowActionFactory(stage=WorkflowStageFactory(workflow=workflow))
+
+        response = self.post_dependency(action=action, depends_on=other)
+
+        # Проверяем, что зависимость не выходит за пределы этапа и ошибка привязана к полю
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("depends_on_action", response.data)
+
+    def test_add_returns_400_when_mandatory_depends_on_optional(self) -> None:
+        """Обязательное действие не может зависеть от необязательного."""
+        stage = WorkflowStageFactory()
+        mandatory = WorkflowActionFactory(stage=stage, is_optional=False)
+        optional = WorkflowActionFactory(stage=stage, is_optional=True)
+
+        response = self.post_dependency(action=mandatory, depends_on=optional)
+
+        # Проверяем ошибку по полю depends_on_action
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("depends_on_action", response.data)
+
+    def test_add_allows_optional_depending_on_mandatory(self) -> None:
+        """Необязательное действие может ждать обязательное."""
+        stage = WorkflowStageFactory()
+        optional = WorkflowActionFactory(stage=stage, is_optional=True)
+        mandatory = WorkflowActionFactory(stage=stage, is_optional=False)
+
+        response = self.post_dependency(action=optional, depends_on=mandatory)
+
+        # Проверяем, что зависимость создана
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
+
+    def test_add_allows_optional_depending_on_optional(self) -> None:
+        """Необязательное действие может ждать другое необязательное."""
+        stage = WorkflowStageFactory()
+        first = WorkflowActionFactory(stage=stage, is_optional=True)
+        second = WorkflowActionFactory(stage=stage, is_optional=True)
+
+        response = self.post_dependency(action=first, depends_on=second)
+
+        # Проверяем, что зависимость создана
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
+
+    def test_add_does_not_check_optionality_of_inactive_dependency(self) -> None:
+        """Неактивная зависимость в правилах не участвует и сохраняется."""
+        stage = WorkflowStageFactory()
+        mandatory = WorkflowActionFactory(stage=stage, is_optional=False)
+        optional = WorkflowActionFactory(stage=stage, is_optional=True)
+
+        response = self.client.post(
+            path=self.list_url,
+            data={
+                "action": str(mandatory.pk),
+                "depends_on_action": str(optional.pk),
+                "active": False,
+            },
+            format="json",
+        )
+
+        # Проверяем, что неактивная зависимость создана
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
+
+    def test_change_returns_400_when_reactivating_mandatory_on_optional(self) -> None:
+        """Включение зависимости обязательного действия от необязательного возвращает 400."""
+        stage = WorkflowStageFactory()
+        dependency = ActionDependencyFactory(
+            action=WorkflowActionFactory(stage=stage, is_optional=False),
+            depends_on_action=WorkflowActionFactory(stage=stage, is_optional=True),
+            active=False,
+        )
+
+        response = self.client.patch(
+            path=self.detail_url(dependency),
+            data={"active": True},
+            format="json",
+        )
+
+        # Проверяем, что правило действует и при реактивации
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_add_returns_400_for_direct_cycle(self) -> None:

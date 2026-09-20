@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from sova.workflows.api.serializers.workflow import WorkflowShortSerializer
 from sova.workflows.models import WorkflowStage
+from sova.workflows.services import stage_transition_service
 
 
 class WorkflowStageShortSerializer(serializers.ModelSerializer):
@@ -59,6 +60,12 @@ class WriteWorkflowStageSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs: dict) -> dict:
+        """Проверка «один начальный этап на workflow» и целостности связей этапа при его правке."""
+        self._validate_single_initial(attrs=attrs)
+        self._validate_transitions(attrs=attrs)
+        return attrs
+
+    def _validate_single_initial(self, attrs: dict) -> None:
         """
         Проверка «один начальный этап на workflow».
 
@@ -68,8 +75,7 @@ class WriteWorkflowStageSerializer(serializers.ModelSerializer):
         is_initial = attrs.get("is_initial", getattr(self.instance, "is_initial", False))
         workflow = attrs.get("workflow", getattr(self.instance, "workflow", None))
         if not is_initial:
-            return attrs
-
+            return
         conflicting = WorkflowStage.objects.filter(workflow=workflow, is_initial=True)
         if self.instance is not None:
             conflicting = conflicting.exclude(pk=self.instance.pk)
@@ -77,4 +83,38 @@ class WriteWorkflowStageSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"is_initial": _("В этом workflow уже есть начальный этап.")},
             )
-        return attrs
+
+    def _validate_transitions(self, attrs: dict) -> None:
+        """
+        Защита связей между этапами при правке существующего этапа.
+
+        Связи создавались с проверками (один workflow, допустимые типы этапов), и перенос этапа
+        в другой workflow или смена его типа могли бы их нарушить.
+        """
+        if self.instance is None:
+            return
+        workflow = attrs.get("workflow", self.instance.workflow)
+        if workflow.pk != self.instance.workflow_id and stage_transition_service.has_active_links(
+            stage=self.instance,
+        ):
+            raise serializers.ValidationError(
+                {
+                    "workflow": _(
+                        "У этапа есть активные связи с другими этапами — перенос в другой workflow нарушил бы их. "
+                        "Сначала отключите или удалите связи.",
+                    ),
+                },
+            )
+        new_type = attrs.get("type", self.instance.type)
+        if new_type != self.instance.type and stage_transition_service.conflicts_with_type(
+            stage=self.instance,
+            new_type=new_type,
+        ):
+            raise serializers.ValidationError(
+                {
+                    "type": _(
+                        "Смена типа нарушила бы связи этапа: этап взаимодействия не может идти "
+                        "после этапа направления, программы или продукта.",
+                    ),
+                },
+            )

@@ -7,6 +7,7 @@ from sova.workflows.tests.factories import (
     ActionOutcomeFactory,
     ActionTransitionFactory,
     WorkflowActionFactory,
+    WorkflowStageFactory,
 )
 
 
@@ -61,6 +62,50 @@ class ActionTransitionApiTestCase(BaseApiTestMixin, APITestCase):
         )
 
         # Проверяем, что ошибка привязана к целевому действию
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("target_action", response.data)
+
+    def test_add_returns_400_with_target_from_another_stage(self) -> None:
+        """Целевое действие из другого этапа того же workflow отклоняется: ветвление по этапам запрещено."""
+        outcome = ActionOutcomeFactory()
+        other_stage = WorkflowStageFactory(workflow=outcome.action.stage.workflow)
+        target = WorkflowActionFactory(stage=other_stage)
+
+        response = self.client.post(
+            path=self.list_url,
+            data={"outcome": str(outcome.pk), "target_action": str(target.pk)},
+            format="json",
+        )
+
+        # Проверяем, что ошибка привязана к целевому действию
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("target_action", response.data)
+
+    def test_add_allows_transition_to_the_same_action(self) -> None:
+        """Исход может вести на своё же действие — так выражается повтор."""
+        outcome = ActionOutcomeFactory()
+
+        response = self.client.post(
+            path=self.list_url,
+            data={"outcome": str(outcome.pk), "target_action": str(outcome.action_id)},
+            format="json",
+        )
+
+        # Проверяем, что переход создан
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
+
+    def test_change_returns_400_when_target_switched_to_another_stage(self) -> None:
+        """PATCH, переводящий цель в другой этап того же workflow, возвращает 400."""
+        instance = ActionTransitionFactory()
+        other_stage = WorkflowStageFactory(workflow=instance.outcome.action.stage.workflow)
+
+        response = self.client.patch(
+            path=self.detail_url(instance),
+            data={"target_action": str(WorkflowActionFactory(stage=other_stage).pk)},
+            format="json",
+        )
+
+        # Проверяем, что при PATCH сравнивается этап сохранённого исхода
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("target_action", response.data)
 

@@ -16,6 +16,7 @@ class WorkflowStageFilter(SearchFilterMixin):
     class Meta:
         model = WorkflowStage
         fields = (
+            "type",
             "is_initial",
             "is_final",
             "is_optional",

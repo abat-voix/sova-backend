@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models
 
 from sova.core.models import UUIDModel
+from sova.processes.enum import WorkflowInstanceStatus
 
 
 class WorkflowInstance(UUIDModel):
@@ -13,6 +14,8 @@ class WorkflowInstance(UUIDModel):
 
     status = models.CharField(
         max_length=50,
+        choices=WorkflowInstanceStatus.choices,
+        default=WorkflowInstanceStatus.RUNNING,
         verbose_name="Статус",
     )
     started_at = models.DateTimeField(
@@ -50,6 +53,12 @@ class WorkflowInstance(UUIDModel):
         verbose_name = "Процесс workflow"
         verbose_name_plural = "Процессы workflow"
         ordering = ["-started_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workflow", "interaction"],
+                name="unique_workflow_per_interaction",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.workflow} — {self.interaction}"

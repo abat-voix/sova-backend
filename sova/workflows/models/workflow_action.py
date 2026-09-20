@@ -30,6 +30,14 @@ class WorkflowAction(TimeStampedModel):
         default=False,
         verbose_name="Можно пропустить без исхода",
     )
+    starts_by_transition_only = models.BooleanField(
+        default=False,
+        verbose_name="Запускается только переходом",
+        help_text=(
+            "Действие не стартует при открытии этапа, а запускается переходом по исходу другого действия. "
+            "Пока не запущено, не мешает закрытию этапа."
+        ),
+    )
     active = models.BooleanField(
         default=True,
         verbose_name="Активно",

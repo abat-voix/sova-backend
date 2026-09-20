@@ -1,6 +1,7 @@
 from django.db import models
 
 from sova.core.models import TimeStampedModel
+from sova.processes.enum import StageInstanceContextType
 
 
 class WorkflowStage(TimeStampedModel):
@@ -9,6 +10,17 @@ class WorkflowStage(TimeStampedModel):
     name = models.CharField(
         max_length=255,
         verbose_name="Название",
+    )
+    type = models.CharField(
+        max_length=20,
+        choices=StageInstanceContextType.choices,
+        default=StageInstanceContextType.INTERACTION,
+        verbose_name="Тип этапа",
+        help_text=(
+            "К чему относится этап: ко всему взаимодействию или к каждому его направлению, "
+            "программе, продукту. Для каждого объекта соответствующего типа создаётся "
+            "свой экземпляр этапа."
+        ),
     )
     description = models.TextField(
         blank=True,

@@ -11,6 +11,10 @@ from sova.workflows.api.serializers.action_transition import (
     ActionTransitionSerializer,
     WriteActionTransitionSerializer,
 )
+from sova.workflows.api.serializers.stage_transition import (
+    StageTransitionSerializer,
+    WriteStageTransitionSerializer,
+)
 from sova.workflows.api.serializers.workflow import (
     WorkflowSerializer,
     WorkflowShortSerializer,
@@ -33,6 +37,7 @@ __all__ = [
     "ActionOutcomeSerializer",
     "ActionOutcomeShortSerializer",
     "ActionTransitionSerializer",
+    "StageTransitionSerializer",
     "WorkflowActionSerializer",
     "WorkflowActionShortSerializer",
     "WorkflowChangeSerializer",
@@ -43,6 +48,7 @@ __all__ = [
     "WriteActionDependencySerializer",
     "WriteActionOutcomeSerializer",
     "WriteActionTransitionSerializer",
+    "WriteStageTransitionSerializer",
     "WriteWorkflowActionSerializer",
     "WriteWorkflowSerializer",
     "WriteWorkflowStageSerializer",

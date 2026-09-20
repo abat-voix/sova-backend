@@ -3,7 +3,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from sova.processes.enum import StageInstanceContextType
+from sova.processes.enum import StageInstanceContextType, StageInstanceStatus
 from sova.core.models import UUIDModel
 
 
@@ -34,11 +34,19 @@ class StageInstance(UUIDModel):
     )
     status = models.CharField(
         max_length=50,
+        choices=StageInstanceStatus.choices,
+        default=StageInstanceStatus.PENDING,
         verbose_name="Статус",
     )
     added_at = models.DateTimeField(
         auto_now_add=True,
         verbose_name="Добавлен",
+    )
+    started_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Открыт",
+        help_text="Момент, когда этап стал доступен; отличается от момента создания экземпляра (added_at).",
     )
     completed_at = models.DateTimeField(
         null=True,
@@ -71,6 +79,26 @@ class StageInstance(UUIDModel):
         verbose_name = "Экземпляр этапа"
         verbose_name_plural = "Экземпляры этапов"
         ordering = ["workflow_instance", "added_at"]
+        constraints = [
+            # Два ограничения вместо одного: NULL в context_id база считает разными значениями,
+            # поэтому этап без контекста (взаимодействие целиком) защищаем отдельным условным ограничением
+            models.UniqueConstraint(
+                fields=["workflow_instance", "stage", "context_type", "context_id"],
+                condition=models.Q(context_id__isnull=False),
+                name="unique_stage_instance_per_context",
+            ),
+            models.UniqueConstraint(
+                fields=["workflow_instance", "stage", "context_type"],
+                condition=models.Q(context_id__isnull=True),
+                name="unique_stage_instance_without_context",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["context_type", "context_id"],
+                name="stage_instance_context_idx",
+            ),
+        ]
 
     def clean(self):
         if self.context_id is None:

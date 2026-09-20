@@ -5,7 +5,6 @@ from sova.core.api.serializers import UserShortSerializer
 from sova.interactions.api.serializers import InteractionShortSerializer
 from sova.processes.models import WorkflowInstance
 from sova.workflows.api.serializers import WorkflowShortSerializer
-from sova.workflows.enum import Audience
 
 
 class WorkflowInstanceSerializer(serializers.ModelSerializer):
@@ -41,35 +40,19 @@ class WorkflowInstanceSerializer(serializers.ModelSerializer):
 
 
 class WriteWorkflowInstanceSerializer(serializers.ModelSerializer):
-    """Процесс workflow — валидация входных данных (запуск процесса)."""
+    """
+    Процесс workflow — валидация входных данных (запуск процесса).
+
+    Принимает только workflow и взаимодействие: статус, этапы и действия создаёт движок, а его правила
+    (активность workflow, аудитория, повторный запуск) проверяются при запуске.
+    """
 
     class Meta:
         model = WorkflowInstance
         fields = (
             "id",
-            "status",
             "workflow",
             "interaction",
         )
-
-    def validate(self, attrs: dict) -> dict:
-        """Проверка, что шаблон активен и его аудитория соответствует контрагенту."""
-        workflow = attrs["workflow"]
-        interaction = attrs["interaction"]
-
-        if not workflow.active:
-            raise serializers.ValidationError(
-                {"workflow": _("Неактивный workflow нельзя запустить.")},
-            )
-        expected_audience = (
-            Audience.B2B if interaction.university_id else Audience.B2C
-        )
-        if workflow.audience != expected_audience:
-            raise serializers.ValidationError(
-                {
-                    "workflow": _(
-                        "Аудитория workflow не соответствует контрагенту взаимодействия.",
-                    ),
-                },
-            )
-        return attrs
+        # Уникальность пары «workflow + взаимодействие» проверяет движок и отвечает 409 already_started
+        validators = []

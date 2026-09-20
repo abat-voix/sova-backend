@@ -45,7 +45,12 @@ class WriteActionDependencySerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs: dict) -> dict:
-        """Проверка одного workflow, отсутствия самозависимости и циклов в графе."""
+        """
+        Проверка одного этапа, отсутствия самозависимости и циклов в графе.
+
+        Обязательное действие не может зависеть от необязательного: необязательное могут не выполнить,
+        и обязательное не стартовало бы. Правило проверяется для активных зависимостей — как и циклы.
+        """
         action = attrs.get("action", getattr(self.instance, "action", None))
         depends_on_action = attrs.get(
             "depends_on_action",
@@ -57,9 +62,13 @@ class WriteActionDependencySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"depends_on_action": _("Действие не может зависеть от самого себя.")},
             )
-        if action.stage.workflow_id != depends_on_action.stage.workflow_id:
+        if action.stage_id != depends_on_action.stage_id:
             raise serializers.ValidationError(
-                {"depends_on_action": _("Действие относится к другому workflow.")},
+                {"depends_on_action": _("Действие относится к другому этапу.")},
+            )
+        if is_active and not action.is_optional and depends_on_action.is_optional:
+            raise serializers.ValidationError(
+                {"depends_on_action": _("Обязательное действие не может зависеть от необязательного.")},
             )
         # Неактивная зависимость в графе не участвует, цикла образовать не может
         if is_active and action_dependency_service.creates_cycle(

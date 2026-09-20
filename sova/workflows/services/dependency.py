@@ -1,9 +1,11 @@
-from sova.workflows.models import ActionDependency, WorkflowAction
+from django.db.models import Q
+
+from sova.workflows.models import ActionDependency, ActionTransition, WorkflowAction
 
 
 class ActionDependencyService:
     """
-    Проверки графа зависимостей действий workflow.
+    Проверки графа зависимостей и переходов действий workflow.
 
     Зависимости задают непоследовательные шаги: действие можно начать, когда
     выполнены все действия, от которых оно зависит. Цикл (A ждёт B, B ждёт A)
@@ -39,6 +41,39 @@ class ActionDependencyService:
             visited.add(current)
             pending.extend(edges.get(current, ()))
         return False
+
+    def has_mandatory_dependents(self, action: WorkflowAction) -> bool:
+        """Есть ли обязательные действия, ждущие это действие по активной зависимости."""
+        return ActionDependency.objects.filter(
+            active=True,
+            depends_on_action=action,
+            action__is_optional=False,
+        ).exists()
+
+    def waits_for_optional(self, action: WorkflowAction) -> bool:
+        """Ждёт ли действие по активной зависимости необязательное действие."""
+        return ActionDependency.objects.filter(
+            active=True,
+            action=action,
+            depends_on_action__is_optional=True,
+        ).exists()
+
+    def has_active_links(self, action: WorkflowAction) -> bool:
+        """
+        Есть ли у действия активные зависимости или переходы.
+
+        Учитываются обе стороны: действие ждёт или его ждут; его исход ведёт куда-то или переход
+        ведёт на него. Границы этапа нарушить можно только через такие связи.
+        """
+        in_dependencies = ActionDependency.objects.filter(
+            Q(action=action) | Q(depends_on_action=action),
+            active=True,
+        ).exists()
+        in_transitions = ActionTransition.objects.filter(
+            Q(outcome__action=action) | Q(target_action=action),
+            active=True,
+        ).exists()
+        return in_dependencies or in_transitions
 
     def _load_edges(
         self,

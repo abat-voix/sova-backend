@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from sova.workflows.api.serializers.workflow_stage import WorkflowStageShortSerializer
 from sova.workflows.models import WorkflowAction
+from sova.workflows.services import action_dependency_service
 
 
 class WorkflowActionShortSerializer(serializers.ModelSerializer):
@@ -31,6 +32,7 @@ class WorkflowActionSerializer(serializers.ModelSerializer):
             "sort_order",
             "default_duration_days",
             "is_optional",
+            "starts_by_transition_only",
             "active",
             "stage",
             "created_at",
@@ -50,6 +52,42 @@ class WriteWorkflowActionSerializer(serializers.ModelSerializer):
             "sort_order",
             "default_duration_days",
             "is_optional",
+            "starts_by_transition_only",
             "active",
             "stage",
         )
+
+    def validate(self, attrs: dict) -> dict:
+        """
+        Защита правил графа при правке существующего действия.
+
+        Перенос в другой этап и смена признака обязательности могут нарушить связи, которые
+        создавались с проверками: зависимости и переходы — только внутри этапа, обязательное
+        действие не ждёт необязательное.
+        """
+        if self.instance is None:
+            return attrs
+        stage = attrs.get("stage", self.instance.stage)
+        if stage.pk != self.instance.stage_id and action_dependency_service.has_active_links(
+            action=self.instance,
+        ):
+            raise serializers.ValidationError(
+                {
+                    "stage": _(
+                        "У действия есть активные зависимости или переходы — перенос в другой этап нарушил бы их. "
+                        "Сначала отключите или удалите связи.",
+                    ),
+                },
+            )
+        is_optional = attrs.get("is_optional", self.instance.is_optional)
+        if is_optional and not self.instance.is_optional:
+            if action_dependency_service.has_mandatory_dependents(action=self.instance):
+                raise serializers.ValidationError(
+                    {"is_optional": _("От действия зависят обязательные действия — оно не может быть необязательным.")},
+                )
+        if not is_optional and self.instance.is_optional:
+            if action_dependency_service.waits_for_optional(action=self.instance):
+                raise serializers.ValidationError(
+                    {"is_optional": _("Действие ждёт необязательное действие — оно не может быть обязательным.")},
+                )
+        return attrs

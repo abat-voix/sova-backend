@@ -234,7 +234,11 @@ LOGIN_REDIRECT_URL_FAILURE = APP_PUBLIC_URL
 LOGOUT_REDIRECT_URL = APP_PUBLIC_URL
 
 REST_FRAMEWORK = {
-    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+        # Формы и фильтры в браузере — только при разработке
+        *(["rest_framework.renderers.BrowsableAPIRenderer"] if DEBUG else []),
+    ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication"
     ],
@@ -256,6 +260,13 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "SERVE_AUTHENTICATION": [],
     "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
+    # Явные имена перечислений: у нескольких моделей есть поля с одинаковыми названиями (status, type)
+    "ENUM_NAME_OVERRIDES": {
+        "WorkflowInstanceStatusEnum": "sova.processes.enum.WorkflowInstanceStatus",
+        "StageInstanceStatusEnum": "sova.processes.enum.StageInstanceStatus",
+        "ActionInstanceStatusEnum": "sova.processes.enum.ActionInstanceStatus",
+        "StageInstanceContextTypeEnum": "sova.processes.enum.StageInstanceContextType",
+    },
 }
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

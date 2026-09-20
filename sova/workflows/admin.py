@@ -5,6 +5,7 @@ from sova.workflows.models import (
     ActionDependency,
     ActionOutcome,
     ActionTransition,
+    StageTransition,
     Workflow,
     WorkflowAction,
     WorkflowChange,
@@ -44,6 +45,17 @@ class ActionTransitionAdmin(AbstractBaseModelAdmin[ActionTransition]):
     search_fields = ("id",)
     list_filter = ("active",)
     autocomplete_fields = ("outcome", "target_action")
+
+
+@admin.register(StageTransition)
+class StageTransitionAdmin(AbstractBaseModelAdmin[StageTransition]):
+    """Админка связей между этапами workflow."""
+
+    list_display = ("id", "from_stage", "to_stage", "active", "created_at")
+    list_select_related = ("from_stage", "to_stage")
+    search_fields = ("id",)
+    list_filter = ("active",)
+    autocomplete_fields = ("from_stage", "to_stage")
 
 
 @admin.register(Workflow)

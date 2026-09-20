@@ -51,3 +51,20 @@ class WriteActionOutcomeSerializer(serializers.ModelSerializer):
             "attachment_required",
             "action",
         )
+
+    def validate(self, attrs: dict) -> dict:
+        """
+        Проверка, что исход с активным переходом остаётся в этапе своей цели.
+
+        Иначе переход вышел бы за границы этапа: ветвление по этапам запрещено.
+        """
+        if self.instance is None:
+            return attrs
+        action = attrs.get("action", self.instance.action)
+        # RelatedObjectDoesNotExist наследует AttributeError: у исхода может не быть перехода
+        transition = getattr(self.instance, "transition", None)
+        if transition is not None and transition.active and transition.target_action.stage_id != action.stage_id:
+            raise serializers.ValidationError(
+                {"action": _("Исход ведёт на действие другого этапа — действие должно быть из того же этапа.")},
+            )
+        return attrs

@@ -2,8 +2,13 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from sova.core.tests.base import BaseApiTestMixin
+from sova.processes.enum import StageInstanceContextType
 from sova.workflows.models import WorkflowStage
-from sova.workflows.tests.factories import WorkflowFactory, WorkflowStageFactory
+from sova.workflows.tests.factories import (
+    StageTransitionFactory,
+    WorkflowFactory,
+    WorkflowStageFactory,
+)
 
 
 class WorkflowStageApiTestCase(BaseApiTestMixin, APITestCase):
@@ -118,6 +123,66 @@ class WorkflowStageApiTestCase(BaseApiTestMixin, APITestCase):
         # Проверяем, что собственный флаг is_initial не считается конфликтом
         self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
 
+    def test_add_accepts_each_fixed_type(self) -> None:
+        """Тип этапа принимает значения взаимодействия, направления, программы и продукта."""
+        workflow = WorkflowFactory()
+
+        for order, stage_type in enumerate(StageInstanceContextType.values, start=1):
+            response = self.client.post(
+                path=self.list_url,
+                data={
+                    "name": f"Этап {stage_type}",
+                    "sort_order": order,
+                    "type": stage_type,
+                    "workflow": str(workflow.pk),
+                },
+                format="json",
+            )
+
+            # Проверяем, что этап создан с указанным типом
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
+            self.assertEqual(response.data["type"], stage_type)
+
+    def test_add_without_type_defaults_to_interaction(self) -> None:
+        """Этап без указанного типа создаётся как этап взаимодействия."""
+        response = self.client.post(
+            path=self.list_url,
+            data=self.get_post_data(),
+            format="json",
+        )
+
+        # Проверяем тип по умолчанию
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
+        self.assertEqual(response.data["type"], StageInstanceContextType.INTERACTION)
+
+    def test_add_returns_400_with_free_text_type(self) -> None:
+        """Тип этапа вне фиксированного набора возвращает 400."""
+        data = self.get_post_data()
+        data["type"] = "Продукт"
+
+        response = self.client.post(path=self.list_url, data=data, format="json")
+
+        # Проверяем, что ошибка привязана к полю type
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("type", response.data)
+
+    def test_filter_by_type(self) -> None:
+        """Фильтр type возвращает этапы указанного типа."""
+        workflow = WorkflowFactory()
+        product = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.IT_PRODUCT)
+        WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.IT_PROGRAM)
+
+        response = self.client.get(
+            path=self.list_url,
+            data={"type": StageInstanceContextType.IT_PRODUCT},
+        )
+
+        # Проверяем, что найден только этап продукта
+        self.assertEqual(
+            [item["id"] for item in response.data["results"]],
+            [str(product.pk)],
+        )
+
     def test_filter_by_workflow_ids_and_flags(self) -> None:
         """Фильтры workflow__ids, is_initial, is_final выбирают нужные этапы."""
         workflow = WorkflowFactory()
@@ -137,3 +202,80 @@ class WorkflowStageApiTestCase(BaseApiTestMixin, APITestCase):
         # Проверяем фильтры по признакам
         self.assertEqual(ids({"is_initial": "true"}), [str(first.pk)])
         self.assertEqual(ids({"is_final": "true"}), [str(last.pk)])
+
+    def patch_stage(self, stage, **data):
+        """Отправляет PATCH этапа."""
+        return self.client.patch(path=self.detail_url(stage), data=data, format="json")
+
+    def test_change_returns_400_when_moving_stage_with_transitions_to_another_workflow(self) -> None:
+        """Этап с активными связями нельзя перенести в другой workflow: связь вышла бы за workflow."""
+        transition = StageTransitionFactory()
+
+        response = self.patch_stage(transition.from_stage, workflow=str(WorkflowFactory().pk))
+
+        # Проверяем ошибку по полю workflow
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("workflow", response.data)
+
+    def test_change_returns_400_when_moving_target_stage_to_another_workflow(self) -> None:
+        """Этап-цель активной связи тоже нельзя перенести в другой workflow."""
+        transition = StageTransitionFactory()
+
+        response = self.patch_stage(transition.to_stage, workflow=str(WorkflowFactory().pk))
+
+        # Проверяем ошибку по полю workflow
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("workflow", response.data)
+
+    def test_change_allows_moving_stage_with_only_inactive_transitions(self) -> None:
+        """Неактивные связи перенос не блокируют."""
+        transition = StageTransitionFactory(active=False)
+
+        response = self.patch_stage(transition.from_stage, workflow=str(WorkflowFactory().pk))
+
+        # Проверяем, что перенос выполнен
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+
+    def test_change_allows_moving_stage_without_transitions(self) -> None:
+        """Этап без связей переносится в другой workflow свободно."""
+        stage = WorkflowStageFactory()
+
+        response = self.patch_stage(stage, workflow=str(WorkflowFactory().pk))
+
+        # Проверяем, что перенос выполнен
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+
+    def test_change_returns_400_when_source_type_would_precede_interaction_stage(self) -> None:
+        """Источник связи нельзя сделать этапом продукта, если после него идёт этап взаимодействия."""
+        transition = StageTransitionFactory()
+
+        response = self.patch_stage(transition.from_stage, type=StageInstanceContextType.IT_PRODUCT)
+
+        # Проверяем ошибку по полю type
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("type", response.data)
+
+    def test_change_returns_400_when_target_type_would_follow_product_stage(self) -> None:
+        """Цель связи нельзя сделать этапом взаимодействия, если перед ней идёт этап продукта."""
+        workflow = WorkflowFactory()
+        source = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.IT_PRODUCT)
+        target = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.IT_PRODUCT)
+        StageTransitionFactory(from_stage=source, to_stage=target)
+
+        response = self.patch_stage(target, type=StageInstanceContextType.INTERACTION)
+
+        # Проверяем ошибку по полю type
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("type", response.data)
+
+    def test_change_allows_type_change_that_keeps_transitions_valid(self) -> None:
+        """Смена типа, не нарушающая правило, проходит."""
+        workflow = WorkflowFactory()
+        source = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.INTERACTION)
+        target = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.IT_PRODUCT)
+        StageTransitionFactory(from_stage=source, to_stage=target)
+
+        response = self.patch_stage(source, type=StageInstanceContextType.IT_PRODUCT)
+
+        # Проверяем, что смена типа выполнена
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)

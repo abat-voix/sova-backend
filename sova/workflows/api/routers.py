@@ -19,6 +19,11 @@ router.register(
     views.ActionDependencyViewSet,
     basename="action-dependency",
 )
+router.register(
+    "stage-transitions",
+    views.StageTransitionViewSet,
+    basename="stage-transition",
+)
 router.register("workflow-changes", views.WorkflowChangeViewSet, basename="workflow-change")
 
 urlpatterns = router.urls

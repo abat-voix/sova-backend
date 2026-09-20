@@ -6,6 +6,7 @@ from sova.workflows.models import (
     ActionDependency,
     ActionOutcome,
     ActionTransition,
+    StageTransition,
     Workflow,
     WorkflowAction,
     WorkflowChange,
@@ -30,6 +31,7 @@ class WorkflowAuditService:
         ActionOutcome: ("action", "stage", "workflow"),
         ActionTransition: ("outcome", "action", "stage", "workflow"),
         ActionDependency: ("action", "stage", "workflow"),
+        StageTransition: ("from_stage", "workflow"),
     }
 
     def record(

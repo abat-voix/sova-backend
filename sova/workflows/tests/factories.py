@@ -4,6 +4,7 @@ from sova.workflows.models import (
     ActionDependency,
     ActionOutcome,
     ActionTransition,
+    StageTransition,
     Workflow,
     WorkflowAction,
     WorkflowChange,
@@ -30,6 +31,19 @@ class WorkflowStageFactory(factory.django.DjangoModelFactory):
     name = factory.Sequence(lambda n: f"Этап {n}")
     sort_order = factory.Sequence(lambda n: n)
     workflow = factory.SubFactory(WorkflowFactory)
+
+
+class StageTransitionFactory(factory.django.DjangoModelFactory):
+    """Фабрика связи между этапами: оба этапа — из одного workflow."""
+
+    class Meta:
+        model = StageTransition
+
+    from_stage = factory.SubFactory(WorkflowStageFactory)
+    to_stage = factory.SubFactory(
+        WorkflowStageFactory,
+        workflow=factory.SelfAttribute("..from_stage.workflow"),
+    )
 
 
 class WorkflowActionFactory(factory.django.DjangoModelFactory):
