@@ -99,6 +99,6 @@ class WorkflowStageAdmin(AbstractBaseModelAdmin[WorkflowStage]):
     list_display = ("id", "name", "workflow", "sort_order", "active", "created_at")
     list_display_links = ("name",)
     list_select_related = ("workflow",)
-    search_fields = ("id", "name", "type")
+    search_fields = ("id", "name", "description")
     list_filter = ("is_initial", "is_final", "is_optional", "active")
     autocomplete_fields = ("workflow",)

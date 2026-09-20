@@ -41,7 +41,7 @@ jobs:
         run: python -m pip install poetry==1.8.3
 
       - name: Install dependencies
-        run: poetry install --only main --no-root --no-interaction --no-ansi
+        run: poetry install --with dev --no-root --no-interaction --no-ansi
 
       - name: Run backend checks
         run: |
@@ -114,4 +114,4 @@ jobs:
           SSH_USER: ${{ secrets.DEV_SSH_USER }}
         run: |
           ssh "$SSH_USER@$SSH_HOST" \
-            'cd /opt/sova && ./scripts/deploy.sh'
+            'cd /opt/dev.sova.1uup.ru && ./scripts/deploy.sh'

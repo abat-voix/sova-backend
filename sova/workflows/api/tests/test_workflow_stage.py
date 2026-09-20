@@ -26,7 +26,6 @@ class WorkflowStageApiTestCase(BaseApiTestMixin, APITestCase):
         return {
             "id": str(instance.pk),
             "name": instance.name,
-            "type": instance.type,
             "description": instance.description,
             "sort_order": instance.sort_order,
             "is_initial": instance.is_initial,
