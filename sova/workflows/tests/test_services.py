@@ -1,7 +1,6 @@
 from django.test import TestCase
 
 from sova.workflows.models import ActionOutcome
-from sova.processes.enum import StageInstanceContextType
 from sova.workflows.services import action_outcome_service, stage_transition_service
 from sova.workflows.tests.factories import (
     ActionOutcomeFactory,
@@ -133,42 +132,3 @@ class StageTransitionServiceTest(TestCase):
 
         # Проверяем, что связей нет
         self.assertFalse(stage_transition_service.has_active_links(stage=self.a))
-
-    def test_type_conflict_when_source_becomes_product_before_interaction_stage(self) -> None:
-        """Источник нельзя сделать этапом продукта, если цель — этап взаимодействия."""
-        StageTransitionFactory(from_stage=self.a, to_stage=self.b)
-
-        # Проверяем конфликт для смены типа источника
-        self.assertTrue(
-            stage_transition_service.conflicts_with_type(
-                stage=self.a,
-                new_type=StageInstanceContextType.IT_PRODUCT,
-            ),
-        )
-
-    def test_type_conflict_when_target_becomes_interaction_after_product_stage(self) -> None:
-        """Цель нельзя сделать этапом взаимодействия, если источник — этап продукта."""
-        product = WorkflowStageFactory(workflow=self.workflow, type=StageInstanceContextType.IT_PRODUCT)
-        target = WorkflowStageFactory(workflow=self.workflow, type=StageInstanceContextType.IT_PRODUCT)
-        StageTransitionFactory(from_stage=product, to_stage=target)
-
-        # Проверяем конфликт для смены типа цели
-        self.assertTrue(
-            stage_transition_service.conflicts_with_type(
-                stage=target,
-                new_type=StageInstanceContextType.INTERACTION,
-            ),
-        )
-
-    def test_no_type_conflict_for_allowed_change(self) -> None:
-        """Смена типа, не нарушающая правило, конфликтом не считается."""
-        target = WorkflowStageFactory(workflow=self.workflow, type=StageInstanceContextType.IT_PRODUCT)
-        StageTransitionFactory(from_stage=self.a, to_stage=target)
-
-        # Проверяем, что источник-взаимодействие может стать продуктовым этапом перед продуктовой целью
-        self.assertFalse(
-            stage_transition_service.conflicts_with_type(
-                stage=self.a,
-                new_type=StageInstanceContextType.IT_PRODUCT,
-            ),
-        )

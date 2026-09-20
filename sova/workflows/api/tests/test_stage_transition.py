@@ -179,17 +179,16 @@ class StageTransitionApiTestCase(BaseApiTestMixin, APITestCase):
         # Проверяем, что правка прошла
         self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
 
-    def test_add_returns_400_for_transition_from_program_stage_to_interaction_stage(self) -> None:
-        """Этап взаимодействия не может идти после этапа программы, продукта или направления."""
+    def test_add_allows_transition_from_product_stage_to_interaction_stage(self) -> None:
+        """Этап взаимодействия может идти после этапа программы, продукта или направления."""
         workflow = WorkflowFactory()
         product = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.IT_PRODUCT)
         interaction = WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.INTERACTION)
 
         response = self.post_transition(source=product, target=interaction)
 
-        # Проверяем ошибку по полю to_stage
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("to_stage", response.data)
+        # Проверяем, что связь создана
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
 
     def test_add_allows_transition_from_interaction_stage_to_product_stage(self) -> None:
         """Этап продукта открывается после этапа взаимодействия."""

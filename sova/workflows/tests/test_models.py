@@ -131,27 +131,29 @@ class StageTransitionTest(TestCase):
         # Проверяем, что связь исчезла вместе с этапом
         self.assertFalse(StageTransition.objects.filter(pk=transition.pk).exists())
 
-    def test_clean_rejects_interaction_stage_after_product_stage(self) -> None:
-        """Этап взаимодействия не может идти после этапа продукта."""
+    def test_clean_allows_interaction_stage_after_product_stage(self) -> None:
+        """Этап взаимодействия может идти после этапа продукта — ждёт закрытия всех его активных экземпляров."""
         workflow = WorkflowFactory()
         transition = StageTransition(
             from_stage=WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.IT_PRODUCT),
             to_stage=WorkflowStageFactory(workflow=workflow, type=StageInstanceContextType.INTERACTION),
         )
 
-        # Проверяем ошибку по полю to_stage
-        with self.assertRaises(ValidationError) as raised:
-            transition.clean()
-        self.assertIn("to_stage", raised.exception.message_dict)
+        # Проверяем, что исключения нет
+        transition.clean()
 
     def test_clean_accepts_allowed_combinations_of_stage_types(self) -> None:
-        """Допустимы переходы: взаимодействие → любой, а также между этапами одного контекстного типа."""
+        """Допустимы любые сочетания типов: единственное ограничение — один workflow и без самоссылки."""
         workflow = WorkflowFactory()
         allowed = (
             (StageInstanceContextType.INTERACTION, StageInstanceContextType.INTERACTION),
             (StageInstanceContextType.INTERACTION, StageInstanceContextType.IT_PRODUCT),
             (StageInstanceContextType.INTERACTION, StageInstanceContextType.IT_PROGRAM),
             (StageInstanceContextType.IT_PRODUCT, StageInstanceContextType.IT_PRODUCT),
+            (StageInstanceContextType.IT_PRODUCT, StageInstanceContextType.INTERACTION),
+            (StageInstanceContextType.IT_PROGRAM, StageInstanceContextType.INTERACTION),
+            (StageInstanceContextType.IT_DIRECTION, StageInstanceContextType.INTERACTION),
+            (StageInstanceContextType.IT_PRODUCT, StageInstanceContextType.IT_PROGRAM),
         )
         for source_type, target_type in allowed:
             with self.subTest(source=source_type, target=target_type):

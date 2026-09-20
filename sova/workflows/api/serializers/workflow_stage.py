@@ -28,6 +28,7 @@ class WorkflowStageSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "name",
+            "type",
             "description",
             "sort_order",
             "is_initial",
@@ -48,6 +49,7 @@ class WriteWorkflowStageSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "name",
+            "type",
             "description",
             "sort_order",
             "is_initial",
@@ -58,9 +60,9 @@ class WriteWorkflowStageSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs: dict) -> dict:
-        """Проверка «один начальный этап на workflow» и целостности связей этапа при его правке."""
+        """Проверка «один начальный этап на workflow» и защита связей этапа при переносе в другой workflow."""
         self._validate_single_initial(attrs=attrs)
-        self._validate_transitions(attrs=attrs)
+        self._validate_workflow_transfer(attrs=attrs)
         return attrs
 
     def _validate_single_initial(self, attrs: dict) -> None:
@@ -82,12 +84,11 @@ class WriteWorkflowStageSerializer(serializers.ModelSerializer):
                 {"is_initial": _("В этом workflow уже есть начальный этап.")},
             )
 
-    def _validate_transitions(self, attrs: dict) -> None:
+    def _validate_workflow_transfer(self, attrs: dict) -> None:
         """
-        Защита связей между этапами при правке существующего этапа.
+        Защита связей между этапами при переносе этапа в другой workflow.
 
-        Связи создавались с проверками (один workflow, допустимые типы этапов), и перенос этапа
-        в другой workflow или смена его типа могли бы их нарушить.
+        Связи создавались с проверкой «один workflow», и перенос этапа в другой workflow её бы нарушил.
         """
         if self.instance is None:
             return
@@ -100,19 +101,6 @@ class WriteWorkflowStageSerializer(serializers.ModelSerializer):
                     "workflow": _(
                         "У этапа есть активные связи с другими этапами — перенос в другой workflow нарушил бы их. "
                         "Сначала отключите или удалите связи.",
-                    ),
-                },
-            )
-        new_type = attrs.get("type", self.instance.type)
-        if new_type != self.instance.type and stage_transition_service.conflicts_with_type(
-            stage=self.instance,
-            new_type=new_type,
-        ):
-            raise serializers.ValidationError(
-                {
-                    "type": _(
-                        "Смена типа нарушила бы связи этапа: этап взаимодействия не может идти "
-                        "после этапа направления, программы или продукта.",
                     ),
                 },
             )

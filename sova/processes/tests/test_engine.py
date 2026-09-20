@@ -819,6 +819,26 @@ class ContextStagesTest(EngineTestCase):
         # Проверяем, что процесс завершился, не дожидаясь деактивированного продукта
         self.assertTrue(final.workflow_completed)
 
+    def test_interaction_stage_after_products_and_programs_waits_for_all_of_them(self) -> None:
+        """Этап взаимодействия после этапов продукта и программы ждёт закрытия всех их активных экземпляров."""
+        addendum = self.builder.stage("Допсоглашение", after=(self.product_stage, self.program_stage))
+        sign_addendum = self.builder.action(addendum, "Подписать допсоглашение")
+        process = self.start()
+        self.complete(process, self.sign)
+        self.complete(process, self.update_program, context=self.program)
+        self.complete(process, self.transfer, context=self.first_product)
+        self.complete(process, self.rollout, context=self.first_product)
+
+        # Проверяем, что этап ждёт: второй продукт ещё не закрыт
+        self.assertEqual(self.stage_status(process, addendum), StageInstanceStatus.PENDING)
+
+        self.complete(process, self.transfer, context=self.second_product)
+        self.complete(process, self.rollout, context=self.second_product)
+
+        # Проверяем, что после закрытия всех продуктов и программ этап открылся
+        self.assertEqual(self.stage_status(process, addendum), StageInstanceStatus.IN_PROGRESS)
+        self.assertEqual(self.action_status(process, sign_addendum), IN_PROGRESS)
+
 
 class CancelStageTest(EngineTestCase):
     """Тесты отката: отмена этапа возвращает процесс на предыдущий, сбрасывая действия."""

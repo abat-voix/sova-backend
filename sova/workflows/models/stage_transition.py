@@ -2,7 +2,6 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from sova.core.models import TimeStampedModel
-from sova.processes.enum import StageInstanceContextType
 
 
 class StageTransition(TimeStampedModel):
@@ -13,8 +12,10 @@ class StageTransition(TimeStampedModel):
     связей, он открывается, когда закрыты все этапы-источники. Этап без входящих связей открывается
     при старте процесса. Он же служит основой отката: «предыдущий» этап — источник входящей связи.
     Циклы запрещены, но проверяются на уровне API (модель проверяет только пару этапов).
-    Этап взаимодействия не может идти после этапа направления, программы или продукта:
-    такой переход не имеет однозначного контекста.
+
+    Источник и цель могут быть разных типов (в том числе цель — этап взаимодействия после этапа
+    направления, программы или продукта): движок в этом случае ждёт закрытия всех действующих
+    экземпляров этапа-источника, а не одного — см. `WorkflowEngineService._source_instances`.
     """
 
     active = models.BooleanField(
@@ -54,13 +55,6 @@ class StageTransition(TimeStampedModel):
         if self.from_stage.workflow_id != self.to_stage.workflow_id:
             raise ValidationError(
                 {"to_stage": "Этап-цель относится к другому workflow."}
-            )
-        if (
-            self.from_stage.type != StageInstanceContextType.INTERACTION
-            and self.to_stage.type == StageInstanceContextType.INTERACTION
-        ):
-            raise ValidationError(
-                {"to_stage": "Этап взаимодействия не может идти после этапа направления, программы или продукта."}
             )
 
     def __str__(self):

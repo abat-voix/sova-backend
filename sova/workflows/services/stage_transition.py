@@ -1,6 +1,5 @@
 from django.db.models import Q
 
-from sova.processes.enum import StageInstanceContextType
 from sova.workflows.models import StageTransition, WorkflowStage
 
 
@@ -46,26 +45,6 @@ class StageTransitionService:
             Q(from_stage=stage) | Q(to_stage=stage),
             active=True,
         ).exists()
-
-    def conflicts_with_type(self, stage: WorkflowStage, new_type: str) -> bool:
-        """
-        Нарушит ли смена типа этапа правило «этап взаимодействия не идёт после других типов».
-
-        Этап, ставший не-взаимодействием, не может вести на этап взаимодействия; этап, ставший
-        взаимодействием, не может следовать за не-взаимодействием. Учитываются активные связи.
-        """
-        interaction = StageInstanceContextType.INTERACTION
-        if new_type != interaction:
-            return StageTransition.objects.filter(
-                from_stage=stage,
-                to_stage__type=interaction,
-                active=True,
-            ).exists()
-        return (
-            StageTransition.objects.filter(to_stage=stage, active=True)
-            .exclude(from_stage__type=interaction)
-            .exists()
-        )
 
     def _load_edges(self, workflow_id: object, exclude_pk: object | None) -> dict:
         """Загружает одним запросом активные связи workflow: этап → этапы, которые он открывает."""
