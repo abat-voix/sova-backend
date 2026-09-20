@@ -28,6 +28,11 @@ class University(TimeStampedModel):
         blank=True,
         verbose_name="Название на английском",
     )
+    short_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Краткое название",
+    )
     inn = models.CharField(
         max_length=12,
         unique=True,

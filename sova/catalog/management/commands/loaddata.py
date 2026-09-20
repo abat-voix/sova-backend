@@ -59,6 +59,7 @@ class Command(DjangoLoadDataCommand):
             "ror",
             "name_en",
             "name",
+            "short_name",
             "country_code",
             "type",
             "works_count",
@@ -98,6 +99,7 @@ class Command(DjangoLoadDataCommand):
                 defaults = {
                     "name": name,
                     "name_en": self._text(row["name_en"]),
+                    "short_name": self._text(row["short_name"]),
                     "institution_type": institution_type,
                     "country_code": self._text(row["country_code"]).upper(),
                     "region": self._text(row["region"]),

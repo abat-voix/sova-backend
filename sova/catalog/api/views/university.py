@@ -13,7 +13,7 @@ class UniversityViewSet(SovaBaseViewSet):
     serializer_class = serializers.WriteUniversitySerializer
     queryset = University.objects.all()
     ordering_fields = "__all__"
-    search_fields = ("name", "inn", "external_code", "email")
+    search_fields = ("short_name", "name", "inn", "external_code", "email")
     filterset_class = filters.UniversityFilter
 
     @action(
@@ -21,13 +21,12 @@ class UniversityViewSet(SovaBaseViewSet):
         methods=("get",),
         serializer_class=serializers.UniversityMapPointSerializer,
         pagination_class=None,
-        filter_backends=(),
         url_path="map",
     )
     def map_points(self, request) -> Response:
         """Возвращает все вузы с координатами в облегчённом формате карты."""
         queryset = (
-            self.get_queryset()
+            self.filter_queryset(self.get_queryset())
             .exclude(lat__isnull=True)
             .exclude(lon__isnull=True)
         )

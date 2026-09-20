@@ -229,6 +229,30 @@ class UniversityApiTestCase(BaseApiTestMixin, APITestCase):
             ],
         )
 
+    def test_map_search_returns_only_matching_university(self) -> None:
+        """Поиск карты фильтрует точки по данным вуза."""
+        target = UniversityFactory(
+            name="Московский государственный университет",
+            lat="55.703934",
+            lon="37.528669",
+        )
+        UniversityFactory(
+            name="Санкт-Петербургский государственный университет",
+            lat="59.941988",
+            lon="30.298918",
+        )
+
+        response = self.client.get(
+            path=reverse("catalog:university-map-points"),
+            data={"search": "Московский"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [item["id"] for item in response.data],
+            [str(target.pk)],
+        )
+
 
 class B2CClientApiTestCase(BaseApiTestMixin, APITestCase):
     """Тесты CRUD /api/catalog/b2c-clients/."""
