@@ -26,6 +26,9 @@ class UniversitySerializer(serializers.ModelSerializer):
             "is_active",
             "created_at",
             "updated_at",
+            "lat",
+            "lon",
+            "city",
         )
 
 
