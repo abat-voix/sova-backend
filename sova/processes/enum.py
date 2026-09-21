@@ -41,3 +41,10 @@ class RollbackMode(TextChoices):
 
     RESTART = "restart", "Заново"
     LAST_ONLY = "last_only", "Только последнее обязательное действие"
+
+
+class TaskScope(TextChoices):
+    """Охват выборки действий на экране «Мои задачи»."""
+
+    MINE = "mine", "Мои"
+    ALL = "all", "Все доступные"

@@ -568,9 +568,9 @@ class WorkflowEngineService:
         """Активные зависимости действий этапа: действие → действия, которые от него зависят."""
         dependents: dict = defaultdict(list)
         for action_id, depends_on_id in ActionDependency.objects.filter(
-            active=True,
+            is_active=True,
             action__stage_id=stage_id,
-            depends_on_action__active=True,
+            depends_on_action__is_active=True,
         ).values_list("action_id", "depends_on_action_id"):
             dependents[depends_on_id].append(action_id)
         return dependents

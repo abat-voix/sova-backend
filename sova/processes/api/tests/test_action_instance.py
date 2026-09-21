@@ -4,6 +4,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
 from sova.core.tests.base import BaseApiTestMixin
 from sova.core.tests.factories import UserFactory
 from sova.processes.enum import StageInstanceStatus, WorkflowInstanceStatus
@@ -22,21 +23,46 @@ class ActionInstanceApiTestCase(BaseApiTestMixin, APITestCase):
     allow_update = False
     allow_delete = False
 
+    def setUp(self) -> None:
+        """Даёт пользователю роль администратора платформы: выборка зависит от роли в СОВА."""
+        super().setUp()
+        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
+
     def create_instance(self, **kwargs) -> ActionInstance:
-        """Создаёт экземпляр действия."""
+        """Создаёт экземпляр действия пользователя: по умолчанию список показывает только свои."""
+        kwargs.setdefault("responsible", self.user)
         return ActionInstanceFactory(**kwargs)
 
     def get_expected_data(self, instance: ActionInstance) -> dict:
         """Поля read-представления экземпляра действия."""
+        interaction = instance.stage_instance.workflow_instance.interaction
         return {
             "id": str(instance.pk),
             "action_name_snapshot": instance.action_name_snapshot,
             "status": instance.status,
             "execution_no": instance.execution_no,
             "triggered_at": None,
+            "is_optional": instance.action.is_optional,
+            "is_trigger_only": instance.action.is_trigger_only,
+            "is_triggered": False,
+            "is_overdue": False,
+            "attachments_count": 0,
             "stage_instance": str(instance.stage_instance_id),
+            "stage_name_snapshot": instance.stage_instance.stage.name,
+            "workflow_instance": str(instance.stage_instance.workflow_instance_id),
+            "interaction": {
+                "id": str(interaction.pk),
+                "university": {"id": str(interaction.university_id), "name": interaction.university.name},
+                "b2c_client": None,
+            },
             "action": {"id": str(instance.action_id), "name": instance.action.name},
-            "responsible": None,
+            "responsible": {
+                "id": self.user.pk,
+                "email": self.user.email,
+                "full_name": self.user.get_full_name(),
+            },
+            "result": None,
+            "available_outcomes": [],
         }
 
     def get_post_data(self) -> dict:
@@ -49,7 +75,8 @@ class ActionInstanceApiTestCase(BaseApiTestMixin, APITestCase):
 
     def assert_filter_returns(self, params: dict, expected: list[ActionInstance]) -> None:
         """Проверяет, что список с фильтром содержит ровно ожидаемые экземпляры."""
-        response = self.client.get(path=self.list_url, data=params)
+        # scope=all: фильтры проверяются на всей доступной выборке, а не только на своих действиях
+        response = self.client.get(path=self.list_url, data={"scope": "all", **params})
 
         # Проверяем состав выдачи (порядок не важен)
         self.assertEqual(

@@ -1,6 +1,8 @@
 from django.test import TestCase
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
+
 from sova.core.tests.factories import UserFactory
 from sova.core.tests.media import TemporaryMediaMixin
 from sova.interactions.tests.factories import InteractionFactory
@@ -101,4 +103,6 @@ class EngineApiTestCase(EngineTestCase, APITestCase):
     def setUp(self) -> None:
         """Аутентифицирует клиента пользователем, от имени которого движок пишет результаты."""
         super().setUp()
+        # Администратор платформы: выборка действий и взаимодействий зависит от роли в СОВА
+        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
         self.client.force_authenticate(user=self.user)
