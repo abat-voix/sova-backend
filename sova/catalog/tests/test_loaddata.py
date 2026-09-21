@@ -3,7 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from django.core.management import CommandError, call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from openpyxl import Workbook
 
 from sova.catalog.models import Direction, Product, Program, University, Vendor
@@ -218,3 +218,79 @@ class LoadProgramsCommandTestCase(TestCase):
 
             with self.assertRaises(CommandError):
                 call_command("loaddata", str(source), stdout=StringIO())
+
+
+class LoadReferenceDataCommandTestCase(TestCase):
+    """Тесты флага --reference-data: загрузка всех справочников разом."""
+
+    def test_loads_every_reference_book_in_dependency_order(self) -> None:
+        with TemporaryDirectory() as base_dir:
+            self._write_reference_data(Path(base_dir))
+
+            with override_settings(BASE_DIR=Path(base_dir)):
+                call_command("loaddata", "--reference-data", stdout=StringIO())
+
+            self.assertEqual(University.objects.count(), 0)
+            self.assertTrue(Vendor.objects.filter(external_code="vendor-1c").exists())
+            self.assertTrue(Direction.objects.filter(external_code="dev").exists())
+
+            program = Program.objects.get(name="DevOps-инженер с нуля")
+            self.assertEqual(program.direction.external_code, "dev")
+
+            # Продукты грузятся последними: вендор и программа уже созданы в этом же прогоне.
+            product = Product.objects.get(external_code="product-1")
+            self.assertEqual(product.vendor.external_code, "vendor-1c")
+            self.assertCountEqual(product.programs.all(), [program])
+
+    def test_missing_file_raises_and_loads_nothing(self) -> None:
+        with TemporaryDirectory() as base_dir:
+            self._write_reference_data(Path(base_dir))
+            (Path(base_dir) / "reference_data" / "products.xlsx").unlink()
+
+            with override_settings(BASE_DIR=Path(base_dir)), self.assertRaises(CommandError):
+                call_command("loaddata", "--reference-data", stdout=StringIO())
+
+            self.assertEqual(Vendor.objects.count(), 0)
+
+    def test_broken_file_rolls_back_already_loaded_books(self) -> None:
+        with TemporaryDirectory() as base_dir:
+            directory = Path(base_dir) / "reference_data"
+            self._write_reference_data(Path(base_dir))
+            _write_workbook(
+                directory / "products.xlsx",
+                ("name", "external_code", "vendor"),
+                ("Продукт", "product-1", "неизвестный вендор"),
+            )
+
+            with override_settings(BASE_DIR=Path(base_dir)), self.assertRaises(CommandError):
+                call_command("loaddata", "--reference-data", stdout=StringIO())
+
+            self.assertEqual(Vendor.objects.count(), 0)
+            self.assertEqual(Direction.objects.count(), 0)
+            self.assertEqual(Program.objects.count(), 0)
+
+    def test_flag_with_explicit_file_raises(self) -> None:
+        with self.assertRaises(CommandError):
+            call_command("loaddata", "vendors.xlsx", "--reference-data", stdout=StringIO())
+
+    def test_without_arguments_raises(self) -> None:
+        with self.assertRaises(CommandError):
+            call_command("loaddata", stdout=StringIO())
+
+    def _write_reference_data(self, base_dir: Path) -> None:
+        directory = base_dir / "reference_data"
+        directory.mkdir()
+
+        _write_workbook(directory / "universities.xlsx", LoadUniversitiesCommandTestCase.headers)
+        _write_workbook(directory / "vendors.xlsx", ("name", "external_code"), ("1С", "vendor-1c"))
+        _write_workbook(directory / "directions.xlsx", ("name", "external_code"), ("Разработка", "dev"))
+        _write_workbook(
+            directory / "programs.xlsx",
+            ("name", "direction"),
+            ("DevOps-инженер с нуля", "dev"),
+        )
+        _write_workbook(
+            directory / "products.xlsx",
+            ("name", "external_code", "vendor", "programs"),
+            ("1С:Предприятие", "product-1", "vendor-1c", "DevOps-инженер с нуля"),
+        )

@@ -15,7 +15,32 @@ from sova.catalog.models.university import InstitutionType
 class Command(DjangoLoadDataCommand):
     help = "Загружает Django fixtures или справочники XLSX из reference_data."
 
+    def add_arguments(self, parser) -> None:
+        super().add_arguments(parser)
+        # Django объявляет метки фикстур обязательными (nargs="+"), но с --reference-data
+        # указывать их не нужно: ослабляем до nargs="*" и проверяем комбинацию сами.
+        for action in parser._actions:
+            if action.dest == "args":
+                action.nargs = "*"
+                break
+        parser.add_argument(
+            "--reference-data",
+            action="store_true",
+            help=(
+                "Загрузить все справочники XLSX из reference_data "
+                "в порядке зависимостей, без указания файлов."
+            ),
+        )
+
     def handle(self, *fixture_labels, **options):
+        if options.pop("reference_data", False):
+            if fixture_labels:
+                raise CommandError("--reference-data нельзя совмещать с указанием файлов.")
+            return self._load_reference_data()
+
+        if not fixture_labels:
+            raise CommandError(self.missing_args_message)
+
         source = self._resolve_xlsx(fixture_labels)
         if source is None:
             return super().handle(*fixture_labels, **options)
@@ -26,13 +51,28 @@ class Command(DjangoLoadDataCommand):
         loader(source)
 
     def _loaders(self) -> dict:
+        """Справочники в порядке зависимостей: продукты ссылаются на вендоров и программы."""
         return {
             "universities.xlsx": self._load_universities,
             "vendors.xlsx": self._load_vendors,
             "directions.xlsx": self._load_directions,
-            "products.xlsx": self._load_products,
             "programs.xlsx": self._load_programs,
+            "products.xlsx": self._load_products,
         }
+
+    @transaction.atomic
+    def _load_reference_data(self) -> None:
+        directory = Path(settings.BASE_DIR) / "reference_data"
+        loaders = self._loaders()
+
+        missing = [name for name in loaders if not (directory / name).is_file()]
+        if missing:
+            raise CommandError(f"В {directory} не найдены справочники: {', '.join(missing)}")
+
+        for name, loader in loaders.items():
+            loader(directory / name)
+
+        self.stdout.write(self.style.SUCCESS(f"Загружены все справочники: {', '.join(loaders)}."))
 
     def _resolve_xlsx(self, fixture_labels: tuple[str, ...]) -> Path | None:
         if len(fixture_labels) != 1:
