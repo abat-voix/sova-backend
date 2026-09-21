@@ -4,8 +4,11 @@ from sova.processes.api.serializers.action_attachment import (
 )
 from sova.processes.api.serializers.action_instance import ActionInstanceSerializer
 from sova.processes.api.serializers.action_result import ActionResultSerializer
+from sova.processes.api.serializers.action_rollback import ActionRollbackSerializer
 from sova.processes.api.serializers.board import WorkflowBoardSerializer
 from sova.processes.api.serializers.engine import (
+    CancelActionResultSerializer,
+    CancelActionSerializer,
     CancelStageResultSerializer,
     CancelStageSerializer,
     CompleteActionResultSerializer,
@@ -25,6 +28,9 @@ __all__ = [
     "ActionAttachmentSerializer",
     "ActionInstanceSerializer",
     "ActionResultSerializer",
+    "ActionRollbackSerializer",
+    "CancelActionResultSerializer",
+    "CancelActionSerializer",
     "CancelStageResultSerializer",
     "CancelStageSerializer",
     "CompleteActionResultSerializer",

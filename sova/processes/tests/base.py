@@ -86,6 +86,14 @@ class EngineTestCase(TemporaryMediaMixin, TestCase):
             return_to=return_to,
         )
 
+    def cancel_action(self, process, action, reason="Ошибка", context=None):
+        """Откатывает последнее исполнение действия."""
+        return engine.cancel_action(
+            action_instance=self.action_instance(process, action, context),
+            reason=reason,
+            cancelled_by=self.user,
+        )
+
 
 class EngineApiTestCase(EngineTestCase, APITestCase):
     """Тесты эндпоинтов движка: те же помощники, а запросы идут от аутентифицированного пользователя."""
