@@ -1,6 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from django.contrib.auth.models import AbstractBaseUser
 from django.db import IntegrityError, transaction
@@ -30,6 +30,7 @@ from sova.processes.models import (
     WorkflowInstance,
 )
 from sova.processes.schemas import EngineOutcome, RollbackOutcome
+from sova.processes.services.planner import workflow_planner_service
 from sova.workflows.enum import Audience
 from sova.workflows.models import (
     ActionDependency,
@@ -259,6 +260,14 @@ class WorkflowEngineService:
 
     def return_options(self, snapshot: ProcessSnapshot, stage_instance: StageInstance) -> list[StageInstance]:
         """Экземпляры этапов, на которые можно вернуться при отмене этапа: его предшественники."""
+        return self._predecessor_instances(snapshot=snapshot, stage_instance=stage_instance)
+
+    def _predecessor_instances(
+        self,
+        snapshot: ProcessSnapshot,
+        stage_instance: StageInstance,
+    ) -> list[StageInstance]:
+        """Экземпляры этапов-предшественников: их закрытия ждёт этап и от их конца считается его план."""
         options: list[StageInstance] = []
         for from_id in snapshot.graph.inbound.get(stage_instance.stage_id, ()):
             sources, _ = self._source_instances(
@@ -314,11 +323,30 @@ class WorkflowEngineService:
         trace: _Trace,
         actor: AbstractBaseUser | None,
     ) -> None:
-        """Открывает всё, что можно открыть, и завершает процесс, если закрыты все этапы. Завершённый не трогает."""
+        """Открывает всё, что можно открыть, планирует даты и завершает процесс. Завершённый не трогает."""
         if process.status != WorkflowInstanceStatus.RUNNING:
             return
         self._release(process=process, now=now, trace=trace, actor=actor)
+        self._plan(process=process, now=now)
         self._finalize_workflow(process=process, now=now, trace=trace)
+
+    def _plan(self, process: WorkflowInstance, now: datetime) -> None:
+        """
+        Проставляет плановые даты действиям, у которых их ещё нет.
+
+        Одна точка на все операции: при старте планируется весь процесс, позже — только новое,
+        то есть этапы добавленной программы или продукта и действия, у которых откат обнулил план.
+        """
+        snapshot = self.snapshot(process=process)
+        relevant = [item for item in snapshot.instances if self._is_relevant(item, snapshot.graph, snapshot.live)]
+        workflow_planner_service.plan(
+            process=process,
+            stage_instances=relevant,
+            predecessors={
+                item.pk: self._predecessor_instances(snapshot=snapshot, stage_instance=item) for item in relevant
+            },
+            origin=now,
+        )
 
     def _release(
         self,
@@ -405,11 +433,10 @@ class WorkflowEngineService:
             if any(item.status != ActionInstanceStatus.COMPLETED for item in prerequisites):
                 continue
             instance.status = ActionInstanceStatus.IN_PROGRESS
-            instance.planned_start = now
             instance.actual_start = now
-            if action.default_duration_days is not None:
-                instance.planned_end = now + timedelta(days=action.default_duration_days)
-            instance.save(update_fields=["status", "planned_start", "actual_start", "planned_end"])
+            # Плановые даты ставит планировщик при старте процесса: активация не должна затирать
+            # базовый план моментом, когда до действия дошла очередь
+            instance.save(update_fields=["status", "actual_start"])
             trace.activated_actions.append(instance)
 
     def _is_closable(self, stage_instance: StageInstance) -> bool:

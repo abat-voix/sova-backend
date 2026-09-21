@@ -150,7 +150,9 @@ class WorkflowBoardService:
             "planned_end": instance.planned_end,
             "actual_start": instance.actual_start,
             "actual_end": instance.actual_end,
-            "is_overdue": in_progress and instance.planned_end is not None and instance.planned_end < now,
+            "is_overdue": instance.status != ActionInstanceStatus.COMPLETED
+            and instance.planned_end is not None
+            and instance.planned_end < now,
             "responsible": instance.responsible,
             "result": (
                 {

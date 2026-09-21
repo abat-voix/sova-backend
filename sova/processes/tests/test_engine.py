@@ -108,8 +108,9 @@ class StartTest(EngineTestCase):
         # Проверяем даты действия с длительностью
         self.assertEqual(timed.actual_start, timed.planned_start)
         self.assertEqual(timed.planned_end - timed.planned_start, timedelta(days=5))
-        # Проверяем, что без длительности планового окончания нет
-        self.assertIsNone(self.action_instance(process, untimed).planned_end)
+        # Проверяем, что без длительности действие планируется на сутки
+        untimed_instance = self.action_instance(process, untimed)
+        self.assertEqual(untimed_instance.planned_end - untimed_instance.planned_start, timedelta(days=1))
 
     def test_start_assigns_current_responsible_manager(self) -> None:
         """Ответственный за действие — действующий менеджер взаимодействия."""
@@ -1000,7 +1001,8 @@ class CancelStageTest(EngineTestCase):
         self.assertEqual(after.execution_no, 1)
         self.assertEqual(after.status, PENDING)
         self.assertIsNone(after.actual_start)
-        self.assertIsNone(after.planned_start)
+        # План действие получает заново: откат обнулил прежний, планировщик проставил новый
+        self.assertIsNotNone(after.planned_start)
         self.assertEqual(ActionInstance.objects.filter(action=self.a4).count(), 1)
 
     def test_cancel_keeps_history_of_completed_actions_of_cancelled_stage(self) -> None:

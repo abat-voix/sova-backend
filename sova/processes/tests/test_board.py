@@ -152,7 +152,7 @@ class BoardTest(EngineTestCase):
         self.assertEqual(card["available_outcomes"], [])
         self.assertFalse(card["is_overdue"])
 
-    def test_overdue_is_reported_only_for_action_in_progress(self) -> None:
+    def test_overdue_is_reported_for_action_in_progress(self) -> None:
         """Просрочено действие в работе, плановое окончание которого прошло."""
         process = self.start()
         ActionInstance.objects.filter(pk=self.action_instance(process, self.find).pk).update(
@@ -162,6 +162,19 @@ class BoardTest(EngineTestCase):
         card = self.action_card(board_service.build(process=process), "Поиск контактов", "Найти контакт")
 
         # Проверяем просрочку
+        self.assertTrue(card["is_overdue"])
+
+    def test_overdue_is_reported_for_pending_action_too(self) -> None:
+        """Ожидающее действие с прошедшим плановым окончанием тоже просрочено."""
+        process = self.start()
+        ActionInstance.objects.filter(pk=self.action_instance(process, self.meet).pk).update(
+            planned_end=timezone.now() - timedelta(days=1),
+        )
+
+        card = self.action_card(board_service.build(process=process), "Встреча", "Организовать встречу")
+
+        # Проверяем, что просрочка не требует статуса «в работе»
+        self.assertEqual(card["status"], PENDING)
         self.assertTrue(card["is_overdue"])
 
     def test_attachments_are_counted(self) -> None:

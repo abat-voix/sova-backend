@@ -71,12 +71,12 @@ class BoardActionSerializer(serializers.Serializer):
     planned_start = serializers.DateTimeField(
         allow_null=True,
         label=_("Плановое начало"),
-        help_text=_("Момент запуска"),
+        help_text=_("Рассчитано при запуске процесса по графу этапов, зависимостей и переходов"),
     )
     planned_end = serializers.DateTimeField(
         allow_null=True,
         label=_("Плановое окончание"),
-        help_text=_("Плановое начало плюс плановая длительность действия; пусто без длительности"),
+        help_text=_("Плановое начало плюс плановая длительность действия"),
     )
     actual_start = serializers.DateTimeField(
         allow_null=True,
@@ -90,7 +90,7 @@ class BoardActionSerializer(serializers.Serializer):
     )
     is_overdue = serializers.BooleanField(
         label=_("Просрочено"),
-        help_text=_("Действие в работе, плановое окончание которого прошло"),
+        help_text=_("Невыполненное действие, плановое окончание которого прошло"),
     )
     responsible = UserShortSerializer(
         allow_null=True,
