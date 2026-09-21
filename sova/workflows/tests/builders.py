@@ -60,7 +60,7 @@ class WorkflowBuilder:
             name=name,
             sort_order=self._action_order[stage.pk],
             is_optional=optional,
-            starts_by_transition_only=trigger_only,
+            is_trigger_only=trigger_only,
             default_duration_days=duration_days,
         )
         action_outcome_service.create_default(action=action)

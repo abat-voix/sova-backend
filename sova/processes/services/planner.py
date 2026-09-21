@@ -135,7 +135,7 @@ class _Calculation:
     ) -> datetime:
         """Начало действия: конец последнего предусловия, иначе начало этапа."""
         sources = list(self.dependencies.get(instance.action_id, ()))
-        if instance.action.starts_by_transition_only:
+        if instance.action.is_trigger_only:
             sources.extend(self.triggers.get(instance.action_id, ()))
         ends = []
         for source_id in sources:
@@ -164,7 +164,7 @@ class _Calculation:
         """Последнее исполнение каждого активного действия: экземпляр этапа → действие → экземпляр."""
         latest: dict = defaultdict(dict)
         instances = (
-            ActionInstance.objects.filter(stage_instance__in=self.stage_instances, action__active=True)
+            ActionInstance.objects.filter(stage_instance__in=self.stage_instances, action__is_active=True)
             .select_related("action")
             .order_by("stage_instance_id", "action_id", "execution_no")
         )
@@ -176,10 +176,10 @@ class _Calculation:
         """Активные зависимости действий workflow: действие → действия, которые оно ждёт."""
         dependencies: dict = defaultdict(list)
         for action_id, depends_on_id in ActionDependency.objects.filter(
-            active=True,
-            action__active=True,
+            is_active=True,
+            action__is_active=True,
             action__stage__workflow_id=self.process.workflow_id,
-            depends_on_action__active=True,
+            depends_on_action__is_active=True,
         ).values_list("action_id", "depends_on_action_id"):
             dependencies[action_id].append(depends_on_id)
         return dependencies
@@ -188,8 +188,8 @@ class _Calculation:
         """Активные переходы workflow: целевое действие → действия, чей исход его запускает."""
         triggers: dict = defaultdict(list)
         for target_id, source_id in ActionTransition.objects.filter(
-            active=True,
-            target_action__active=True,
+            is_active=True,
+            target_action__is_active=True,
             target_action__stage__workflow_id=self.process.workflow_id,
         ).values_list("target_action_id", "outcome__action_id"):
             triggers[target_id].append(source_id)

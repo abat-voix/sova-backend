@@ -133,7 +133,7 @@ class WorkflowTemplateService:
                     sort_order=order,
                     default_duration_days=action_spec.duration_days,
                     is_optional=action_spec.is_optional,
-                    starts_by_transition_only=action_spec.starts_by_transition_only,
+                    is_trigger_only=action_spec.is_trigger_only,
                 )
                 actions[action_spec.name] = action
                 created.append(action)
@@ -156,8 +156,8 @@ class WorkflowTemplateService:
                     action=action,
                     code=outcome_spec.code,
                     name=outcome_spec.name,
-                    comment_required=outcome_spec.comment_required,
-                    attachment_required=outcome_spec.attachment_required,
+                    is_comment_required=outcome_spec.is_comment_required,
+                    is_attachment_required=outcome_spec.is_attachment_required,
                 ),
             )
 

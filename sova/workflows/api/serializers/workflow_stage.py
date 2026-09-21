@@ -34,7 +34,7 @@ class WorkflowStageSerializer(serializers.ModelSerializer):
             "is_initial",
             "is_final",
             "is_optional",
-            "active",
+            "is_active",
             "workflow",
             "created_at",
             "updated_at",
@@ -55,7 +55,7 @@ class WriteWorkflowStageSerializer(serializers.ModelSerializer):
             "is_initial",
             "is_final",
             "is_optional",
-            "active",
+            "is_active",
             "workflow",
         )
 

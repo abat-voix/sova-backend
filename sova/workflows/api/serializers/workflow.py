@@ -37,7 +37,7 @@ class WorkflowSerializer(serializers.ModelSerializer):
             "description",
             "stale_threshold_days",
             "is_base",
-            "active",
+            "is_active",
             "created_by",
             "created_at",
             "updated_at",
@@ -58,7 +58,7 @@ class WriteWorkflowSerializer(serializers.ModelSerializer):
             "description",
             "stale_threshold_days",
             "is_base",
-            "active",
+            "is_active",
         )
 
     def validate(self, attrs: dict) -> dict:

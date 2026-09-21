@@ -39,7 +39,7 @@ class WorkflowTemplateServiceStageTest(TestCase):
         self.assertEqual(workflow.audience, Audience.B2B)
         self.assertEqual(workflow.description, "Процесс работы с вузом")
         self.assertEqual(workflow.stale_threshold_days, 180)
-        self.assertTrue(workflow.active)
+        self.assertTrue(workflow.is_active)
         self.assertFalse(workflow.is_base)
 
     def test_create_marks_workflow_as_base_on_request(self) -> None:
@@ -178,7 +178,7 @@ class WorkflowTemplateServiceActionTest(TestCase):
                 description="После правок вуза",
                 duration_days=3,
                 is_optional=True,
-                starts_by_transition_only=True,
+                is_trigger_only=True,
             ),
         )
 
@@ -187,7 +187,7 @@ class WorkflowTemplateServiceActionTest(TestCase):
         self.assertEqual(action.description, "После правок вуза")
         self.assertEqual(action.default_duration_days, 3)
         self.assertTrue(action.is_optional)
-        self.assertTrue(action.starts_by_transition_only)
+        self.assertTrue(action.is_trigger_only)
 
     def test_create_adds_default_outcome_to_action_without_outcomes(self) -> None:
         """Действию без объявленных исходов добавляется «Выполнено» — иначе его нельзя завершить."""
@@ -203,8 +203,8 @@ class WorkflowTemplateServiceActionTest(TestCase):
             ActionSpec(
                 name="Согласовать документы",
                 outcomes=(
-                    OutcomeSpec(code="done", name="Согласовано", attachment_required=True),
-                    OutcomeSpec(code="revision", name="Нужны правки", comment_required=True),
+                    OutcomeSpec(code="done", name="Согласовано", is_attachment_required=True),
+                    OutcomeSpec(code="revision", name="Нужны правки", is_comment_required=True),
                 ),
             ),
         )
@@ -213,7 +213,7 @@ class WorkflowTemplateServiceActionTest(TestCase):
         # Проверяем исходы и их правила
         self.assertEqual(
             [
-                (outcome.code, outcome.name, outcome.comment_required, outcome.attachment_required)
+                (outcome.code, outcome.name, outcome.is_comment_required, outcome.is_attachment_required)
                 for outcome in outcomes
             ],
             [("done", "Согласовано", False, True), ("revision", "Нужны правки", True, False)],
@@ -243,7 +243,7 @@ class WorkflowTemplateServiceActionTest(TestCase):
                     OutcomeSpec(code="revision", name="Нужны правки", starts="Доработать документы"),
                 ),
             ),
-            ActionSpec(name="Доработать документы", starts_by_transition_only=True),
+            ActionSpec(name="Доработать документы", is_trigger_only=True),
         )
 
         transitions = ActionTransition.objects.all()
@@ -358,7 +358,7 @@ class WorkflowTemplateServiceAuditTest(TestCase):
                         ),
                         ActionSpec(
                             name="Запросить лицензию",
-                            starts_by_transition_only=True,
+                            is_trigger_only=True,
                             after=("Передать лицензию",),
                         ),
                     ),

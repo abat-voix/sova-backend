@@ -18,7 +18,7 @@ class StageTransition(TimeStampedModel):
     экземпляров этапа-источника, а не одного — см. `WorkflowEngineService._source_instances`.
     """
 
-    active = models.BooleanField(
+    is_active = models.BooleanField(
         default=True,
         verbose_name="Активна",
     )

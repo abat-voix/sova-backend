@@ -25,4 +25,4 @@ class ActionDependencyFilter(SearchFilterMixin):
 
     class Meta:
         model = ActionDependency
-        fields = ("active",)
+        fields = ("is_active",)

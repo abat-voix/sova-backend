@@ -25,7 +25,7 @@ class ActionDependencyApiTestCase(BaseApiTestMixin, APITestCase):
         """Поля read-представления зависимости."""
         return {
             "id": str(instance.pk),
-            "active": instance.active,
+            "is_active": instance.is_active,
             "action": {"id": str(instance.action_id), "name": instance.action.name},
             "depends_on_action": {
                 "id": str(instance.depends_on_action_id),
@@ -41,7 +41,7 @@ class ActionDependencyApiTestCase(BaseApiTestMixin, APITestCase):
 
     def get_change_data(self) -> dict:
         """Данные обновления зависимости."""
-        return {"active": False}
+        return {"is_active": False}
 
     def post_dependency(self, action, depends_on):
         """Отправляет запрос на создание зависимости action → depends_on."""
@@ -127,7 +127,7 @@ class ActionDependencyApiTestCase(BaseApiTestMixin, APITestCase):
             data={
                 "action": str(mandatory.pk),
                 "depends_on_action": str(optional.pk),
-                "active": False,
+                "is_active": False,
             },
             format="json",
         )
@@ -141,12 +141,12 @@ class ActionDependencyApiTestCase(BaseApiTestMixin, APITestCase):
         dependency = ActionDependencyFactory(
             action=WorkflowActionFactory(stage=stage, is_optional=False),
             depends_on_action=WorkflowActionFactory(stage=stage, is_optional=True),
-            active=False,
+            is_active=False,
         )
 
         response = self.client.patch(
             path=self.detail_url(dependency),
-            data={"active": True},
+            data={"is_active": True},
             format="json",
         )
 
@@ -192,7 +192,7 @@ class ActionDependencyApiTestCase(BaseApiTestMixin, APITestCase):
 
     def test_add_ignores_inactive_dependencies_when_looking_for_cycle(self) -> None:
         """Неактивная обратная зависимость цикл не образует."""
-        existing = ActionDependencyFactory(active=False)
+        existing = ActionDependencyFactory(is_active=False)
 
         response = self.post_dependency(
             action=existing.depends_on_action,
@@ -208,12 +208,12 @@ class ActionDependencyApiTestCase(BaseApiTestMixin, APITestCase):
         reverse = ActionDependencyFactory(
             action=first.depends_on_action,
             depends_on_action=first.action,
-            active=False,
+            is_active=False,
         )
 
         response = self.client.patch(
             path=self.detail_url(reverse),
-            data={"active": True},
+            data={"is_active": True},
             format="json",
         )
 

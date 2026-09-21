@@ -65,7 +65,7 @@ BASE_B2B_PRESET = WorkflowSpec(
                         OutcomeSpec(
                             code="revision",
                             name="Нужны правки",
-                            comment_required=True,
+                            is_comment_required=True,
                             starts="Доработать документы",
                         ),
                     ),
@@ -74,7 +74,7 @@ BASE_B2B_PRESET = WorkflowSpec(
                     name="Доработать документы",
                     description="Правки по замечаниям вуза. Запускается исходом «Нужны правки».",
                     duration_days=5,
-                    starts_by_transition_only=True,
+                    is_trigger_only=True,
                 ),
                 ActionSpec(
                     name="Подписать договор",
@@ -135,7 +135,7 @@ BASE_B2B_PRESET = WorkflowSpec(
                     duration_days=30,
                     outcomes=(
                         OutcomeSpec(code="done", name="Результат достигнут"),
-                        OutcomeSpec(code="issues", name="Есть замечания", comment_required=True),
+                        OutcomeSpec(code="issues", name="Есть замечания", is_comment_required=True),
                     ),
                 ),
             ),

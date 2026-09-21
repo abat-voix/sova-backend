@@ -137,7 +137,7 @@ class WorkflowInstanceApiTestCase(BaseApiTestMixin, APITestCase):
     def test_add_returns_400_for_inactive_workflow(self) -> None:
         """Запуск неактивного workflow отклоняется."""
         workflow = startable_workflow()
-        workflow.active = False
+        workflow.is_active = False
         workflow.save()
 
         response = self.post(workflow, InteractionFactory())

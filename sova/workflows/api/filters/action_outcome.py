@@ -21,8 +21,8 @@ class ActionOutcomeFilter(SearchFilterMixin):
     class Meta:
         model = ActionOutcome
         fields = (
-            "active",
-            "comment_required",
-            "attachment_required",
+            "is_active",
+            "is_comment_required",
+            "is_attachment_required",
         )
         exact_search_fields = ["code"]

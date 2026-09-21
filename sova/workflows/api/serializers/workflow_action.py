@@ -32,8 +32,8 @@ class WorkflowActionSerializer(serializers.ModelSerializer):
             "sort_order",
             "default_duration_days",
             "is_optional",
-            "starts_by_transition_only",
-            "active",
+            "is_trigger_only",
+            "is_active",
             "stage",
             "created_at",
             "updated_at",
@@ -52,8 +52,8 @@ class WriteWorkflowActionSerializer(serializers.ModelSerializer):
             "sort_order",
             "default_duration_days",
             "is_optional",
-            "starts_by_transition_only",
-            "active",
+            "is_trigger_only",
+            "is_active",
             "stage",
         )
 

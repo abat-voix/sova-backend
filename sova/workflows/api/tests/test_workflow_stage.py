@@ -32,7 +32,7 @@ class WorkflowStageApiTestCase(BaseApiTestMixin, APITestCase):
             "is_initial": instance.is_initial,
             "is_final": instance.is_final,
             "is_optional": instance.is_optional,
-            "active": instance.active,
+            "is_active": instance.is_active,
             "workflow": {
                 "id": str(instance.workflow_id),
                 "name": instance.workflow.name,
@@ -229,7 +229,7 @@ class WorkflowStageApiTestCase(BaseApiTestMixin, APITestCase):
 
     def test_change_allows_moving_stage_with_only_inactive_transitions(self) -> None:
         """Неактивные связи перенос не блокируют."""
-        transition = StageTransitionFactory(active=False)
+        transition = StageTransitionFactory(is_active=False)
 
         response = self.patch_stage(transition.from_stage, workflow=str(WorkflowFactory().pk))
 

@@ -58,7 +58,7 @@ class _Trace:
     activated_actions: list[ActionInstance] = field(default_factory=list)
     opened_stages: list[StageInstance] = field(default_factory=list)
     completed_stages: list[StageInstance] = field(default_factory=list)
-    workflow_completed: bool = False
+    is_workflow_completed: bool = False
 
 
 @dataclass
@@ -191,7 +191,7 @@ class WorkflowEngineService:
             activated_actions=trace.activated_actions,
             opened_stages=trace.opened_stages,
             completed_stages=trace.completed_stages,
-            workflow_completed=trace.workflow_completed,
+            is_workflow_completed=trace.is_workflow_completed,
         )
 
     @transaction.atomic
@@ -338,7 +338,7 @@ class WorkflowEngineService:
 
     def _check_can_start(self, workflow: Workflow, interaction: Interaction) -> None:
         """Проверяет, что workflow активен, подходит контрагенту взаимодействия и содержит этапы."""
-        if not workflow.active:
+        if not workflow.is_active:
             raise RuleViolationError("Workflow неактивен.", code="workflow_inactive")
         has_counterparty = (
             interaction.university_id is not None
@@ -350,7 +350,7 @@ class WorkflowEngineService:
                 "Аудитория workflow не соответствует контрагенту взаимодействия.",
                 code="audience_mismatch",
             )
-        if not WorkflowStage.objects.filter(workflow=workflow, active=True).exists():
+        if not WorkflowStage.objects.filter(workflow=workflow, is_active=True).exists():
             raise RuleViolationError("В workflow нет активных этапов.", code="empty_workflow")
 
     def _check_can_complete(self, instance: ActionInstance, outcome: ActionOutcome, comment: str) -> None:
@@ -359,12 +359,12 @@ class WorkflowEngineService:
             raise InvalidStateError("Завершить можно только действие в работе.")
         if outcome.action_id != instance.action_id:
             raise RuleViolationError("Исход относится к другому действию.", code="outcome_mismatch")
-        if not outcome.active:
+        if not outcome.is_active:
             raise RuleViolationError("Исход неактивен.", code="outcome_inactive")
-        if outcome.comment_required and not comment.strip():
-            raise RuleViolationError("Для этого исхода нужен комментарий.", code="comment_required")
-        if outcome.attachment_required and not ActionAttachment.objects.filter(action_instance=instance).exists():
-            raise RuleViolationError("Для этого исхода нужно приложить файл.", code="attachment_required")
+        if outcome.is_comment_required and not comment.strip():
+            raise RuleViolationError("Для этого исхода нужен комментарий.", code="is_comment_required")
+        if outcome.is_attachment_required and not ActionAttachment.objects.filter(action_instance=instance).exists():
+            raise RuleViolationError("Для этого исхода нужно приложить файл.", code="is_attachment_required")
 
     # === ПРИВАТНЫЕ МЕТОДЫ: ПРОДВИЖЕНИЕ ПРОЦЕССА ===
 
@@ -464,7 +464,7 @@ class WorkflowEngineService:
         process.status = WorkflowInstanceStatus.COMPLETED
         process.completed_at = now
         process.save(update_fields=["status", "completed_at"])
-        trace.workflow_completed = True
+        trace.is_workflow_completed = True
 
     # === ПРИВАТНЫЕ МЕТОДЫ: ДЕЙСТВИЯ ===
 
@@ -481,9 +481,9 @@ class WorkflowEngineService:
         dependencies = self._action_dependencies(stage_id=stage_instance.stage_id)
         for instance in latest.values():
             action = instance.action
-            if instance.status != ActionInstanceStatus.PENDING or not action.active:
+            if instance.status != ActionInstanceStatus.PENDING or not action.is_active:
                 continue
-            if action.starts_by_transition_only and instance.triggered_at is None:
+            if action.is_trigger_only and instance.triggered_at is None:
                 continue
             prerequisites = [latest[item] for item in dependencies.get(action.pk, ()) if item in latest]
             if any(item.status != ActionInstanceStatus.COMPLETED for item in prerequisites):
@@ -503,12 +503,12 @@ class WorkflowEngineService:
         """
         for instance in self._latest_action_instances(stage_instance=stage_instance).values():
             action = instance.action
-            if not action.active or action.is_optional:
+            if not action.is_active or action.is_optional:
                 continue
             if instance.status == ActionInstanceStatus.COMPLETED:
                 continue
             if (
-                action.starts_by_transition_only
+                action.is_trigger_only
                 and instance.status == ActionInstanceStatus.PENDING
                 and instance.triggered_at is None
             ):
@@ -519,12 +519,12 @@ class WorkflowEngineService:
     def _follow_transition(self, stage_instance: StageInstance, outcome: ActionOutcome, now: datetime) -> None:
         """Запускает целевое действие активного перехода исхода. Цель из другого этапа игнорируется."""
         transition = (
-            ActionTransition.objects.select_related("target_action").filter(outcome=outcome, active=True).first()
+            ActionTransition.objects.select_related("target_action").filter(outcome=outcome, is_active=True).first()
         )
         if transition is None:
             return
         target = transition.target_action
-        if not target.active or target.stage_id != stage_instance.stage_id:
+        if not target.is_active or target.stage_id != stage_instance.stage_id:
             return
         latest = self._latest_action_instances(stage_instance=stage_instance).get(target.pk)
         if latest is None:
@@ -557,9 +557,9 @@ class WorkflowEngineService:
         """Активные зависимости действий этапа: действие → действия, которые оно ждёт."""
         dependencies: dict = defaultdict(list)
         for action_id, depends_on_id in ActionDependency.objects.filter(
-            active=True,
+            is_active=True,
             action__stage_id=stage_id,
-            depends_on_action__active=True,
+            depends_on_action__is_active=True,
         ).values_list("action_id", "depends_on_action_id"):
             dependencies[action_id].append(depends_on_id)
         return dependencies
@@ -580,14 +580,14 @@ class WorkflowEngineService:
     def _load_graph(self, process: WorkflowInstance) -> _Graph:
         """Загружает активные этапы workflow и активные связи между ними."""
         stages = {
-            stage.pk: stage for stage in WorkflowStage.objects.filter(workflow_id=process.workflow_id, active=True)
+            stage.pk: stage for stage in WorkflowStage.objects.filter(workflow_id=process.workflow_id, is_active=True)
         }
         inbound: dict = defaultdict(list)
         outbound: dict = defaultdict(list)
         for from_id, to_id in StageTransition.objects.filter(
-            active=True,
-            from_stage__active=True,
-            to_stage__active=True,
+            is_active=True,
+            from_stage__is_active=True,
+            to_stage__is_active=True,
             from_stage__workflow_id=process.workflow_id,
         ).values_list("from_stage_id", "to_stage_id"):
             inbound[to_id].append(from_id)
@@ -617,7 +617,7 @@ class WorkflowEngineService:
 
     def _materialize(self, process: WorkflowInstance, now: datetime, actor: AbstractBaseUser | None) -> None:
         """Создаёт недостающие экземпляры этапов и действий: для каждого активного этапа и каждого его контекста."""
-        stages = list(WorkflowStage.objects.filter(workflow_id=process.workflow_id, active=True))
+        stages = list(WorkflowStage.objects.filter(workflow_id=process.workflow_id, is_active=True))
         existing = set(
             StageInstance.objects.filter(workflow_instance=process).values_list("stage_id", "context_id"),
         )
@@ -629,7 +629,7 @@ class WorkflowEngineService:
                     continue
                 if actions_by_stage is None:
                     actions_by_stage = defaultdict(list)
-                    for action in WorkflowAction.objects.filter(stage__workflow_id=process.workflow_id, active=True):
+                    for action in WorkflowAction.objects.filter(stage__workflow_id=process.workflow_id, is_active=True):
                         actions_by_stage[action.stage_id].append(action)
                     responsible = self._current_manager(interaction=process.interaction)
                 stage_instance = StageInstance.objects.create(
@@ -732,7 +732,7 @@ class WorkflowEngineService:
         candidates = [
             item
             for item in self._latest_action_instances(stage_instance=stage_instance).values()
-            if item.action.active and not item.action.is_optional and item.status == ActionInstanceStatus.COMPLETED
+            if item.action.is_active and not item.action.is_optional and item.status == ActionInstanceStatus.COMPLETED
         ]
         if not candidates:
             return None

@@ -11,7 +11,7 @@ class ActionTransition(TimeStampedModel):
     действие-цель может вести несколько переходов от разных исходов/действий.
     """
 
-    active = models.BooleanField(
+    is_active = models.BooleanField(
         default=True,
         verbose_name="Активен",
     )

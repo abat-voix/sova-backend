@@ -25,7 +25,7 @@ class StageTransitionSerializer(serializers.ModelSerializer):
         model = StageTransition
         fields = (
             "id",
-            "active",
+            "is_active",
             "from_stage",
             "to_stage",
             "created_at",
@@ -40,7 +40,7 @@ class WriteStageTransitionSerializer(serializers.ModelSerializer):
         model = StageTransition
         fields = (
             "id",
-            "active",
+            "is_active",
             "from_stage",
             "to_stage",
         )
@@ -55,7 +55,7 @@ class WriteStageTransitionSerializer(serializers.ModelSerializer):
         """
         from_stage = attrs.get("from_stage", getattr(self.instance, "from_stage", None))
         to_stage = attrs.get("to_stage", getattr(self.instance, "to_stage", None))
-        is_active = attrs.get("active", getattr(self.instance, "active", True))
+        is_active = attrs.get("is_active", getattr(self.instance, "is_active", True))
         if from_stage.pk == to_stage.pk:
             raise serializers.ValidationError(
                 {"to_stage": _("Этап не может вести сам на себя.")},

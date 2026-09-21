@@ -25,7 +25,7 @@ class ActionTransitionApiTestCase(BaseApiTestMixin, APITestCase):
         """Поля read-представления перехода."""
         return {
             "id": str(instance.pk),
-            "active": instance.active,
+            "is_active": instance.is_active,
             "outcome": {
                 "id": str(instance.outcome_id),
                 "code": instance.outcome.code,
@@ -45,7 +45,7 @@ class ActionTransitionApiTestCase(BaseApiTestMixin, APITestCase):
 
     def get_change_data(self) -> dict:
         """Данные обновления перехода."""
-        return {"active": False}
+        return {"is_active": False}
 
     def test_add_returns_400_with_target_from_another_workflow(self) -> None:
         """Целевое действие из другого workflow отклоняется."""

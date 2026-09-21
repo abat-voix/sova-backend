@@ -22,5 +22,5 @@ class WorkflowActionFilter(SearchFilterMixin):
         model = WorkflowAction
         fields = (
             "is_optional",
-            "active",
+            "is_active",
         )

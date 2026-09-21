@@ -25,4 +25,4 @@ class StageTransitionFilter(SearchFilterMixin):
 
     class Meta:
         model = StageTransition
-        fields = ("active",)
+        fields = ("is_active",)

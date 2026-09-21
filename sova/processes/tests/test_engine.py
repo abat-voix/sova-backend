@@ -138,10 +138,10 @@ class StartTest(EngineTestCase):
         stage = self.builder.stage("Первый")
         active = self.builder.action(stage, "Активное")
         inactive = self.builder.action(stage, "Неактивное")
-        inactive.active = False
+        inactive.is_active = False
         inactive.save()
         disabled_stage = self.builder.stage("Выключенный")
-        disabled_stage.active = False
+        disabled_stage.is_active = False
         disabled_stage.save()
         self.builder.action(disabled_stage, "В выключенном")
 
@@ -202,7 +202,7 @@ class StartTest(EngineTestCase):
         """Неактивный workflow запустить нельзя."""
         stage = self.builder.stage("Первый")
         self.builder.action(stage, "А")
-        self.builder.workflow.active = False
+        self.builder.workflow.is_active = False
         self.builder.workflow.save()
 
         # Проверяем код ошибки
@@ -339,7 +339,7 @@ class CompleteActionTest(EngineTestCase):
     def test_complete_rejects_inactive_outcome(self) -> None:
         """Неактивный исход не подходит."""
         outcome = ActionOutcome.objects.get(action=self.action, code="done")
-        outcome.active = False
+        outcome.is_active = False
         outcome.save()
         process = self.start()
 
@@ -350,7 +350,7 @@ class CompleteActionTest(EngineTestCase):
 
     def test_complete_requires_comment_when_outcome_demands_it(self) -> None:
         """Исход с обязательным комментарием не принимает пустой и состоящий из пробелов."""
-        self.builder.outcome(self.action, "agreed", comment_required=True)
+        self.builder.outcome(self.action, "agreed", is_comment_required=True)
         process = self.start()
 
         for comment in ("", "   "):
@@ -358,14 +358,14 @@ class CompleteActionTest(EngineTestCase):
                 # Проверяем код ошибки
                 with self.assertRaises(RuleViolationError) as raised:
                     self.complete(process, self.action, code="agreed", comment=comment)
-                self.assertEqual(raised.exception.code, "comment_required")
+                self.assertEqual(raised.exception.code, "is_comment_required")
         # Проверяем, что состояние не изменилось
         self.assertEqual(self.action_status(process, self.action), IN_PROGRESS)
         self.assertFalse(ActionResult.objects.exists())
 
     def test_complete_accepts_comment_when_outcome_demands_it(self) -> None:
         """Исход с обязательным комментарием принимает непустой."""
-        self.builder.outcome(self.action, "agreed", comment_required=True)
+        self.builder.outcome(self.action, "agreed", is_comment_required=True)
         process = self.start()
 
         self.complete(process, self.action, code="agreed", comment="Согласовано")
@@ -375,13 +375,13 @@ class CompleteActionTest(EngineTestCase):
 
     def test_complete_requires_attachment_when_outcome_demands_it(self) -> None:
         """Исход с обязательным вложением требует файл у этого исполнения."""
-        self.builder.outcome(self.action, "signed", attachment_required=True)
+        self.builder.outcome(self.action, "signed", is_attachment_required=True)
         process = self.start()
 
         # Проверяем код ошибки без вложения
         with self.assertRaises(RuleViolationError) as raised:
             self.complete(process, self.action, code="signed")
-        self.assertEqual(raised.exception.code, "attachment_required")
+        self.assertEqual(raised.exception.code, "is_attachment_required")
 
         ActionAttachmentFactory(action_instance=self.action_instance(process, self.action))
         self.complete(process, self.action, code="signed")
@@ -582,13 +582,13 @@ class StageLifecycleTest(EngineTestCase):
 
         middle = self.complete(process, a)
         # Проверяем, что после первого этапа процесс идёт
-        self.assertFalse(middle.workflow_completed)
+        self.assertFalse(middle.is_workflow_completed)
 
         last = self.complete(process, b)
 
         process.refresh_from_db()
         # Проверяем завершение процесса
-        self.assertTrue(last.workflow_completed)
+        self.assertTrue(last.is_workflow_completed)
         self.assertEqual(process.status, WorkflowInstanceStatus.COMPLETED)
         self.assertIsNotNone(process.completed_at)
 
@@ -688,7 +688,7 @@ class ConditionalActionTest(EngineTestCase):
     def test_inactive_transition_is_ignored(self) -> None:
         """Неактивный переход не срабатывает."""
         dormant = self.builder.outcome(self.check, "dormant")
-        self.builder.branch(dormant, self.fix, active=False)
+        self.builder.branch(dormant, self.fix, is_active=False)
         process = self.start()
 
         self.complete(process, self.check, code="dormant")
@@ -762,12 +762,12 @@ class ContextStagesTest(EngineTestCase):
 
         partial = self.complete(process, self.rollout, context=self.first_product)
         # Проверяем, что пока не все продукты готовы, процесс идёт
-        self.assertFalse(partial.workflow_completed)
+        self.assertFalse(partial.is_workflow_completed)
 
         final = self.complete(process, self.rollout, context=self.second_product)
 
         # Проверяем завершение процесса
-        self.assertTrue(final.workflow_completed)
+        self.assertTrue(final.is_workflow_completed)
 
     def test_next_stage_of_same_context_opens_per_context(self) -> None:
         """Следующий этап продукта открывается только для того продукта, у которого закрыт предыдущий."""
@@ -818,7 +818,7 @@ class ContextStagesTest(EngineTestCase):
         final = self.complete(process, self.rollout, context=self.first_product)
 
         # Проверяем, что процесс завершился, не дожидаясь деактивированного продукта
-        self.assertTrue(final.workflow_completed)
+        self.assertTrue(final.is_workflow_completed)
 
     def test_interaction_stage_after_products_and_programs_waits_for_all_of_them(self) -> None:
         """Этап взаимодействия после этапов продукта и программы ждёт закрытия всех их активных экземпляров."""
@@ -1144,7 +1144,7 @@ class CancelStageTest(EngineTestCase):
 
         process.refresh_from_db()
         # Проверяем завершение
-        self.assertTrue(final.workflow_completed)
+        self.assertTrue(final.is_workflow_completed)
         self.assertEqual(process.status, WorkflowInstanceStatus.COMPLETED)
 
 

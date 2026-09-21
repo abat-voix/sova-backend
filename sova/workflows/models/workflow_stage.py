@@ -41,7 +41,7 @@ class WorkflowStage(TimeStampedModel):
         default=False,
         verbose_name="Можно пропустить",
     )
-    active = models.BooleanField(
+    is_active = models.BooleanField(
         default=True,
         verbose_name="Активен",
     )

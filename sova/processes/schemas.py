@@ -12,7 +12,7 @@ class EngineOutcome:
     activated_actions: list[ActionInstance] = field(default_factory=list)
     opened_stages: list[StageInstance] = field(default_factory=list)
     completed_stages: list[StageInstance] = field(default_factory=list)
-    workflow_completed: bool = False
+    is_workflow_completed: bool = False
 
 
 @dataclass

@@ -17,10 +17,10 @@ from sova.workflows.models import (
 class ActionDependencyAdmin(AbstractBaseModelAdmin[ActionDependency]):
     """Админка зависимостей действий workflow."""
 
-    list_display = ("id", "action", "depends_on_action", "active", "created_at")
+    list_display = ("id", "action", "depends_on_action", "is_active", "created_at")
     list_select_related = ("action", "depends_on_action")
     search_fields = ("id",)
-    list_filter = ("active",)
+    list_filter = ("is_active",)
     autocomplete_fields = ("action", "depends_on_action")
 
 
@@ -28,11 +28,11 @@ class ActionDependencyAdmin(AbstractBaseModelAdmin[ActionDependency]):
 class ActionOutcomeAdmin(AbstractBaseModelAdmin[ActionOutcome]):
     """Админка исходов действий workflow."""
 
-    list_display = ("id", "name", "code", "action", "active", "created_at")
+    list_display = ("id", "name", "code", "action", "is_active", "created_at")
     list_display_links = ("name",)
     list_select_related = ("action",)
     search_fields = ("id", "name", "code")
-    list_filter = ("active", "comment_required", "attachment_required")
+    list_filter = ("is_active", "is_comment_required", "is_attachment_required")
     autocomplete_fields = ("action",)
 
 
@@ -40,10 +40,10 @@ class ActionOutcomeAdmin(AbstractBaseModelAdmin[ActionOutcome]):
 class ActionTransitionAdmin(AbstractBaseModelAdmin[ActionTransition]):
     """Админка переходов между действиями workflow."""
 
-    list_display = ("id", "outcome", "target_action", "active", "created_at")
+    list_display = ("id", "outcome", "target_action", "is_active", "created_at")
     list_select_related = ("outcome", "target_action")
     search_fields = ("id",)
-    list_filter = ("active",)
+    list_filter = ("is_active",)
     autocomplete_fields = ("outcome", "target_action")
 
 
@@ -51,10 +51,10 @@ class ActionTransitionAdmin(AbstractBaseModelAdmin[ActionTransition]):
 class StageTransitionAdmin(AbstractBaseModelAdmin[StageTransition]):
     """Админка связей между этапами workflow."""
 
-    list_display = ("id", "from_stage", "to_stage", "active", "created_at")
+    list_display = ("id", "from_stage", "to_stage", "is_active", "created_at")
     list_select_related = ("from_stage", "to_stage")
     search_fields = ("id",)
-    list_filter = ("active",)
+    list_filter = ("is_active",)
     autocomplete_fields = ("from_stage", "to_stage")
 
 
@@ -62,10 +62,10 @@ class StageTransitionAdmin(AbstractBaseModelAdmin[StageTransition]):
 class WorkflowAdmin(AbstractBaseModelAdmin[Workflow]):
     """Админка шаблонов workflow."""
 
-    list_display = ("id", "name", "code", "audience", "is_base", "active", "created_at")
+    list_display = ("id", "name", "code", "audience", "is_base", "is_active", "created_at")
     list_display_links = ("name",)
     search_fields = ("id", "name", "code")
-    list_filter = ("audience", "is_base", "active")
+    list_filter = ("audience", "is_base", "is_active")
     autocomplete_fields = ("created_by",)
 
 
@@ -73,11 +73,11 @@ class WorkflowAdmin(AbstractBaseModelAdmin[Workflow]):
 class WorkflowActionAdmin(AbstractBaseModelAdmin[WorkflowAction]):
     """Админка действий workflow."""
 
-    list_display = ("id", "name", "stage", "sort_order", "active", "created_at")
+    list_display = ("id", "name", "stage", "sort_order", "is_active", "created_at")
     list_display_links = ("name",)
     list_select_related = ("stage",)
     search_fields = ("id", "name")
-    list_filter = ("active", "is_optional")
+    list_filter = ("is_active", "is_optional")
     autocomplete_fields = ("stage",)
 
 
@@ -96,9 +96,9 @@ class WorkflowChangeAdmin(AbstractHistoryModelAdmin[WorkflowChange]):
 class WorkflowStageAdmin(AbstractBaseModelAdmin[WorkflowStage]):
     """Админка этапов workflow."""
 
-    list_display = ("id", "name", "workflow", "sort_order", "active", "created_at")
+    list_display = ("id", "name", "workflow", "sort_order", "is_active", "created_at")
     list_display_links = ("name",)
     list_select_related = ("workflow",)
     search_fields = ("id", "name", "description")
-    list_filter = ("is_initial", "is_final", "is_optional", "active")
+    list_filter = ("is_initial", "is_final", "is_optional", "is_active")
     autocomplete_fields = ("workflow",)

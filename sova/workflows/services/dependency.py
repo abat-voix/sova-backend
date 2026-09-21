@@ -45,7 +45,7 @@ class ActionDependencyService:
     def has_mandatory_dependents(self, action: WorkflowAction) -> bool:
         """Есть ли обязательные действия, ждущие это действие по активной зависимости."""
         return ActionDependency.objects.filter(
-            active=True,
+            is_active=True,
             depends_on_action=action,
             action__is_optional=False,
         ).exists()
@@ -53,7 +53,7 @@ class ActionDependencyService:
     def waits_for_optional(self, action: WorkflowAction) -> bool:
         """Ждёт ли действие по активной зависимости необязательное действие."""
         return ActionDependency.objects.filter(
-            active=True,
+            is_active=True,
             action=action,
             depends_on_action__is_optional=True,
         ).exists()
@@ -67,11 +67,11 @@ class ActionDependencyService:
         """
         in_dependencies = ActionDependency.objects.filter(
             Q(action=action) | Q(depends_on_action=action),
-            active=True,
+            is_active=True,
         ).exists()
         in_transitions = ActionTransition.objects.filter(
             Q(outcome__action=action) | Q(target_action=action),
-            active=True,
+            is_active=True,
         ).exists()
         return in_dependencies or in_transitions
 
@@ -82,7 +82,7 @@ class ActionDependencyService:
     ) -> dict:
         """Загружает одним запросом активные зависимости workflow: действие → его предусловия."""
         dependencies = ActionDependency.objects.filter(
-            active=True,
+            is_active=True,
             action__stage__workflow_id=action.stage.workflow_id,
         )
         if exclude_pk is not None:

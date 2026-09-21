@@ -120,12 +120,12 @@ class WorkflowAuditTestCase(APITestCase):
         )
         self.client.patch(
             path=f"/api/workflows/action-transitions/{transition.pk}/",
-            data={"active": False},
+            data={"is_active": False},
             format="json",
         )
         self.client.patch(
             path=f"/api/workflows/action-dependencies/{dependency.pk}/",
-            data={"active": False},
+            data={"is_active": False},
             format="json",
         )
 
@@ -179,7 +179,7 @@ class WorkflowAuditTestCase(APITestCase):
 
         self.client.patch(
             path=f"/api/workflows/stage-transitions/{transition.pk}/",
-            data={"active": False},
+            data={"is_active": False},
             format="json",
         )
 

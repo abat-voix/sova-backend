@@ -30,4 +30,4 @@ class ActionTransitionFilter(SearchFilterMixin):
 
     class Meta:
         model = ActionTransition
-        fields = ("active",)
+        fields = ("is_active",)

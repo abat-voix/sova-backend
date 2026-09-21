@@ -6,7 +6,7 @@ from sova.core.models import TimeStampedModel
 class ActionDependency(TimeStampedModel):
     """Зависимость действия от другого действия того же workflow (граф для непоследовательных шагов)."""
 
-    active = models.BooleanField(
+    is_active = models.BooleanField(
         default=True,
         verbose_name="Активна",
     )

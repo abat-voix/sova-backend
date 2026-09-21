@@ -39,7 +39,7 @@ class ActionInstanceViewSet(SovaReadOnlyViewSet):
 
         Ответ описывает, что изменилось: результат, запущенные действия, открытые и закрытые этапы, завершён ли
         процесс. Ошибки: 409 (`invalid_state`) — действие не в работе; 400 — нарушены правила исхода
-        (`outcome_mismatch`, `outcome_inactive`, `comment_required`, `attachment_required`).
+        (`outcome_mismatch`, `outcome_inactive`, `is_comment_required`, `is_attachment_required`).
         """
         action_instance = self.get_object()
         serializer = self.get_serializer(data=request.data)
