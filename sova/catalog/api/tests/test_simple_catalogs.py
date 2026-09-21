@@ -225,6 +225,7 @@ class UniversityApiTestCase(BaseApiTestMixin, APITestCase):
                     "id": str(target.pk),
                     "lat": "57.160488",
                     "lon": "65.527412",
+                    "has_interactions": False,
                 }
             ],
         )
