@@ -31,6 +31,19 @@ class UniversityHasInteractionsTestCase(APITestCase):
 
         self.assertTrue(response.json()["has_interactions"])
 
+    def test_map_point_carries_the_flag(self) -> None:
+        """Точка карты несёт флаг: по нему на карте видно вузы со взаимодействиями."""
+        with_interaction = InteractionFactory(
+            university=UniversityFactory(lat="55.755814", lon="37.617635"),
+        ).university
+        without_interaction = UniversityFactory(lat="59.939095", lon="30.315868")
+
+        response = self.client.get(reverse("catalog:university-map-points"))
+
+        flags = {item["id"]: item["has_interactions"] for item in response.json()}
+        self.assertTrue(flags[str(with_interaction.id)])
+        self.assertFalse(flags[str(without_interaction.id)])
+
     def test_filter_selects_universities_with_interactions(self) -> None:
         with_interaction = InteractionFactory().university
         UniversityFactory()

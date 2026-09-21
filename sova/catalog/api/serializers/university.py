@@ -43,9 +43,15 @@ class UniversitySerializer(serializers.ModelSerializer):
 class UniversityMapPointSerializer(serializers.ModelSerializer):
     """Вуз — облегчённая точка для карты без карточных данных."""
 
+    has_interactions = serializers.BooleanField(
+        read_only=True,
+        label=_("Наличие взаимодействий"),
+        help_text=_("True — с вузом есть хотя бы одно взаимодействие"),
+    )
+
     class Meta:
         model = University
-        fields = ("id", "lat", "lon")
+        fields = ("id", "lat", "lon", "has_interactions")
 
 
 class WriteUniversitySerializer(serializers.ModelSerializer):
