@@ -199,11 +199,14 @@ class PlannerTest(EngineTestCase):
         one = self.builder.action(first, "А", duration_days=2)
         second = self.builder.stage("Второй", after=(first,))
         two = self.builder.action(second, "Б", duration_days=2)
+        third = self.builder.stage("Третий", after=(second,))
+        self.builder.action(third, "В", duration_days=2)
 
         process = self.start()
         self.complete(process, one)
         self.complete(process, two)
-        self.cancel(process, second)
+        # Отменяем этап в работе: завершённый движок отменить не даёт, откат идёт с третьего на второй
+        self.cancel(process, third)
 
         repeated = self.action_instance(process, two)
         # Проверяем, что повтор спланирован
