@@ -24,6 +24,7 @@ class UniversityViewSet(SovaBaseViewSet):
             has_interactions=Exists(Interaction.objects.filter(university=OuterRef("pk"))),
         ).order_by(
             "-has_interactions",
+            "name",
         )
 
     def perform_create(self, serializer: serializers.WriteUniversitySerializer) -> None:
