@@ -4,6 +4,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
 from sova.catalog.tests.factories import (
     B2CClientFactory,
     DirectionFactory,
@@ -29,6 +30,11 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
 
     url_basename = "interactions:interaction"
     model = Interaction
+
+    def setUp(self) -> None:
+        """Даёт пользователю роль администратора платформы: выборка зависит от роли в СОВА."""
+        super().setUp()
+        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
 
     def create_instance(self, **kwargs) -> Interaction:
         """Создаёт взаимодействие с вузом."""
@@ -288,8 +294,9 @@ class InteractionResponsibleActionsTestCase(APITestCase):
     """Тесты действий assign-responsible и unassign-responsible взаимодействия."""
 
     def setUp(self) -> None:
-        """Аутентифицирует клиента и создаёт взаимодействие."""
+        """Аутентифицирует клиента администратором платформы и создаёт взаимодействие."""
         self.user = UserFactory()
+        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
         self.client.force_authenticate(user=self.user)
         self.interaction = InteractionFactory()
         self.assign_url = reverse(

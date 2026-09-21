@@ -17,7 +17,7 @@ from sova.interactions.models import (
     InteractionProgram,
     Responsible,
 )
-from sova.interactions.services import responsible_service
+from sova.interactions.services import responsible_service, visible_interactions
 
 
 def _active_count(model: type) -> Coalesce:
@@ -42,6 +42,10 @@ class InteractionViewSet(SovaBaseViewSet):
     """
     Взаимодействия с вузами и B2C-клиентами. Доступны CRUD операции.
 
+    Состав выборки зависит от роли запрашивающего: КАМ видит взаимодействия, где он
+    действующий ответственный, руководитель — свои и КАМов, администратор платформы — все.
+    Взаимодействия без действующего ответственного видны всем ролям.
+
     Ответственного менеджера назначают и снимают действиями
     `assign-responsible` / `unassign-responsible`: он хранится с историей,
     поэтому напрямую в теле взаимодействия не редактируется.
@@ -51,14 +55,22 @@ class InteractionViewSet(SovaBaseViewSet):
     serializer_class = serializers.WriteInteractionSerializer
     queryset = Interaction.objects.all()
     ordering_fields = "__all__"
-    search_fields = ("comment", "university__name", "b2c_client__full_name")
+    search_fields = (
+        "comment",
+        "university__name",
+        "university__short_name",
+        "b2c_client__full_name",
+    )
     filterset_class = filters.InteractionFilter
 
     def get_queryset(self) -> QuerySet:
-        """Queryset со счётчиками состава и действующим ответственным."""
+        """Взаимодействия, видимые пользователю по его роли в СОВА."""
+        return self._with_details(visible_interactions(self.request.user))
+
+    def _with_details(self, queryset: QuerySet) -> QuerySet:
+        """Дополняет выборку счётчиками состава и действующим ответственным."""
         return (
-            super()
-            .get_queryset()
+            queryset
             .select_related("university", "b2c_client")
             .prefetch_related(
                 Prefetch(
@@ -79,7 +91,8 @@ class InteractionViewSet(SovaBaseViewSet):
     def perform_create(self, serializer: serializers.WriteInteractionSerializer) -> None:
         """Пересоздание инстанса через аннотированный queryset для read-ответа."""
         super().perform_create(serializer)
-        serializer.instance = self.get_queryset().get(pk=serializer.instance.pk)
+        # Выборка без роли: созданное взаимодействие нужно вернуть автору в любом случае
+        serializer.instance = self._with_details(Interaction.objects.all()).get(pk=serializer.instance.pk)
 
     @extend_schema(
         request=serializers.AssignResponsibleSerializer,
