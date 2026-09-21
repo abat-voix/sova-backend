@@ -56,6 +56,12 @@ tokens не передаются frontend и не сохраняются в brow
 - `KEYCLOAK_REALM` и `KEYCLOAK_CLIENT_ID`;
 - `KEYCLOAK_CLIENT_SECRET`.
 
+Сессия продлевается молча: раз в `OIDC_RENEW_ID_TOKEN_EXPIRY_SECONDS` первый же
+запрос переспрашивает Keycloak с `prompt=none`. Навигация браузера получает при
+этом редирект, а запросы к `/api/` — `401` с кодом `session_expired`
+(`accounts/middleware.py`), чтобы браузерный `fetch` не уходил по редиректу на
+чужой origin и не падал с ошибкой CORS.
+
 OIDC-пользователи получают unusable Django password. Локальный Django
 `ModelBackend` сохранён для аварийного superuser в `/admin/`; не назначайте
 OIDC-пользователям пароль вручную.
@@ -103,6 +109,46 @@ poetry run python manage.py runserver
 
 Для быстрого запуска без PostgreSQL и Redis переменные `DATABASE_URL` и `REDIS_URL` можно временно удалить: development-конфигурация использует SQLite и локальный memory cache.
 
+## Шаблон workflow
+
+Готовый шаблон процесса собирается одной командой — вручную создавать этапы,
+действия, исходы и связи через API не нужно:
+
+```bash
+poetry run python manage.py create_workflow_template
+```
+
+Команда создаёт базовый процесс работы с вузом (`base-b2b`): 5 этапов —
+«Подготовка и контакт», «Согласование и документы», «Поставка ПО» (этап на
+каждый продукт взаимодействия), «Обучение преподавателей» (этап на каждую
+программу) и «Сопровождение», — 12 действий с плановыми длительностями,
+зависимостями внутри этапов, исходами и ветвлением: исход «Нужны правки»
+запускает действие «Доработать документы». Декларация шаблона лежит в
+`sova/workflows/presets.py`, сборку графа делает
+`sova.workflows.services.workflow_template_service`.
+
+Аргументы:
+
+- `--code` и `--name` — код и название шаблона (по умолчанию `base-b2b`);
+- `--audience b2b|b2c` — аудитория; граф не меняется;
+- `--base` — сделать шаблон базовым для аудитории (базовый один на аудиторию);
+- `--username` — автор шаблона; попадёт в `created_by` и в журнал `WorkflowChange`;
+- `--recreate` — удалить шаблон с этим кодом и собрать заново. Запрещено, если по
+  шаблону уже запущены процессы: каскадное удаление снесло бы их историю.
+
+Без `--recreate` повторный запуск не трогает существующий шаблон и завершается
+ошибкой. Правила комментария и вложения заданы по минимуму — их включают на
+исходах через API или Django Admin под свой процесс.
+
+Запуск процесса по готовому шаблону:
+
+```http
+POST /api/processes/workflow-instances/
+Content-Type: application/json
+
+{"workflow": "<id шаблона>", "interaction": "<id взаимодействия>"}
+```
+
 ## PDF generation
 
 Gotenberg запускается из `sova-infra` и доступен backend по переменной
@@ -134,6 +180,12 @@ pdf = html_to_pdf(
 - OpenAPI-схема: `http://127.0.0.1:8000/api/schema/`.
 
 Оба endpoint публичны, чтобы документацию можно было открыть без авторизации.
+
+Инструкции для frontend:
+
+- `docs/frontend/users-api.md` — список пользователей;
+- `docs/frontend/session-refresh.md` — продление сессии и ошибка CORS на
+  Keycloak при истёкшем id token.
 
 ## Checks
 
