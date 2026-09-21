@@ -59,8 +59,8 @@ class BaseB2BPresetTest(TestCase):
 
         # Проверяем ветвление и то, что доработка ждёт перехода
         self.assertEqual(revision.starts, "Доработать документы")
-        self.assertTrue(revision.comment_required)
-        self.assertTrue(actions["Доработать документы"].starts_by_transition_only)
+        self.assertTrue(revision.is_comment_required)
+        self.assertTrue(actions["Доработать документы"].is_trigger_only)
 
     def test_preset_plans_duration_for_every_action(self) -> None:
         """У каждого действия задана плановая длительность — без неё нет ни плана, ни контроля зависания."""

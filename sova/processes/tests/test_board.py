@@ -85,7 +85,7 @@ class BoardTest(EngineTestCase):
         self.assertEqual(card["action"], {"id": self.find.pk, "name": "Найти контакт"})
         self.assertEqual(card["status"], IN_PROGRESS)
         self.assertFalse(card["is_optional"])
-        self.assertFalse(card["starts_by_transition_only"])
+        self.assertFalse(card["is_trigger_only"])
         self.assertEqual(card["execution_no"], 1)
         # Проверяем даты и просрочку
         self.assertEqual(card["planned_end"], instance.planned_end)
@@ -101,8 +101,8 @@ class BoardTest(EngineTestCase):
                     "id": outcome.pk,
                     "code": "done",
                     "name": "Выполнено",
-                    "comment_required": False,
-                    "attachment_required": False,
+                    "is_comment_required": False,
+                    "is_attachment_required": False,
                 },
             ],
         )
@@ -128,7 +128,7 @@ class BoardTest(EngineTestCase):
 
     def test_only_active_outcomes_are_offered(self) -> None:
         """Неактивный исход не предлагается."""
-        self.builder.outcome(self.find, "obsolete", active=False)
+        self.builder.outcome(self.find, "obsolete", is_active=False)
         process = self.start()
 
         card = self.action_card(board_service.build(process=process), "Поиск контактов", "Найти контакт")
@@ -212,7 +212,7 @@ class BoardTest(EngineTestCase):
         after = self.action_card(board_service.build(process=process), "Поиск контактов", "Исправить")
 
         # Проверяем признаки до и после запуска
-        self.assertTrue(before["starts_by_transition_only"])
+        self.assertTrue(before["is_trigger_only"])
         self.assertFalse(before["is_triggered"])
         self.assertTrue(after["is_triggered"])
 

@@ -58,7 +58,7 @@ class CompleteActionResultSerializer(serializers.Serializer):
         label=_("Закрытые этапы"),
         help_text=_("Этапы, закрытые этим действием или сразу при открытии"),
     )
-    workflow_completed = serializers.BooleanField(
+    is_workflow_completed = serializers.BooleanField(
         read_only=True,
         label=_("Процесс завершён"),
         help_text=_("Истина, если закрыты все этапы"),

@@ -28,7 +28,7 @@ class StageTransitionApiTestCase(BaseApiTestMixin, APITestCase):
         """Поля read-представления связи."""
         return {
             "id": str(instance.pk),
-            "active": instance.active,
+            "is_active": instance.is_active,
             "from_stage": {
                 "id": str(instance.from_stage_id),
                 "name": instance.from_stage.name,
@@ -50,7 +50,7 @@ class StageTransitionApiTestCase(BaseApiTestMixin, APITestCase):
 
     def get_change_data(self) -> dict:
         """Данные обновления связи."""
-        return {"active": False}
+        return {"is_active": False}
 
     def get_search_term(self, instance: StageTransition) -> str:
         """Поиск по названию этапа-источника."""
@@ -128,7 +128,7 @@ class StageTransitionApiTestCase(BaseApiTestMixin, APITestCase):
 
     def test_add_ignores_inactive_transitions_when_looking_for_cycle(self) -> None:
         """Неактивная обратная связь цикл не образует."""
-        existing = StageTransitionFactory(active=False)
+        existing = StageTransitionFactory(is_active=False)
 
         response = self.post_transition(source=existing.to_stage, target=existing.from_stage)
 
@@ -142,7 +142,7 @@ class StageTransitionApiTestCase(BaseApiTestMixin, APITestCase):
         response = self.post_transition(
             source=existing.to_stage,
             target=existing.from_stage,
-            active=False,
+            is_active=False,
         )
 
         # Проверяем, что связь создана
@@ -154,12 +154,12 @@ class StageTransitionApiTestCase(BaseApiTestMixin, APITestCase):
         reverse = StageTransitionFactory(
             from_stage=first.to_stage,
             to_stage=first.from_stage,
-            active=False,
+            is_active=False,
         )
 
         response = self.client.patch(
             path=self.detail_url(reverse),
-            data={"active": True},
+            data={"is_active": True},
             format="json",
         )
 
@@ -203,7 +203,7 @@ class StageTransitionApiTestCase(BaseApiTestMixin, APITestCase):
 
     def test_filters_select_matching_transitions(self) -> None:
         """Фильтры этапов, workflow и активности выбирают нужные связи."""
-        target = StageTransitionFactory(active=False)
+        target = StageTransitionFactory(is_active=False)
         StageTransitionFactory()
 
         def ids(params: dict) -> list[str]:
@@ -217,4 +217,4 @@ class StageTransitionApiTestCase(BaseApiTestMixin, APITestCase):
         # Проверяем фильтр по workflow через этап-источник
         self.assertEqual(ids({"workflow__ids": str(target.from_stage.workflow_id)}), [str(target.pk)])
         # Проверяем фильтр по активности
-        self.assertEqual(ids({"active": "false"}), [str(target.pk)])
+        self.assertEqual(ids({"is_active": "false"}), [str(target.pk)])

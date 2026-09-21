@@ -43,12 +43,12 @@ class StageTransitionService:
         """Есть ли у этапа активные связи: входящие или исходящие."""
         return StageTransition.objects.filter(
             Q(from_stage=stage) | Q(to_stage=stage),
-            active=True,
+            is_active=True,
         ).exists()
 
     def _load_edges(self, workflow_id: object, exclude_pk: object | None) -> dict:
         """Загружает одним запросом активные связи workflow: этап → этапы, которые он открывает."""
-        transitions = StageTransition.objects.filter(active=True, from_stage__workflow_id=workflow_id)
+        transitions = StageTransition.objects.filter(is_active=True, from_stage__workflow_id=workflow_id)
         if exclude_pk is not None:
             transitions = transitions.exclude(pk=exclude_pk)
         edges: dict = {}

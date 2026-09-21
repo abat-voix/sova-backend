@@ -45,7 +45,7 @@ class Workflow(TimeStampedModel):
         default=False,
         verbose_name="Базовый workflow",
     )
-    active = models.BooleanField(
+    is_active = models.BooleanField(
         default=True,
         verbose_name="Активен",
     )

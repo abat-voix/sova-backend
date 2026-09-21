@@ -14,8 +14,8 @@ class OutcomeSpec:
 
     code: str
     name: str
-    comment_required: bool = False
-    attachment_required: bool = False
+    is_comment_required: bool = False
+    is_attachment_required: bool = False
     starts: str | None = None
 
 
@@ -32,7 +32,7 @@ class ActionSpec:
     description: str = ""
     duration_days: int | None = None
     is_optional: bool = False
-    starts_by_transition_only: bool = False
+    is_trigger_only: bool = False
     after: tuple[str, ...] = ()
     outcomes: tuple[OutcomeSpec, ...] = ()
 

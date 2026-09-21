@@ -18,6 +18,6 @@ class WorkflowFilter(SearchFilterMixin):
         fields = (
             "audience",
             "is_base",
-            "active",
+            "is_active",
         )
         exact_search_fields = ["code"]

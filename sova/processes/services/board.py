@@ -110,7 +110,7 @@ class WorkflowBoardService:
             instance.action_id for instance in latest.values() if instance.status == ActionInstanceStatus.IN_PROGRESS
         }
         outcomes: dict = defaultdict(list)
-        for outcome in ActionOutcome.objects.filter(action_id__in=working_actions, active=True).order_by("code"):
+        for outcome in ActionOutcome.objects.filter(action_id__in=working_actions, is_active=True).order_by("code"):
             outcomes[outcome.action_id].append(outcome)
         now = timezone.now()
         cards: dict = defaultdict(list)
@@ -143,7 +143,7 @@ class WorkflowBoardService:
             "name": instance.action_name_snapshot,
             "status": instance.status,
             "is_optional": action.is_optional,
-            "starts_by_transition_only": action.starts_by_transition_only,
+            "is_trigger_only": action.is_trigger_only,
             "is_triggered": instance.triggered_at is not None,
             "execution_no": instance.execution_no,
             "planned_start": instance.planned_start,
@@ -170,8 +170,8 @@ class WorkflowBoardService:
                     "id": outcome.pk,
                     "code": outcome.code,
                     "name": outcome.name,
-                    "comment_required": outcome.comment_required,
-                    "attachment_required": outcome.attachment_required,
+                    "is_comment_required": outcome.is_comment_required,
+                    "is_attachment_required": outcome.is_attachment_required,
                 }
                 for outcome in outcomes
             ]

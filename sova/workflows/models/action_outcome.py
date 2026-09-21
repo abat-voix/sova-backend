@@ -14,15 +14,15 @@ class ActionOutcome(TimeStampedModel):
         max_length=255,
         verbose_name="Название",
     )
-    active = models.BooleanField(
+    is_active = models.BooleanField(
         default=True,
         verbose_name="Активен",
     )
-    comment_required = models.BooleanField(
+    is_comment_required = models.BooleanField(
         default=False,
         verbose_name="Требует комментарий",
     )
-    attachment_required = models.BooleanField(
+    is_attachment_required = models.BooleanField(
         default=False,
         verbose_name="Требует вложение",
     )

@@ -118,7 +118,7 @@ class CompleteActionApiTestCase(EngineApiTestCase):
             [item["id"] for item in response.data["activated_actions"]],
             [str(self.action_instance(self.process, self.meet).pk)],
         )
-        self.assertFalse(response.data["workflow_completed"])
+        self.assertFalse(response.data["is_workflow_completed"])
 
     def test_complete_without_comment_records_empty_comment(self) -> None:
         """Комментарий необязателен: без него сохраняется пустой."""
@@ -136,7 +136,7 @@ class CompleteActionApiTestCase(EngineApiTestCase):
 
         self.process.refresh_from_db()
         # Проверяем признак в ответе и статус процесса
-        self.assertTrue(response.data["workflow_completed"])
+        self.assertTrue(response.data["is_workflow_completed"])
         self.assertEqual(self.process.status, WorkflowInstanceStatus.COMPLETED)
         self.assertEqual(self.stage_status(self.process, self.second), StageInstanceStatus.COMPLETED)
 
@@ -176,7 +176,7 @@ class CompleteActionApiTestCase(EngineApiTestCase):
 
     def test_complete_returns_400_for_inactive_outcome(self) -> None:
         """Неактивный исход: 400 и код outcome_inactive."""
-        outcome = self.builder.outcome(self.find, "obsolete", active=False)
+        outcome = self.builder.outcome(self.find, "obsolete", is_active=False)
 
         response = self.post(self.find, outcome=str(outcome.pk))
 
@@ -185,19 +185,19 @@ class CompleteActionApiTestCase(EngineApiTestCase):
         self.assertEqual(response.data["code"], "outcome_inactive")
 
     def test_complete_returns_400_without_required_comment(self) -> None:
-        """Исход с обязательным комментарием без него: 400 и код comment_required, действие не завершено."""
-        outcome = self.builder.outcome(self.find, "agreed", comment_required=True)
+        """Исход с обязательным комментарием без него: 400 и код is_comment_required, действие не завершено."""
+        outcome = self.builder.outcome(self.find, "agreed", is_comment_required=True)
 
         response = self.post(self.find, outcome=str(outcome.pk), comment="   ")
 
         # Проверяем статус, код и то, что состояние не изменилось
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["code"], "comment_required")
+        self.assertEqual(response.data["code"], "is_comment_required")
         self.assertFalse(ActionResult.objects.exists())
 
     def test_complete_requires_attachment_when_outcome_demands_it(self) -> None:
-        """Исход с обязательным вложением: без файла 400 и код attachment_required, с файлом 200."""
-        outcome = self.builder.outcome(self.find, "signed", attachment_required=True)
+        """Исход с обязательным вложением: без файла 400 и код is_attachment_required, с файлом 200."""
+        outcome = self.builder.outcome(self.find, "signed", is_attachment_required=True)
 
         without = self.post(self.find, outcome=str(outcome.pk))
         ActionAttachmentFactory(action_instance=self.action_instance(self.process, self.find))
@@ -205,7 +205,7 @@ class CompleteActionApiTestCase(EngineApiTestCase):
 
         # Проверяем оба ответа
         self.assertEqual(without.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(without.data["code"], "attachment_required")
+        self.assertEqual(without.data["code"], "is_attachment_required")
         self.assertEqual(with_file.status_code, status.HTTP_200_OK, msg=with_file.data)
 
     def test_complete_returns_400_when_outcome_is_missing_or_unknown(self) -> None:

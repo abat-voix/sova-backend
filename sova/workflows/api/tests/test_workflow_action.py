@@ -33,8 +33,8 @@ class WorkflowActionApiTestCase(BaseApiTestMixin, APITestCase):
             "sort_order": instance.sort_order,
             "default_duration_days": instance.default_duration_days,
             "is_optional": instance.is_optional,
-            "starts_by_transition_only": instance.starts_by_transition_only,
-            "active": instance.active,
+            "is_trigger_only": instance.is_trigger_only,
+            "is_active": instance.is_active,
             "stage": {
                 "id": str(instance.stage_id),
                 "name": instance.stage.name,
@@ -104,13 +104,13 @@ class WorkflowActionApiTestCase(BaseApiTestMixin, APITestCase):
 
     def test_add_stores_starts_by_transition_only(self) -> None:
         """Признак «запускается только переходом» задаётся при создании."""
-        data = {**self.get_post_data(), "starts_by_transition_only": True}
+        data = {**self.get_post_data(), "is_trigger_only": True}
 
         response = self.client.post(path=self.list_url, data=data, format="json")
 
         # Проверяем, что признак сохранён и отдан в ответе
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
-        self.assertTrue(response.data["starts_by_transition_only"])
+        self.assertTrue(response.data["is_trigger_only"])
 
     def test_add_creates_default_outcome(self) -> None:
         """Новое действие получает исход «Выполнено»: без исхода действие нельзя завершить."""
@@ -122,9 +122,9 @@ class WorkflowActionApiTestCase(BaseApiTestMixin, APITestCase):
         outcome = outcomes.get()
         self.assertEqual(outcome.code, "done")
         self.assertEqual(outcome.name, "Выполнено")
-        self.assertTrue(outcome.active)
-        self.assertFalse(outcome.comment_required)
-        self.assertFalse(outcome.attachment_required)
+        self.assertTrue(outcome.is_active)
+        self.assertFalse(outcome.is_comment_required)
+        self.assertFalse(outcome.is_attachment_required)
 
     def test_add_records_default_outcome_in_audit(self) -> None:
         """Исход по умолчанию попадает в аудит как созданный текущим пользователем."""
@@ -199,11 +199,11 @@ class WorkflowActionApiTestCase(BaseApiTestMixin, APITestCase):
 
     def test_change_allows_moving_action_with_only_inactive_links(self) -> None:
         """Неактивные зависимость и переход перенос не блокируют."""
-        dependency = ActionDependencyFactory(active=False)
+        dependency = ActionDependencyFactory(is_active=False)
         ActionTransitionFactory(
             outcome=ActionOutcomeFactory(action=dependency.action),
             target_action=WorkflowActionFactory(stage=dependency.action.stage),
-            active=False,
+            is_active=False,
         )
         other_stage = WorkflowStageFactory(workflow=dependency.action.stage.workflow)
 

@@ -19,11 +19,11 @@ class BoardOutcomeSerializer(serializers.Serializer):
     id = serializers.UUIDField(label=_("ID"), help_text=_("Передаётся при завершении действия"))
     code = serializers.CharField(label=_("Код"), help_text=_("Стабильный код исхода внутри действия"))
     name = serializers.CharField(label=_("Название"), help_text=_("Подпись исхода для пользователя"))
-    comment_required = serializers.BooleanField(
+    is_comment_required = serializers.BooleanField(
         label=_("Нужен комментарий"),
         help_text=_("Без комментария исход не будет принят"),
     )
-    attachment_required = serializers.BooleanField(
+    is_attachment_required = serializers.BooleanField(
         label=_("Нужно вложение"),
         help_text=_("Файл нужно загрузить к исполнению действия до завершения"),
     )
@@ -56,7 +56,7 @@ class BoardActionSerializer(serializers.Serializer):
         label=_("Необязательное"),
         help_text=_("Необязательное действие не мешает закрыть этап и остаётся доступным после его закрытия"),
     )
-    starts_by_transition_only = serializers.BooleanField(
+    is_trigger_only = serializers.BooleanField(
         label=_("Только по переходу"),
         help_text=_("Действие запускается переходом по исходу другого действия, а не вместе с этапом"),
     )

@@ -24,7 +24,7 @@ class ActionDependencySerializer(serializers.ModelSerializer):
         model = ActionDependency
         fields = (
             "id",
-            "active",
+            "is_active",
             "action",
             "depends_on_action",
             "created_at",
@@ -39,7 +39,7 @@ class WriteActionDependencySerializer(serializers.ModelSerializer):
         model = ActionDependency
         fields = (
             "id",
-            "active",
+            "is_active",
             "action",
             "depends_on_action",
         )
@@ -56,7 +56,7 @@ class WriteActionDependencySerializer(serializers.ModelSerializer):
             "depends_on_action",
             getattr(self.instance, "depends_on_action", None),
         )
-        is_active = attrs.get("active", getattr(self.instance, "active", True))
+        is_active = attrs.get("is_active", getattr(self.instance, "is_active", True))
 
         if action.pk == depends_on_action.pk:
             raise serializers.ValidationError(

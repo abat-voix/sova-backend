@@ -28,9 +28,9 @@ class ActionOutcomeSerializer(serializers.ModelSerializer):
             "id",
             "code",
             "name",
-            "active",
-            "comment_required",
-            "attachment_required",
+            "is_active",
+            "is_comment_required",
+            "is_attachment_required",
             "action",
             "created_at",
             "updated_at",
@@ -46,9 +46,9 @@ class WriteActionOutcomeSerializer(serializers.ModelSerializer):
             "id",
             "code",
             "name",
-            "active",
-            "comment_required",
-            "attachment_required",
+            "is_active",
+            "is_comment_required",
+            "is_attachment_required",
             "action",
         )
 
@@ -63,7 +63,7 @@ class WriteActionOutcomeSerializer(serializers.ModelSerializer):
         action = attrs.get("action", self.instance.action)
         # RelatedObjectDoesNotExist наследует AttributeError: у исхода может не быть перехода
         transition = getattr(self.instance, "transition", None)
-        if transition is not None and transition.active and transition.target_action.stage_id != action.stage_id:
+        if transition is not None and transition.is_active and transition.target_action.stage_id != action.stage_id:
             raise serializers.ValidationError(
                 {"action": _("Исход ведёт на действие другого этапа — действие должно быть из того же этапа.")},
             )

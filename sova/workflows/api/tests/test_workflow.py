@@ -31,7 +31,7 @@ class WorkflowApiTestCase(BaseApiTestMixin, APITestCase):
             "description": instance.description,
             "stale_threshold_days": instance.stale_threshold_days,
             "is_base": instance.is_base,
-            "active": instance.active,
+            "is_active": instance.is_active,
             "created_by": (
                 {
                     "id": creator.pk,
@@ -192,15 +192,15 @@ class WorkflowApiTestCase(BaseApiTestMixin, APITestCase):
             sorted(str(workflow.pk) for workflow in expected),
         )
 
-    def test_filter_by_audience_is_base_and_active(self) -> None:
-        """Фильтры audience, is_base и active выбирают нужные workflow."""
+    def test_filter_by_audience_is_base_and_is_active(self) -> None:
+        """Фильтры audience, is_base и is_active выбирают нужные workflow."""
         base_b2b = WorkflowFactory(is_base=True, audience=Audience.B2B)
         b2c = WorkflowFactory(audience=Audience.B2C)
-        inactive = WorkflowFactory(active=False)
+        inactive = WorkflowFactory(is_active=False)
 
         self.assert_filter_returns({"audience": Audience.B2C}, [b2c])
         self.assert_filter_returns({"is_base": "true"}, [base_b2b])
-        self.assert_filter_returns({"active": "false"}, [inactive])
+        self.assert_filter_returns({"is_active": "false"}, [inactive])
 
     def test_filter_by_created_by_ids(self) -> None:
         """Фильтр created_by__ids возвращает workflow указанных авторов."""

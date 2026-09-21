@@ -20,5 +20,5 @@ class WorkflowStageFilter(SearchFilterMixin):
             "is_initial",
             "is_final",
             "is_optional",
-            "active",
+            "is_active",
         )

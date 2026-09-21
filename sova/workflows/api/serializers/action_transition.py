@@ -24,7 +24,7 @@ class ActionTransitionSerializer(serializers.ModelSerializer):
         model = ActionTransition
         fields = (
             "id",
-            "active",
+            "is_active",
             "outcome",
             "target_action",
             "created_at",
@@ -39,7 +39,7 @@ class WriteActionTransitionSerializer(serializers.ModelSerializer):
         model = ActionTransition
         fields = (
             "id",
-            "active",
+            "is_active",
             "outcome",
             "target_action",
         )

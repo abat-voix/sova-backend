@@ -28,7 +28,7 @@ class CreateWorkflowTemplateCommandTest(TestCase):
         # Проверяем аудиторию и то, что шаблон не базовый по умолчанию
         self.assertEqual(workflow.audience, Audience.B2B)
         self.assertFalse(workflow.is_base)
-        self.assertTrue(workflow.active)
+        self.assertTrue(workflow.is_active)
         # Проверяем, что граф собран
         self.assertEqual(WorkflowStage.objects.filter(workflow=workflow).count(), 5)
         self.assertEqual(WorkflowAction.objects.filter(stage__workflow=workflow).count(), 12)

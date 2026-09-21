@@ -27,9 +27,9 @@ class ActionOutcomeApiTestCase(BaseApiTestMixin, APITestCase):
             "id": str(instance.pk),
             "code": instance.code,
             "name": instance.name,
-            "active": instance.active,
-            "comment_required": instance.comment_required,
-            "attachment_required": instance.attachment_required,
+            "is_active": instance.is_active,
+            "is_comment_required": instance.is_comment_required,
+            "is_attachment_required": instance.is_attachment_required,
             "action": {"id": str(instance.action_id), "name": instance.action.name},
         }
 
@@ -38,13 +38,13 @@ class ActionOutcomeApiTestCase(BaseApiTestMixin, APITestCase):
         return {
             "code": "agreed",
             "name": "Согласовано",
-            "comment_required": True,
+            "is_comment_required": True,
             "action": str(WorkflowActionFactory().pk),
         }
 
     def get_change_data(self) -> dict:
         """Данные обновления исхода."""
-        return {"name": "Отказ", "attachment_required": True}
+        return {"name": "Отказ", "is_attachment_required": True}
 
     def get_search_term(self, instance: ActionOutcome) -> str:
         """Поиск по названию."""

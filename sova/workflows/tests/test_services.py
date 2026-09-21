@@ -24,8 +24,8 @@ class ActionOutcomeServiceTest(TestCase):
         self.assertEqual(outcome.action, action)
         self.assertEqual(outcome.code, "done")
         self.assertEqual(outcome.name, "Выполнено")
-        self.assertFalse(outcome.comment_required)
-        self.assertFalse(outcome.attachment_required)
+        self.assertFalse(outcome.is_comment_required)
+        self.assertFalse(outcome.is_attachment_required)
 
     def test_create_default_is_idempotent(self) -> None:
         """Повторный вызов не создаёт второй исход."""
@@ -41,7 +41,7 @@ class ActionOutcomeServiceTest(TestCase):
     def test_create_default_keeps_customised_outcome(self) -> None:
         """Настроенный администратором исход с кодом done не перезаписывается."""
         action = WorkflowActionFactory()
-        custom = ActionOutcomeFactory(action=action, code="done", name="Сделано", comment_required=True)
+        custom = ActionOutcomeFactory(action=action, code="done", name="Сделано", is_comment_required=True)
 
         outcome = action_outcome_service.create_default(action=action)
 
@@ -49,7 +49,7 @@ class ActionOutcomeServiceTest(TestCase):
         self.assertEqual(outcome.pk, custom.pk)
         outcome.refresh_from_db()
         self.assertEqual(outcome.name, "Сделано")
-        self.assertTrue(outcome.comment_required)
+        self.assertTrue(outcome.is_comment_required)
 
 
 class StageTransitionServiceTest(TestCase):
@@ -89,7 +89,7 @@ class StageTransitionServiceTest(TestCase):
 
     def test_inactive_transitions_are_ignored(self) -> None:
         """Неактивные связи в графе не участвуют."""
-        StageTransitionFactory(from_stage=self.a, to_stage=self.b, active=False)
+        StageTransitionFactory(from_stage=self.a, to_stage=self.b, is_active=False)
 
         # Проверяем, что B → A циклом не считается
         self.assertFalse(stage_transition_service.creates_cycle(from_stage=self.b, to_stage=self.a))
@@ -128,7 +128,7 @@ class StageTransitionServiceTest(TestCase):
 
     def test_has_active_links_ignores_inactive_transitions(self) -> None:
         """Неактивная связь не считается."""
-        StageTransitionFactory(from_stage=self.a, to_stage=self.b, active=False)
+        StageTransitionFactory(from_stage=self.a, to_stage=self.b, is_active=False)
 
         # Проверяем, что связей нет
         self.assertFalse(stage_transition_service.has_active_links(stage=self.a))

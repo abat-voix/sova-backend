@@ -56,16 +56,16 @@ class WorkflowActionStartModeTest(TestCase):
         """По умолчанию действие доступно сразу при открытии этапа."""
         action = WorkflowActionFactory()
         # Проверяем значение по умолчанию
-        self.assertFalse(action.starts_by_transition_only)
+        self.assertFalse(action.is_trigger_only)
 
     def test_action_can_be_marked_as_started_only_by_transition(self) -> None:
         """Признак «только по переходу» сохраняется в базе."""
-        action = WorkflowActionFactory(starts_by_transition_only=True)
+        action = WorkflowActionFactory(is_trigger_only=True)
 
         action.refresh_from_db()
 
         # Проверяем, что признак не потерялся после перечитывания
-        self.assertTrue(action.starts_by_transition_only)
+        self.assertTrue(action.is_trigger_only)
 
 
 class StageTransitionTest(TestCase):
@@ -75,7 +75,7 @@ class StageTransitionTest(TestCase):
         """Новая связь между этапами действует."""
         transition = StageTransitionFactory()
         # Проверяем значение по умолчанию
-        self.assertTrue(transition.active)
+        self.assertTrue(transition.is_active)
 
     def test_clean_accepts_stages_of_one_workflow(self) -> None:
         """Связь между этапами одного workflow проходит проверку модели."""
