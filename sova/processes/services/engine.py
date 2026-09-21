@@ -25,11 +25,12 @@ from sova.processes.models import (
     ActionAttachment,
     ActionInstance,
     ActionResult,
+    ActionRollback,
     StageInstance,
     StageRollback,
     WorkflowInstance,
 )
-from sova.processes.schemas import EngineOutcome, RollbackOutcome
+from sova.processes.schemas import ActionRollbackOutcome, EngineOutcome, RollbackOutcome
 from sova.workflows.enum import Audience
 from sova.workflows.models import (
     ActionDependency,
@@ -94,7 +95,8 @@ class WorkflowEngineService:
       считается). Этап без обязательных действий закрывается сразу при открытии. Необязательные действия
       остаются доступными и после закрытия этапа и на состояние этапа и процесса не влияют;
     - процесс завершается, когда закрыты все этапы;
-    - откат отменяет этап и возвращает процесс на предыдущий.
+    - откат отменяет этап и возвращает процесс на предыдущий; откат действия отменяет только его последнее
+      исполнение, и только пока его этап ещё в работе — иначе сначала нужно откатить сам этап.
 
     Все публичные операции идут в транзакции и блокируют процесс, чтобы параллельные запросы к одному процессу
     выполнялись по очереди. Состояние операции передаётся в приватные методы объектом `_Trace`, а не хранится
@@ -241,6 +243,60 @@ class WorkflowEngineService:
         self._advance(process=process, now=now, trace=trace, actor=cancelled_by)
         target.refresh_from_db()
         return RollbackOutcome(rollback=rollback, returned_stage=target, reset_stages=reset_stages)
+
+    @transaction.atomic
+    def cancel_action(
+        self,
+        action_instance: ActionInstance,
+        reason: str,
+        cancelled_by: AbstractBaseUser | None = None,
+    ) -> ActionRollbackOutcome:
+        """
+        Откатывает выполненное действие: новое исполнение вместо отменённого, прежний результат остаётся в истории.
+
+        Откатить можно только последнее исполнение действия, и только если от него не зависит уже выполненное
+        действие того же этапа — цепочку зависимостей откатывают строго в обратном порядке, начиная с последнего
+        звена. Этап должен быть в работе: если действие закрыло свой этап, сначала откатывают сам этап (`cancel_stage`).
+        Откат пишется в журнал `ActionRollback`.
+        """
+        process = self._lock_process(process_id=action_instance.stage_instance.workflow_instance_id)
+        cancelled = ActionInstance.objects.select_related("action", "stage_instance__stage").get(
+            pk=action_instance.pk,
+        )
+        if cancelled.status != ActionInstanceStatus.COMPLETED:
+            raise InvalidStateError("Откатить можно только выполненное действие.")
+        stage_instance = cancelled.stage_instance
+        latest = self._latest_action_instances(stage_instance=stage_instance)
+        if latest.get(cancelled.action_id, cancelled).pk != cancelled.pk:
+            raise InvalidStateError("Откатить можно только последнее исполнение действия.")
+        if stage_instance.status != StageInstanceStatus.IN_PROGRESS:
+            raise InvalidStateError(
+                "Откатить действие можно только в этапе в работе. Сначала откатите этап.",
+            )
+        if not reason.strip():
+            raise RuleViolationError("Укажите причину отката.", code="reason_required")
+        dependents = self._action_dependents(stage_id=stage_instance.stage_id)
+        for dependent_id in dependents.get(cancelled.action_id, ()):
+            dependent = latest.get(dependent_id)
+            if dependent is not None and dependent.status == ActionInstanceStatus.COMPLETED:
+                raise RuleViolationError(
+                    "Нельзя откатить: от действия зависит уже выполненное действие.",
+                    code="has_completed_dependent",
+                )
+        now = timezone.now()
+        trace = _Trace()
+        self._reset_action(instance=cancelled)
+        self._activate_ready(stage_instance=stage_instance, now=now, trace=trace)
+        target = self._latest_action_instances(stage_instance=stage_instance)[cancelled.action_id]
+        rollback = ActionRollback.objects.create(
+            workflow_instance=process,
+            stage_instance=stage_instance,
+            from_action_instance=cancelled,
+            to_action_instance=target,
+            reason=reason,
+            created_by=cancelled_by,
+        )
+        return ActionRollbackOutcome(rollback=rollback, action_instance=target)
 
     def snapshot(self, process: WorkflowInstance) -> ProcessSnapshot:
         """Загружает состояние процесса: определение, экземпляры этапов и действующие контексты."""
@@ -480,6 +536,17 @@ class WorkflowEngineService:
         ).values_list("action_id", "depends_on_action_id"):
             dependencies[action_id].append(depends_on_id)
         return dependencies
+
+    def _action_dependents(self, stage_id: object) -> dict[object, list[object]]:
+        """Активные зависимости действий этапа: действие → действия, которые от него зависят."""
+        dependents: dict = defaultdict(list)
+        for action_id, depends_on_id in ActionDependency.objects.filter(
+            active=True,
+            action__stage_id=stage_id,
+            depends_on_action__active=True,
+        ).values_list("action_id", "depends_on_action_id"):
+            dependents[depends_on_id].append(action_id)
+        return dependents
 
     # === ПРИВАТНЫЕ МЕТОДЫ: ЭТАПЫ И КОНТЕКСТЫ ===
 

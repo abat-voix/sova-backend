@@ -14,6 +14,7 @@ router.register("stage-instances", views.StageInstanceViewSet, basename="stage-i
 router.register("action-instances", views.ActionInstanceViewSet, basename="action-instance")
 router.register("action-results", views.ActionResultViewSet, basename="action-result")
 router.register("stage-rollbacks", views.StageRollbackViewSet, basename="stage-rollback")
+router.register("action-rollbacks", views.ActionRollbackViewSet, basename="action-rollback")
 router.register(
     "action-attachments",
     views.ActionAttachmentViewSet,
