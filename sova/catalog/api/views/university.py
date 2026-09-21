@@ -1,9 +1,11 @@
+from django.db.models import Exists, OuterRef, QuerySet
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from sova.catalog.api import filters, serializers
 from sova.catalog.models import University
 from sova.core.api.views import SovaBaseViewSet
+from sova.interactions.models import Interaction
 
 
 class UniversityViewSet(SovaBaseViewSet):
@@ -15,6 +17,19 @@ class UniversityViewSet(SovaBaseViewSet):
     ordering_fields = "__all__"
     search_fields = ("short_name", "name", "inn", "external_code", "email")
     filterset_class = filters.UniversityFilter
+
+    def get_queryset(self) -> QuerySet[University]:
+        """Добавляет флаг наличия взаимодействий одним подзапросом, а не запросом на каждый вуз."""
+        return super().get_queryset().annotate(
+            has_interactions=Exists(Interaction.objects.filter(university=OuterRef("pk"))),
+        ).order_by(
+            "-has_interactions",
+        )
+
+    def perform_create(self, serializer: serializers.WriteUniversitySerializer) -> None:
+        """Пересоздание инстанса через аннотированный queryset для read-ответа."""
+        super().perform_create(serializer)
+        serializer.instance = self.get_queryset().get(pk=serializer.instance.pk)
 
     @action(
         detail=False,
