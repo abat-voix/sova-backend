@@ -18,4 +18,4 @@ staticfiles/
 .DS_Store
 .idea/
 
-docs
+docsprivate/
