@@ -6,6 +6,7 @@ from sova.workflows.enum import WorkflowChangeType
 from sova.workflows.models import (
     ActionDependency,
     ActionOutcome,
+    ActionFeature,
     ActionTransition,
     StageTransition,
     Workflow,
@@ -137,6 +138,13 @@ class WorkflowTemplateService:
                 )
                 actions[action_spec.name] = action
                 created.append(action)
+                for feature_order, feature_spec in enumerate(action_spec.features, start=1):
+                    created.append(ActionFeature.objects.create(
+                        action=action,
+                        code=feature_spec.code,
+                        sort_order=feature_order,
+                        settings=feature_spec.settings or {},
+                    ))
                 self._create_outcomes(action=action, action_spec=action_spec, created=created)
         return actions
 

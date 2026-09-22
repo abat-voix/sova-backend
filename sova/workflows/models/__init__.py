@@ -1,4 +1,5 @@
 from sova.workflows.models.action_dependency import ActionDependency
+from sova.workflows.models.action_feature import ActionFeature
 from sova.workflows.models.action_outcome import ActionOutcome
 from sova.workflows.models.action_transition import ActionTransition
 from sova.workflows.models.stage_transition import StageTransition
@@ -9,6 +10,7 @@ from sova.workflows.models.workflow_stage import WorkflowStage
 
 __all__ = [
     "ActionDependency",
+    "ActionFeature",
     "ActionOutcome",
     "ActionTransition",
     "StageTransition",
