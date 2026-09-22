@@ -22,13 +22,11 @@ class ContactLinkService:
     def link(self, interaction: Interaction, contact_person: ContactPerson, actor=None) -> tuple[InteractionContact, bool]:
         locked_interaction = (
             Interaction.objects.select_for_update()
-            .select_related("university", "b2c_client")
             .get(pk=interaction.pk)
         )
         try:
             locked_contact = (
                 ContactPerson.objects.select_for_update()
-                .select_related("university", "b2c_client")
                 .get(pk=contact_person.pk)
             )
         except ContactPerson.DoesNotExist as error:

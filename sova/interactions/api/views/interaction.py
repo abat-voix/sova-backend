@@ -7,6 +7,7 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.fields import UUIDField
 from rest_framework.response import Response
 
 from sova.core.api.exceptions import ConflictError
@@ -250,7 +251,7 @@ class InteractionViewSet(SovaBaseViewSet):
         """Закрывает активную привязку, сохраняя контакт и историю в каталоге."""
         interaction = self.get_object()
         try:
-            parsed_contact_id = serializers.UUIDField().run_validation(contact_id)
+            parsed_contact_id = UUIDField().run_validation(contact_id)
         except ValidationError:
             raise ValidationError(
                 detail="Некорректный UUID контактного лица.",
