@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     "sova.workflows",
     "sova.processes",
     "sova.notifications",
+    "sova.reports",
 ]
 
 MIDDLEWARE = [
@@ -121,6 +122,44 @@ except ValueError as error:
 
 if GOTENBERG_TIMEOUT <= 0:
     raise ImproperlyConfigured("GOTENBERG_TIMEOUT must be greater than zero.")
+
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "") or None
+CELERY_TASK_IGNORE_RESULT = True
+# Без брокера (локальная разработка, тесты) задания выполняются синхронно в процессе API
+CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", default=not CELERY_BROKER_URL)
+CELERY_TASK_EAGER_PROPAGATES = False
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TIMEZONE = "Europe/Moscow"
+CELERY_BEAT_SCHEDULE = {
+    "cleanup-report-jobs": {
+        "task": "sova.reports.tasks.cleanup_report_jobs",
+        "schedule": 60 * 60,
+    },
+}
+
+# Приватное хранилище файлов отчётов: вне MEDIA_ROOT, отдаётся только через API.
+# API и worker должны видеть один и тот же каталог (общий том) или общий backend.
+REPORTS_STORAGE_ROOT = Path(os.getenv("REPORTS_STORAGE_ROOT", BASE_DIR / "private" / "reports"))
+REPORTS_RETENTION_HOURS = int(os.getenv("REPORTS_RETENTION_HOURS", "72"))
+REPORTS_JOB_TIMEOUT_SECONDS = int(os.getenv("REPORTS_JOB_TIMEOUT_SECONDS", str(30 * 60)))
+REPORTS_MAX_ATTEMPTS = int(os.getenv("REPORTS_MAX_ATTEMPTS", "3"))
+REPORTS_MAX_PERIOD_DAYS = int(os.getenv("REPORTS_MAX_PERIOD_DAYS", str(5 * 366)))
+REPORTS_MAX_FILTER_ITEMS = int(os.getenv("REPORTS_MAX_FILTER_ITEMS", "500"))
+REPORTS_MAX_ACTIVE_JOBS_PER_USER = int(os.getenv("REPORTS_MAX_ACTIVE_JOBS_PER_USER", "5"))
+REPORTS_PREVIEW_MAX_PAGE_SIZE = 200
+REPORTS_PDF_MAX_ROWS = int(os.getenv("REPORTS_PDF_MAX_ROWS", "5000"))
+REPORTS_XLS_MAX_SHEETS = int(os.getenv("REPORTS_XLS_MAX_SHEETS", "4"))
+
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    "reports": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {"location": REPORTS_STORAGE_ROOT, "base_url": None},
+    },
+}
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
