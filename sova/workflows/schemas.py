@@ -35,6 +35,15 @@ class ActionSpec:
     is_trigger_only: bool = False
     after: tuple[str, ...] = ()
     outcomes: tuple[OutcomeSpec, ...] = ()
+    features: tuple["FeatureSpec", ...] = ()
+
+
+@dataclass(frozen=True)
+class FeatureSpec:
+    """Feature, включённый в шаблонное действие."""
+
+    code: str
+    settings: dict | None = None
 
 
 @dataclass(frozen=True)

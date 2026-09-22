@@ -4,6 +4,7 @@ from django.db.models import Model
 from sova.workflows.enum import WorkflowChangeType
 from sova.workflows.models import (
     ActionDependency,
+    ActionFeature,
     ActionOutcome,
     ActionTransition,
     StageTransition,
@@ -31,6 +32,7 @@ class WorkflowAuditService:
         ActionOutcome: ("action", "stage", "workflow"),
         ActionTransition: ("outcome", "action", "stage", "workflow"),
         ActionDependency: ("action", "stage", "workflow"),
+        ActionFeature: ("action", "stage", "workflow"),
         StageTransition: ("from_stage", "workflow"),
     }
 
