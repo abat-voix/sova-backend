@@ -1,10 +1,11 @@
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
+from django.db.models.functions import Lower
 
-from sova.core.models import TimeStampedModel
+from sova.core.models import NormalizedTextFieldsMixin, TimeStampedModel
 
 
-class ContactPerson(TimeStampedModel):
+class ContactPerson(NormalizedTextFieldsMixin, TimeStampedModel):
     """Контактное лицо со стороны вуза или B2C-клиента-юрлица. Контрагент — ровно один из двух."""
 
     full_name = models.CharField(
@@ -47,6 +48,8 @@ class ContactPerson(TimeStampedModel):
         verbose_name="B2C-клиент",
     )
 
+    normalized_text_fields = ("full_name", "position", "phone")
+
     class Meta:
         verbose_name = "Контактное лицо"
         verbose_name_plural = "Контактные лица"
@@ -59,13 +62,18 @@ class ContactPerson(TimeStampedModel):
                 ),
                 name="contact_person_exactly_one_counterparty",
             ),
+            # ФИО уникально у контрагента без учёта регистра: импорт сопоставляет его через iexact.
             models.UniqueConstraint(
-                fields=["university", "full_name"],
+                F("university"),
+                Lower("full_name"),
                 name="unique_university_contact_name",
+                violation_error_message="Контактное лицо с таким ФИО у этого вуза уже существует.",
             ),
             models.UniqueConstraint(
-                fields=["b2c_client", "full_name"],
+                F("b2c_client"),
+                Lower("full_name"),
                 name="unique_b2c_client_contact_name",
+                violation_error_message="Контактное лицо с таким ФИО у этого B2C-клиента уже существует.",
             ),
         ]
 

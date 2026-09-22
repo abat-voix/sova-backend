@@ -51,6 +51,9 @@ class WriteContractSerializer(serializers.ModelSerializer):
             "signed_at",
             "interaction",
         )
+        # В модели interaction nullable ради headless-договоров импорта реестра; через API
+        # договор всегда создаётся в рамках взаимодействия.
+        extra_kwargs = {"interaction": {"required": True, "allow_null": False}}
 
     def validate(self, attrs: dict) -> dict:
         """Проверка порядка дат: отправка → корректировка → подписание."""
@@ -67,3 +70,4 @@ class WriteContractSerializer(serializers.ModelSerializer):
                     {name: _("Дата не может быть раньше предыдущего шага договора.")},
                 )
         return attrs
+

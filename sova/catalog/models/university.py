@@ -1,6 +1,7 @@
 from django.db import models
+from django.db.models.functions import Lower
 
-from sova.core.models import TimeStampedModel
+from sova.core.models import NormalizedTextFieldsMixin, TimeStampedModel
 
 
 class InstitutionType(models.TextChoices):
@@ -15,12 +16,11 @@ class InstitutionType(models.TextChoices):
     OTHER = "other", "Другое"
 
 
-class University(TimeStampedModel):
+class University(NormalizedTextFieldsMixin, TimeStampedModel):
     """Вуз — учебное заведение, с которым взаимодействует ИТ Школа."""
 
     name = models.CharField(
         max_length=255,
-        unique=True,
         verbose_name="Название вуза",
     )
     name_en = models.CharField(
@@ -42,7 +42,6 @@ class University(TimeStampedModel):
     )
     external_code = models.CharField(
         max_length=255,
-        unique=True,
         null=True,
         blank=True,
         verbose_name="Внешний идентификатор",
@@ -118,10 +117,25 @@ class University(TimeStampedModel):
         verbose_name="Активен",
     )
 
+    normalized_text_fields = ("name", "name_en", "short_name", "external_code")
+
     class Meta:
         verbose_name = "Вуз"
         verbose_name_plural = "Вузы"
         ordering = ["name"]
+        # Название и код уникальны без учёта регистра: импорт сопоставляет их через iexact.
+        constraints = [
+            models.UniqueConstraint(
+                Lower("name"),
+                name="unique_university_name_ci",
+                violation_error_message="Вуз с таким названием уже существует.",
+            ),
+            models.UniqueConstraint(
+                Lower("external_code"),
+                name="unique_university_external_code_ci",
+                violation_error_message="Вуз с таким внешним идентификатором уже существует.",
+            ),
+        ]
 
     def __str__(self):
         return self.name

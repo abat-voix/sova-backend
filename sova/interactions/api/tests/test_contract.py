@@ -85,6 +85,18 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
         # Проверяем, что нарушение порядка шагов 4→6 отклонено
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_add_returns_400_without_interaction(self) -> None:
+        """Через API договор без взаимодействия не создаётся (headless — только импортом)."""
+        response = self.client.post(
+            path=self.list_url,
+            data={"contract_number": "Д-102"},
+            format="json",
+        )
+
+        # Проверяем, что interaction обязателен, хотя в модели он nullable
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("interaction", response.data)
+
     def test_change_returns_400_when_correction_after_signing(self) -> None:
         """PATCH с корректировкой позже подписания возвращает 400."""
         instance = ContractFactory(signed_at=date(2026, 3, 1))
