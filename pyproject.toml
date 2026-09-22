@@ -19,10 +19,10 @@ mozilla-django-oidc = "5.0.2"
 django-filter = "26.1"
 openpyxl = "^3.1"
 python-dotenv = "1.2.3"
+requests = "2.34.2"
 
 [tool.poetry.group.dev.dependencies]
 factory-boy = "3.3.3"
-requests = "2.34.2"
 
 [build-system]
 requires = ["poetry-core"]

@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "sova.interactions",
     "sova.workflows",
     "sova.processes",
+    "sova.notifications",
 ]
 
 MIDDLEWARE = [
@@ -173,6 +174,11 @@ if missing_smtp_settings:
     )
 else:
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+MAX_BOT_TOKEN = os.getenv("MAX_BOT_TOKEN", "")
+MAX_API_URL = os.getenv("MAX_API_URL", "https://platform-api.max.ru").rstrip("/")
+NOTIFICATION_HTTP_TIMEOUT = float(os.getenv("NOTIFICATION_HTTP_TIMEOUT", "10"))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
