@@ -19,6 +19,7 @@ class WorkflowChangeType(TextChoices):
 class ActionFeatureCode(TextChoices):
     CONTACT_PERSON_CREATE = "contact_person.create", "Создать контакт"
     CONTACT_PERSON_SELECT = "contact_person.select", "Выбрать контакт"
+    CONTACT_PERSON_LINK = "contact_person.link", "Привязать контакт"
     CONTACT_PERSON_UPDATE = "contact_person.update", "Изменить контакт"
     CONTACT_PERSON_DEACTIVATE = "contact_person.deactivate", "Деактивировать контакт"
 

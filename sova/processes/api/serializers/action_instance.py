@@ -184,3 +184,10 @@ class ActionInstanceSerializer(serializers.ModelSerializer):
             }
             for item in executions
         ]
+
+
+class ActionFeatureExecutionResponseSerializer(serializers.Serializer):
+    """Стандартный ответ выполнения любой feature действия."""
+
+    execution = serializers.DictField(read_only=True)
+    target = serializers.DictField(read_only=True)

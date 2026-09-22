@@ -29,7 +29,7 @@ BASE_B2B_PRESET = WorkflowSpec(
                     name="Найти контакт",
                     description="Найти контактное лицо вуза и зафиксировать его в справочнике.",
                     duration_days=5,
-                    features=(FeatureSpec("contact_person.create"), FeatureSpec("contact_person.select")),
+                    features=(FeatureSpec("contact_person.create"), FeatureSpec("contact_person.link")),
                 ),
                 ActionSpec(
                     name="Связаться с вузом",
