@@ -1,23 +1,28 @@
+from uuid import UUID
+
 from django.db.models import Count, IntegerField, OuterRef, Prefetch, QuerySet, Subquery
 from django.db.models.functions import Coalesce
 from django.utils.translation import gettext_lazy as _
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 
 from sova.core.api.exceptions import ConflictError
 from sova.core.api.views import SovaBaseViewSet
+from sova.catalog.models import ContactPerson
 from sova.interactions.api import filters, serializers
 from sova.interactions.exceptions import NoActiveResponsibleError
 from sova.interactions.models import (
     Interaction,
+    InteractionContact,
     InteractionDirection,
     InteractionProduct,
     InteractionProgram,
     Responsible,
 )
-from sova.interactions.services import responsible_service, visible_interactions
+from sova.interactions.services import contact_link_service, responsible_service, visible_interactions
 
 
 def _active_count(model: type) -> Coalesce:
@@ -160,3 +165,108 @@ class InteractionViewSet(SovaBaseViewSet):
             ).data,
             status=status.HTTP_200_OK,
         )
+
+    @extend_schema(
+        methods=["GET"],
+        request=None,
+        responses={200: serializers.InteractionContactSerializer(many=True)},
+    )
+    @extend_schema(
+        methods=["POST"],
+        request=serializers.LinkContactPersonSerializer,
+        responses={200: serializers.InteractionContactSerializer},
+    )
+    @action(
+        methods=["GET", "POST"],
+        detail=True,
+        url_path="contacts",
+        pagination_class=None,
+        filter_backends=[],
+    )
+    def contacts(self, request, pk=None) -> Response:
+        """Возвращает активные контакты взаимодействия или добавляет новый контакт."""
+        interaction = self.get_object()
+        if request.method == "GET":
+            links = (
+                InteractionContact.objects.filter(
+                    interaction=interaction,
+                    unlinked_at__isnull=True,
+                )
+                .select_related("contact_person")
+                .order_by("linked_at")
+            )
+            return Response(
+                serializers.InteractionContactSerializer(
+                    links,
+                    many=True,
+                    context=self.get_serializer_context(),
+                ).data,
+            )
+
+        request_serializer = serializers.LinkContactPersonSerializer(data=request.data)
+        request_serializer.is_valid(raise_exception=True)
+        try:
+            contact = ContactPerson.objects.get(
+                pk=request_serializer.validated_data["contact_person"],
+            )
+        except ContactPerson.DoesNotExist as error:
+            raise NotFound(
+                detail="Контактное лицо не найдено.",
+                code="contact_not_found",
+            ) from error
+
+        link, _ = contact_link_service.link(
+            interaction=interaction,
+            contact_person=contact,
+            actor=request.user,
+        )
+        link = InteractionContact.objects.select_related("contact_person").get(pk=link.pk)
+        return Response(
+            serializers.InteractionContactSerializer(
+                link,
+                context=self.get_serializer_context(),
+            ).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        request=None,
+        parameters=[
+            OpenApiParameter(
+                name="contact_id",
+                type=UUID,
+                location=OpenApiParameter.PATH,
+            ),
+        ],
+        responses={204: None},
+    )
+    @action(
+        methods=["DELETE"],
+        detail=True,
+        url_path=r"contacts/(?P<contact_id>[^/.]+)",
+        url_name="unlink-contact",
+    )
+    def unlink_contact(self, request, pk=None, contact_id=None) -> Response:
+        """Закрывает активную привязку, сохраняя контакт и историю в каталоге."""
+        interaction = self.get_object()
+        try:
+            parsed_contact_id = serializers.UUIDField().run_validation(contact_id)
+        except ValidationError:
+            raise ValidationError(
+                detail="Некорректный UUID контактного лица.",
+                code="invalid_contact_id",
+            )
+        try:
+            contact = ContactPerson.objects.get(pk=parsed_contact_id)
+        except ContactPerson.DoesNotExist as error:
+            raise NotFound(
+                detail="Контактное лицо не найдено.",
+                code="contact_not_found",
+            ) from error
+
+        contact_link_service.unlink(
+            interaction=interaction,
+            contact_person=contact,
+            actor=request.user,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)

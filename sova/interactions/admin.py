@@ -4,6 +4,7 @@ from sova.core.admin import AbstractBaseModelAdmin
 from sova.interactions.models import (
     Contract,
     Interaction,
+    InteractionContact,
     InteractionDirection,
     InteractionProduct,
     InteractionProgram,
@@ -32,6 +33,17 @@ class InteractionAdmin(AbstractBaseModelAdmin[Interaction]):
     search_fields = ("id", "comment", "university__name", "b2c_client__full_name")
     list_filter = ("is_active",)
     autocomplete_fields = ("university", "b2c_client")
+
+
+@admin.register(InteractionContact)
+class InteractionContactAdmin(AbstractBaseModelAdmin[InteractionContact]):
+    """История привязок контактных лиц к взаимодействиям."""
+
+    list_display = ("id", "interaction", "contact_person", "linked_at", "unlinked_at")
+    list_select_related = ("interaction", "contact_person", "linked_by", "unlinked_by")
+    search_fields = ("id", "contact_person__full_name")
+    list_filter = ("unlinked_at",)
+    autocomplete_fields = ("interaction", "contact_person", "linked_by", "unlinked_by")
 
 
 @admin.register(InteractionDirection)

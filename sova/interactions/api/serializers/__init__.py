@@ -8,6 +8,10 @@ from sova.interactions.api.serializers.interaction import (
     InteractionShortSerializer,
     WriteInteractionSerializer,
 )
+from sova.interactions.api.serializers.interaction_contact import (
+    InteractionContactSerializer,
+    LinkContactPersonSerializer,
+)
 from sova.interactions.api.serializers.interaction_direction import (
     InteractionDirectionSerializer,
     WriteInteractionDirectionSerializer,
@@ -36,12 +40,14 @@ __all__ = [
     "ContractSerializer",
     "ContractShortSerializer",
     "InteractionDirectionSerializer",
+    "InteractionContactSerializer",
     "InteractionProductSerializer",
     "InteractionProductShortSerializer",
     "InteractionProgramSerializer",
     "InteractionSerializer",
     "InteractionShortSerializer",
     "LicenseSerializer",
+    "LinkContactPersonSerializer",
     "ResponsibleSerializer",
     "ResponsibleShortSerializer",
     "WriteContractSerializer",

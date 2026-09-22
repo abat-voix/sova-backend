@@ -1,5 +1,6 @@
 from django.db.models import Count, IntegerField, OuterRef, Prefetch, QuerySet, Subquery
 from django.db.models.functions import Coalesce
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import status
 from rest_framework.decorators import action
@@ -183,6 +184,10 @@ class ActionInstanceViewSet(SovaReadOnlyViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @extend_schema(
+        request=OpenApiTypes.OBJECT,
+        responses={200: serializers.ActionFeatureExecutionResponseSerializer},
+    )
     @action(methods=["POST"], detail=True, url_path=r"features/(?P<code>[^/]+)/execute")
     def execute_feature(self, request, pk=None, code=None) -> Response:
         """Выполняет настроенный feature внутри действия, не завершая его."""
