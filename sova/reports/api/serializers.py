@@ -14,7 +14,7 @@ class ReportSpecSerializer(serializers.Serializer):
     """
     Параметры отчёта по взаимодействиям с вузами.
 
-    Период — включительные даты создания взаимодействия. Статус, этапы, ответственный
+    Период — даты создания взаимодействия. Статус, этапы, ответственный
     и состав — состояние на момент построения. Пустой список фильтра — без ограничения.
     """
 
@@ -42,6 +42,7 @@ class ReportSpecSerializer(serializers.Serializer):
     columns = serializers.ListField(
         child=serializers.ChoiceField(choices=INTERACTION_COLUMN_KEYS),
         required=False,
+        allow_null=True,
         allow_empty=False,
         help_text="Отображаемые колонки; по умолчанию — все. Идентификаторы возвращаются всегда.",
     )

@@ -193,6 +193,13 @@ class InteractionReportRowsTestCase(ReportTestMixin, APITestCase):
 class InteractionReportValidationTestCase(ReportTestMixin, APITestCase):
     """Неверные фильтры дают 400 с кодами ошибок."""
 
+    def test_null_columns_uses_all_columns(self) -> None:
+        for url in (self.preview_url, self.summary_url):
+            with self.subTest(url=url):
+                response = self.client.post(url, data={"columns": None}, format="json")
+                self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+                self.assertEqual(response.data["meta"]["columns"][0]["key"], "university")
+
     def assert_error(self, data, field, code):
         response = self.client.post(self.preview_url, data=data, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

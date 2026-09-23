@@ -186,7 +186,7 @@ pdf = html_to_pdf(
 
 Семантика отчёта:
 
-- **Период** (`date_from`, `date_to`) — включительные даты создания взаимодействия
+- **Период** (`date_from`, `date_to`) — даты создания взаимодействия
   (`Interaction.created_at`, часовой пояс `Europe/Moscow`).
 - **Состояние** — статус процесса, актуальные этапы, ответственный и состав отражают
   состояние на момент построения (`meta.generated_at`), а не на конец периода.
@@ -208,6 +208,12 @@ pdf = html_to_pdf(
 celery -A sova worker --loglevel=info --concurrency=2
 celery -A sova beat --loglevel=info   # очистка просроченных файлов и зависших заданий
 ```
+
+При локальном запуске на macOS пул worker по умолчанию — `solo`: он обходит сбой
+`fast_trace_task` в дочерних процессах `SpawnPoolWorker`. Перезапустите уже
+работающий worker после обновления настроек. Для явного запуска используйте
+`celery -A sova worker --loglevel=info --pool=solo`; задания выполняются по одному.
+В Linux-контейнере остаётся стандартный `prefork`.
 
 Переменные: `CELERY_BROKER_URL` (по умолчанию `REDIS_URL`), `REPORTS_STORAGE_ROOT` —
 приватный каталог файлов, общий для API и worker (общий том), `REPORTS_RETENTION_HOURS`

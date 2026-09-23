@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
@@ -131,6 +132,11 @@ CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", default=not CELE
 CELERY_TASK_EAGER_PROPAGATES = False
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+# На macOS prefork запускает дочерние процессы через spawn: в Celery 5.6
+# fast_trace_task остаётся без инициализированного реестра задач. Для локального
+# worker используем однопроцессный пул; Linux в контейнере сохраняет prefork.
+if sys.platform == "darwin" and ENVIRONMENT == "development":
+    CELERY_WORKER_POOL = os.getenv("CELERY_WORKER_POOL", "solo")
 CELERY_TIMEZONE = "Europe/Moscow"
 CELERY_BEAT_SCHEDULE = {
     "cleanup-report-jobs": {
