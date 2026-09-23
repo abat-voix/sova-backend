@@ -5,9 +5,10 @@ from django.utils import timezone
 
 from sova.interactions.models import InteractionDirection, InteractionProduct, InteractionProgram
 from sova.processes.enum import ActionInstanceStatus, StageInstanceContextType, StageInstanceStatus
-from sova.processes.models import ActionAttachment, ActionInstance, ActionResult, StageInstance, WorkflowInstance
+from sova.processes.models import ActionAttachment, ActionFeatureExecution, ActionInstance, ActionResult, StageInstance, WorkflowInstance
 from sova.processes.services.engine import ProcessSnapshot, workflow_engine_service
-from sova.workflows.models import ActionOutcome
+from sova.workflows.models import ActionFeature, ActionOutcome
+from sova.processes.action_features.registry import FEATURE_HANDLERS
 
 # Порядок групп контекстов на доске: направления, программы, продукты
 _CONTEXT_ORDER = {
@@ -112,6 +113,13 @@ class WorkflowBoardService:
         outcomes: dict = defaultdict(list)
         for outcome in ActionOutcome.objects.filter(action_id__in=working_actions, is_active=True).order_by("code"):
             outcomes[outcome.action_id].append(outcome)
+        features: dict = defaultdict(list)
+        for feature in ActionFeature.objects.filter(action_id__in=working_actions, is_active=True).order_by("sort_order"):
+            if feature.code in FEATURE_HANDLERS:
+                features[feature.action_id].append(feature)
+        executions: dict = defaultdict(list)
+        for execution in ActionFeatureExecution.objects.filter(action_instance_id__in=instance_ids).select_related("performed_by"):
+            executions[execution.action_instance_id].append(execution)
         now = timezone.now()
         cards: dict = defaultdict(list)
         for instance in sorted(latest.values(), key=lambda entry: entry.action.sort_order):
@@ -121,6 +129,8 @@ class WorkflowBoardService:
                     result=results.get(instance.pk),
                     attachments_count=attachments.get(instance.pk, 0),
                     outcomes=outcomes.get(instance.action_id, []),
+                    features=features.get(instance.action_id, []),
+                    executions=executions.get(instance.pk, []),
                     now=now,
                 ),
             )
@@ -132,6 +142,8 @@ class WorkflowBoardService:
         result: ActionResult | None,
         attachments_count: int,
         outcomes: list[ActionOutcome],
+        features: list[ActionFeature],
+        executions: list[ActionFeatureExecution],
         now,
     ) -> dict:
         """Карточка действия: последнее исполнение, результат, вложения и исходы, которые можно выбрать."""
@@ -177,6 +189,14 @@ class WorkflowBoardService:
             ]
             if in_progress
             else [],
+            "available_features": [{"code": feature.code, "settings": feature.settings} for feature in features] if in_progress else [],
+            "feature_executions": [{
+                "id": item.pk,
+                "feature_code": item.feature_code_snapshot,
+                "performed_at": item.performed_at,
+                "performed_by": item.performed_by,
+                "target": {"type": item.target_type, "id": item.target_id, "data": item.result},
+            } for item in executions],
         }
 
     def _context_titles(self, process: WorkflowInstance) -> dict:

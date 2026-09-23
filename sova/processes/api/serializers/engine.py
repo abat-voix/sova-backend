@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from sova.processes.api.serializers.action_instance import ActionInstanceSerializer
 from sova.processes.api.serializers.action_result import ActionResultSerializer
+from sova.processes.api.serializers.action_rollback import ActionRollbackSerializer
 from sova.processes.api.serializers.stage_instance import StageInstanceSerializer
 from sova.processes.api.serializers.stage_rollback import StageRollbackSerializer
 from sova.processes.enum import RollbackMode
@@ -104,4 +105,28 @@ class CancelStageResultSerializer(serializers.Serializer):
         read_only=True,
         label=_("Сброшенные этапы"),
         help_text=_("Этапы после этапа возврата, которые снова ожидают и будут выполнены заново"),
+    )
+
+
+class CancelActionSerializer(serializers.Serializer):
+    """Откат действия — валидация входных данных."""
+
+    reason = serializers.CharField(
+        label=_("Причина"),
+        help_text=_("Записывается в журнал откатов"),
+    )
+
+
+class CancelActionResultSerializer(serializers.Serializer):
+    """Откат действия — что изменилось в процессе."""
+
+    rollback = ActionRollbackSerializer(
+        read_only=True,
+        label=_("Откат"),
+        help_text=_("Запись журнала об этом откате"),
+    )
+    action_instance = ActionInstanceSerializer(
+        read_only=True,
+        label=_("Действие"),
+        help_text=_("Новое исполнение, которое начало ждать или уже в работе"),
     )

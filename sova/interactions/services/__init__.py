@@ -1,3 +1,4 @@
+from sova.interactions.services.contact_link import ContactLinkService, contact_link_service
 from sova.interactions.services.license import LicenseService, license_service
 from sova.interactions.services.responsible import (
     ResponsibleService,
@@ -6,8 +7,10 @@ from sova.interactions.services.responsible import (
 from sova.interactions.services.visibility import visible_interactions
 
 __all__ = [
+    "ContactLinkService",
     "LicenseService",
     "ResponsibleService",
+    "contact_link_service",
     "license_service",
     "responsible_service",
     "visible_interactions",

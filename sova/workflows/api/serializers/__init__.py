@@ -1,3 +1,7 @@
+from sova.workflows.api.serializers.action_feature import (
+    ActionFeatureSerializer,
+    WriteActionFeatureSerializer,
+)
 from sova.workflows.api.serializers.action_dependency import (
     ActionDependencySerializer,
     WriteActionDependencySerializer,
@@ -33,6 +37,7 @@ from sova.workflows.api.serializers.workflow_stage import (
 )
 
 __all__ = [
+    "ActionFeatureSerializer",
     "ActionDependencySerializer",
     "ActionOutcomeSerializer",
     "ActionOutcomeShortSerializer",
@@ -46,6 +51,7 @@ __all__ = [
     "WorkflowStageSerializer",
     "WorkflowStageShortSerializer",
     "WriteActionDependencySerializer",
+    "WriteActionFeatureSerializer",
     "WriteActionOutcomeSerializer",
     "WriteActionTransitionSerializer",
     "WriteStageTransitionSerializer",

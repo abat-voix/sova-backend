@@ -8,7 +8,7 @@
 
 from sova.processes.enum import StageInstanceContextType
 from sova.workflows.enum import Audience
-from sova.workflows.schemas import ActionSpec, OutcomeSpec, StageSpec, WorkflowSpec
+from sova.workflows.schemas import ActionSpec, FeatureSpec, OutcomeSpec, StageSpec, WorkflowSpec
 
 BASE_B2B_PRESET = WorkflowSpec(
     code="base-b2b",
@@ -29,6 +29,7 @@ BASE_B2B_PRESET = WorkflowSpec(
                     name="Найти контакт",
                     description="Найти контактное лицо вуза и зафиксировать его в справочнике.",
                     duration_days=5,
+                    features=(FeatureSpec("contact_person.create"), FeatureSpec("contact_person.link")),
                 ),
                 ActionSpec(
                     name="Связаться с вузом",
@@ -54,12 +55,14 @@ BASE_B2B_PRESET = WorkflowSpec(
                     name="Подготовить документы",
                     description="Комплект документов под договор с вузом.",
                     duration_days=10,
+                    features=(FeatureSpec("contract.create"), FeatureSpec("contract.file.upload")),
                 ),
                 ActionSpec(
                     name="Согласовать документы",
                     description="Согласование комплекта с вузом.",
                     duration_days=15,
                     after=("Подготовить документы",),
+                    features=(FeatureSpec("contract.update"), FeatureSpec("contract.file.upload")),
                     outcomes=(
                         OutcomeSpec(code="done", name="Согласовано"),
                         OutcomeSpec(
@@ -75,6 +78,7 @@ BASE_B2B_PRESET = WorkflowSpec(
                     description="Правки по замечаниям вуза. Запускается исходом «Нужны правки».",
                     duration_days=5,
                     is_trigger_only=True,
+                    features=(FeatureSpec("contract.update"), FeatureSpec("contract.file.upload")),
                 ),
                 ActionSpec(
                     name="Подписать договор",
@@ -82,6 +86,7 @@ BASE_B2B_PRESET = WorkflowSpec(
                     duration_days=15,
                     after=("Согласовать документы",),
                     outcomes=(OutcomeSpec(code="done", name="Договор подписан"),),
+                    features=(FeatureSpec("contract.sign"), FeatureSpec("contract.file.upload")),
                 ),
             ),
         ),
@@ -95,6 +100,7 @@ BASE_B2B_PRESET = WorkflowSpec(
                     name="Передать лицензию",
                     description="Передать вузу лицензию на продукт.",
                     duration_days=10,
+                    features=(FeatureSpec("license.create"), FeatureSpec("license.update")),
                 ),
                 ActionSpec(
                     name="Установить ПО",

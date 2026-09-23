@@ -1,6 +1,7 @@
 from sova.core.api.views import SovaReadOnlyViewSet
 from sova.workflows.api import filters, serializers
 from sova.workflows.models import WorkflowChange
+from sova.workflows.api.permissions import CanManageWorkflows
 
 
 class WorkflowChangeViewSet(SovaReadOnlyViewSet):
@@ -12,3 +13,4 @@ class WorkflowChangeViewSet(SovaReadOnlyViewSet):
     ordering_fields = "__all__"
     search_fields = ("change_type", "entity_type")
     filterset_class = filters.WorkflowChangeFilter
+    permission_classes = (CanManageWorkflows,)

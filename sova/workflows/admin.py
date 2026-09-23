@@ -4,6 +4,7 @@ from sova.core.admin import AbstractBaseModelAdmin, AbstractHistoryModelAdmin
 from sova.workflows.models import (
     ActionDependency,
     ActionOutcome,
+    ActionFeature,
     ActionTransition,
     StageTransition,
     Workflow,
@@ -11,6 +12,12 @@ from sova.workflows.models import (
     WorkflowChange,
     WorkflowStage,
 )
+
+
+class ActionFeatureInline(admin.TabularInline):
+    model = ActionFeature
+    extra = 0
+    fields = ("code", "sort_order", "is_active", "settings")
 
 
 @admin.register(ActionDependency)
@@ -79,6 +86,7 @@ class WorkflowActionAdmin(AbstractBaseModelAdmin[WorkflowAction]):
     search_fields = ("id", "name")
     list_filter = ("is_active", "is_optional")
     autocomplete_fields = ("stage",)
+    inlines = (ActionFeatureInline,)
 
 
 @admin.register(WorkflowChange)

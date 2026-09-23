@@ -1,6 +1,8 @@
 from django.test import TestCase
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
+
 from sova.core.tests.factories import UserFactory
 from sova.core.tests.media import TemporaryMediaMixin
 from sova.interactions.tests.factories import InteractionFactory
@@ -86,6 +88,14 @@ class EngineTestCase(TemporaryMediaMixin, TestCase):
             return_to=return_to,
         )
 
+    def cancel_action(self, process, action, reason="Ошибка", context=None):
+        """Откатывает последнее исполнение действия."""
+        return engine.cancel_action(
+            action_instance=self.action_instance(process, action, context),
+            reason=reason,
+            cancelled_by=self.user,
+        )
+
 
 class EngineApiTestCase(EngineTestCase, APITestCase):
     """Тесты эндпоинтов движка: те же помощники, а запросы идут от аутентифицированного пользователя."""
@@ -93,4 +103,6 @@ class EngineApiTestCase(EngineTestCase, APITestCase):
     def setUp(self) -> None:
         """Аутентифицирует клиента пользователем, от имени которого движок пишет результаты."""
         super().setUp()
+        # Администратор платформы: выборка действий и взаимодействий зависит от роли в СОВА
+        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
         self.client.force_authenticate(user=self.user)

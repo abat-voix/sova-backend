@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from sova.processes.models import ActionInstance, ActionResult, StageInstance, StageRollback
+from sova.processes.models import ActionInstance, ActionResult, ActionRollback, StageInstance, StageRollback
 
 
 @dataclass
@@ -22,3 +22,11 @@ class RollbackOutcome:
     rollback: StageRollback
     returned_stage: StageInstance
     reset_stages: list[StageInstance] = field(default_factory=list)
+
+
+@dataclass
+class ActionRollbackOutcome:
+    """Итог отката действия: запись журнала и новое исполнение."""
+
+    rollback: ActionRollback
+    action_instance: ActionInstance

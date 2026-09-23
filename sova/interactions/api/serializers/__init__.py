@@ -3,10 +3,15 @@ from sova.interactions.api.serializers.contract import (
     ContractShortSerializer,
     WriteContractSerializer,
 )
+from sova.interactions.api.serializers.contract_file import ContractFileSerializer
 from sova.interactions.api.serializers.interaction import (
     InteractionSerializer,
     InteractionShortSerializer,
     WriteInteractionSerializer,
+)
+from sova.interactions.api.serializers.interaction_contact import (
+    InteractionContactSerializer,
+    LinkContactPersonSerializer,
 )
 from sova.interactions.api.serializers.interaction_direction import (
     InteractionDirectionSerializer,
@@ -33,15 +38,18 @@ from sova.interactions.api.serializers.responsible import (
 
 __all__ = [
     "AssignResponsibleSerializer",
+    "ContractFileSerializer",
     "ContractSerializer",
     "ContractShortSerializer",
     "InteractionDirectionSerializer",
+    "InteractionContactSerializer",
     "InteractionProductSerializer",
     "InteractionProductShortSerializer",
     "InteractionProgramSerializer",
     "InteractionSerializer",
     "InteractionShortSerializer",
     "LicenseSerializer",
+    "LinkContactPersonSerializer",
     "ResponsibleSerializer",
     "ResponsibleShortSerializer",
     "WriteContractSerializer",

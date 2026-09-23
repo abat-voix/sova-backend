@@ -10,7 +10,7 @@ from sova.interactions.tests.factories import (
 )
 from sova.processes.enum import RollbackMode, StageInstanceStatus, WorkflowInstanceStatus
 from sova.processes.exceptions import InvalidStateError, RuleViolationError
-from sova.processes.models import ActionInstance, ActionResult, StageInstance, StageRollback
+from sova.processes.models import ActionInstance, ActionResult, ActionRollback, StageInstance, StageRollback
 from sova.processes.services import workflow_engine_service as engine
 from sova.processes.tests.base import (
     COMPLETED,
@@ -1146,3 +1146,164 @@ class CancelStageTest(EngineTestCase):
         # Проверяем завершение
         self.assertTrue(final.is_workflow_completed)
         self.assertEqual(process.status, WorkflowInstanceStatus.COMPLETED)
+
+
+class CancelActionTest(EngineTestCase):
+    """Тесты отката отдельного действия: новое исполнение вместо отката всего этапа."""
+
+    def setUp(self) -> None:
+        """Этап с цепочкой предшественник→зависимое, независимым и необязательным действием; за ним второй этап."""
+        super().setUp()
+        self.stage = self.builder.stage("Этап")
+        self.prerequisite_action = self.builder.action(self.stage, "Предшественник")
+        self.dependent_action = self.builder.action(self.stage, "Зависимое", after=(self.prerequisite_action,))
+        self.independent_action = self.builder.action(self.stage, "Независимое")
+        self.optional_action = self.builder.action(self.stage, "Необязательное", optional=True)
+        self.next_stage = self.builder.stage("Следующий", after=(self.stage,))
+        self.next_stage_action = self.builder.action(self.next_stage, "Действие следующего этапа")
+
+    def test_cancel_creates_new_execution_and_reactivates_action(self) -> None:
+        """Откат последнего звена цепочки: новое исполнение сразу в работе, прежнее — в истории."""
+        process = self.start()
+        self.complete(process, self.prerequisite_action)
+        self.complete(process, self.dependent_action)
+
+        self.cancel_action(process, self.dependent_action)
+
+        # Проверяем новое исполнение действия
+        self.assertEqual(self.action_instance(process, self.dependent_action).execution_no, 2)
+        self.assertEqual(self.action_status(process, self.dependent_action), IN_PROGRESS)
+        # Прежнее исполнение и его результат остались
+        self.assertEqual(ActionInstance.objects.filter(action=self.dependent_action).count(), 2)
+        self.assertEqual(ActionResult.objects.filter(action_instance__action=self.dependent_action).count(), 1)
+        # Предшественник и этап не тронуты
+        self.assertEqual(self.action_status(process, self.prerequisite_action), COMPLETED)
+        self.assertEqual(self.stage_status(process, self.stage), StageInstanceStatus.IN_PROGRESS)
+
+    def test_cancel_rejects_action_that_is_not_completed(self) -> None:
+        """Откатить можно только выполненное действие."""
+        process = self.start()
+
+        with self.assertRaises(InvalidStateError):
+            self.cancel_action(process, self.prerequisite_action)
+
+    def test_cancel_rejects_when_completed_dependent_exists(self) -> None:
+        """Нельзя откатить действие, если от него уже зависит выполненное действие."""
+        process = self.start()
+        self.complete(process, self.prerequisite_action)
+        self.complete(process, self.dependent_action)
+
+        # Проверяем код ошибки
+        with self.assertRaises(RuleViolationError) as raised:
+            self.cancel_action(process, self.prerequisite_action)
+        self.assertEqual(raised.exception.code, "has_completed_dependent")
+
+    def test_cancel_allows_prerequisite_after_dependent_is_cancelled(self) -> None:
+        """После отката зависимого действия предшественник становится последним и тоже откатывается."""
+        process = self.start()
+        self.complete(process, self.prerequisite_action)
+        self.complete(process, self.dependent_action)
+
+        self.cancel_action(process, self.dependent_action)
+        self.cancel_action(process, self.prerequisite_action)
+
+        # Проверяем, что предшественник получил новое исполнение и снова в работе
+        self.assertEqual(self.action_instance(process, self.prerequisite_action).execution_no, 2)
+        self.assertEqual(self.action_status(process, self.prerequisite_action), IN_PROGRESS)
+
+    def test_cancel_rejects_when_stage_already_completed(self) -> None:
+        """Нельзя откатить действие закрытого этапа — сначала нужно откатить сам этап."""
+        process = self.start()
+        self.complete(process, self.prerequisite_action)
+        self.complete(process, self.dependent_action)
+        self.complete(process, self.independent_action)
+        self.complete(process, self.optional_action)
+
+        self.assertEqual(self.stage_status(process, self.stage), StageInstanceStatus.COMPLETED)
+        with self.assertRaises(InvalidStateError):
+            self.cancel_action(process, self.independent_action)
+
+    def test_cancel_requires_reason(self) -> None:
+        """Причина обязательна."""
+        process = self.start()
+        self.complete(process, self.prerequisite_action)
+        self.complete(process, self.dependent_action)
+
+        # Проверяем код ошибки
+        with self.assertRaises(RuleViolationError) as raised:
+            self.cancel_action(process, self.dependent_action, reason="   ")
+        self.assertEqual(raised.exception.code, "reason_required")
+
+    def test_cancel_writes_journal_record(self) -> None:
+        """Откат действия пишется в журнал: причина, действия, этап и автор."""
+        process = self.start()
+        self.complete(process, self.prerequisite_action)
+        self.complete(process, self.dependent_action)
+        cancelled_instance = self.action_instance(process, self.dependent_action)
+
+        outcome = self.cancel_action(process, self.dependent_action, reason="Ошиблись в данных")
+
+        record = ActionRollback.objects.get()
+        # Проверяем запись журнала
+        self.assertEqual(outcome.rollback, record)
+        self.assertEqual(record.reason, "Ошиблись в данных")
+        self.assertEqual(record.workflow_instance, process)
+        self.assertEqual(record.stage_instance, self.stage_instance(process, self.stage))
+        self.assertEqual(record.from_action_instance, cancelled_instance)
+        self.assertEqual(record.to_action_instance, self.action_instance(process, self.dependent_action))
+        self.assertEqual(record.created_by, self.user)
+
+    def test_cancel_rejects_not_latest_execution(self) -> None:
+        """Откатить можно только последнее исполнение действия."""
+        process = self.start()
+        self.complete(process, self.prerequisite_action)
+        self.complete(process, self.dependent_action)
+        first_execution = ActionInstance.objects.get(action=self.dependent_action, execution_no=1)
+        self.cancel_action(process, self.dependent_action)
+        self.complete(process, self.dependent_action)
+
+        with self.assertRaises(InvalidStateError):
+            engine.cancel_action(action_instance=first_execution, reason="Ошибка", cancelled_by=self.user)
+
+    def test_cancel_optional_action_does_not_affect_others(self) -> None:
+        """Необязательное действие без зависимостей: откат не трогает остальные действия и этап."""
+        process = self.start()
+        self.complete(process, self.optional_action)
+
+        self.cancel_action(process, self.optional_action)
+
+        # Проверяем новое исполнение необязательного действия
+        self.assertEqual(self.action_instance(process, self.optional_action).execution_no, 2)
+        self.assertEqual(self.action_status(process, self.optional_action), IN_PROGRESS)
+        # Остальные действия и этап не тронуты
+        self.assertEqual(self.action_status(process, self.prerequisite_action), IN_PROGRESS)
+        self.assertEqual(self.stage_status(process, self.stage), StageInstanceStatus.IN_PROGRESS)
+
+
+class CancelActionTransitionOnlyTest(EngineTestCase):
+    """Откат действия, запускаемого только переходом: новое исполнение ждёт нового перехода."""
+
+    def setUp(self) -> None:
+        """Этап с действием-триггером и целевым действием, запускаемым только по его исходу."""
+        super().setUp()
+        self.stage = self.builder.stage("Этап")
+        self.trigger = self.builder.action(self.stage, "Триггер")
+        self.target = self.builder.action(self.stage, "Цель", trigger_only=True)
+        self.other = self.builder.action(self.stage, "Другое")
+        outcome = self.builder.outcome(self.trigger, "go")
+        self.builder.branch(outcome, self.target)
+
+    def test_cancel_new_execution_stays_pending_until_triggered_again(self) -> None:
+        """Новое исполнение не запускается само: у него нет метки запуска переходом."""
+        process = self.start()
+        self.complete(process, self.trigger, code="go")
+        self.complete(process, self.target)
+        self.assertEqual(self.action_status(process, self.target), COMPLETED)
+
+        self.cancel_action(process, self.target)
+
+        instance = self.action_instance(process, self.target)
+        # Проверяем, что новое исполнение ждёт перехода, а не запущено сразу
+        self.assertEqual(instance.execution_no, 2)
+        self.assertEqual(instance.status, PENDING)
+        self.assertIsNone(instance.triggered_at)

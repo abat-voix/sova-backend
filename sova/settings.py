@@ -1,9 +1,12 @@
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
+
+from sova.core.storage import s3_storage
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -11,6 +14,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Loads .env for local runs. Existing environment variables win, so values
 # injected by Docker Compose are never overridden.
 load_dotenv(BASE_DIR / ".env")
+
+# `manage.py test ...` — тесты всегда работают с файловой системой (временный MEDIA_ROOT из
+# TemporaryMediaMixin), независимо от STORAGE_BACKEND в окружении разработчика или CI.
+TESTING = "test" in sys.argv
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -50,10 +57,13 @@ INSTALLED_APPS = [
     "mozilla_django_oidc",
     "accounts",
     "health",
+    "sova.core",
     "sova.catalog",
     "sova.interactions",
     "sova.workflows",
     "sova.processes",
+    "sova.notifications",
+    "sova.reports",
 ]
 
 MIDDLEWARE = [
@@ -121,6 +131,75 @@ except ValueError as error:
 if GOTENBERG_TIMEOUT <= 0:
     raise ImproperlyConfigured("GOTENBERG_TIMEOUT must be greater than zero.")
 
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "") or None
+CELERY_TASK_IGNORE_RESULT = True
+# Без брокера (локальная разработка, тесты) задания выполняются синхронно в процессе API
+CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", default=not CELERY_BROKER_URL)
+CELERY_TASK_EAGER_PROPAGATES = False
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+# На macOS prefork запускает дочерние процессы через spawn: в Celery 5.6
+# fast_trace_task остаётся без инициализированного реестра задач. Для локального
+# worker используем однопроцессный пул; Linux в контейнере сохраняет prefork.
+if sys.platform == "darwin" and ENVIRONMENT == "development":
+    CELERY_WORKER_POOL = os.getenv("CELERY_WORKER_POOL", "solo")
+CELERY_TIMEZONE = "Europe/Moscow"
+CELERY_BEAT_SCHEDULE = {
+    "cleanup-report-jobs": {
+        "task": "sova.reports.tasks.cleanup_report_jobs",
+        "schedule": 60 * 60,
+    },
+}
+
+# Приватное хранилище файлов отчётов: вне MEDIA_ROOT, отдаётся только через API.
+# API и worker должны видеть один и тот же каталог (общий том) или общий backend.
+REPORTS_STORAGE_ROOT = Path(os.getenv("REPORTS_STORAGE_ROOT", BASE_DIR / "private" / "reports"))
+REPORTS_RETENTION_HOURS = int(os.getenv("REPORTS_RETENTION_HOURS", "72"))
+REPORTS_JOB_TIMEOUT_SECONDS = int(os.getenv("REPORTS_JOB_TIMEOUT_SECONDS", str(30 * 60)))
+REPORTS_MAX_ATTEMPTS = int(os.getenv("REPORTS_MAX_ATTEMPTS", "3"))
+REPORTS_MAX_PERIOD_DAYS = int(os.getenv("REPORTS_MAX_PERIOD_DAYS", str(5 * 366)))
+REPORTS_MAX_FILTER_ITEMS = int(os.getenv("REPORTS_MAX_FILTER_ITEMS", "500"))
+REPORTS_MAX_ACTIVE_JOBS_PER_USER = int(os.getenv("REPORTS_MAX_ACTIVE_JOBS_PER_USER", "5"))
+REPORTS_PREVIEW_MAX_PAGE_SIZE = 200
+REPORTS_PDF_MAX_ROWS = int(os.getenv("REPORTS_PDF_MAX_ROWS", "5000"))
+REPORTS_XLS_MAX_SHEETS = int(os.getenv("REPORTS_XLS_MAX_SHEETS", "4"))
+
+# Хранилище файлов: `filesystem` (по умолчанию, тесты и локальный запуск без Docker) или `s3`
+# (собственный Garage или внешний S3-совместимый провайдер — см. docs/plans/2026-09-23-s3-storage.md).
+# Переключение — только переменными окружения, код хранилища не знает, с каким провайдером
+# работает.
+STORAGE_BACKEND = "filesystem" if TESTING else os.getenv("STORAGE_BACKEND", "filesystem")
+# Как отдавать файл авторизованному пользователю: `proxy` — Django стримит его сам (хранилище
+# остаётся только во внутренней сети), `redirect` — 302 на подписанный URL (для провайдера,
+# чей endpoint виден браузеру).
+S3_DOWNLOAD_MODE = os.getenv("S3_DOWNLOAD_MODE", "proxy")
+FILE_UPLOAD_MAX_SIZE = int(os.getenv("FILE_UPLOAD_MAX_SIZE_MB", "25")) * 1024 * 1024
+
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    "reports": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {"location": REPORTS_STORAGE_ROOT, "base_url": None},
+    },
+}
+
+if STORAGE_BACKEND == "s3":
+    try:
+        S3_MEDIA_BUCKET = os.environ["S3_MEDIA_BUCKET"]
+        S3_REPORTS_BUCKET = os.environ["S3_REPORTS_BUCKET"]
+    except KeyError as exc:
+        raise ImproperlyConfigured(
+            "STORAGE_BACKEND=s3 требует S3_MEDIA_BUCKET и S3_REPORTS_BUCKET."
+        ) from exc
+    STORAGES["default"] = s3_storage(S3_MEDIA_BUCKET)
+    STORAGES["reports"] = s3_storage(S3_REPORTS_BUCKET, location="reports")
+elif STORAGE_BACKEND != "filesystem":
+    raise ImproperlyConfigured(
+        f"Неизвестный STORAGE_BACKEND={STORAGE_BACKEND!r}, допустимо: filesystem, s3."
+    )
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -173,6 +252,11 @@ if missing_smtp_settings:
     )
 else:
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+MAX_BOT_TOKEN = os.getenv("MAX_BOT_TOKEN", "")
+MAX_API_URL = os.getenv("MAX_API_URL", "https://platform-api.max.ru").rstrip("/")
+NOTIFICATION_HTTP_TIMEOUT = float(os.getenv("NOTIFICATION_HTTP_TIMEOUT", "10"))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -230,6 +314,7 @@ OIDC_TIMEOUT = 10
 OIDC_STORE_ACCESS_TOKEN = False
 OIDC_STORE_ID_TOKEN = True
 OIDC_OP_LOGOUT_URL_METHOD = "accounts.oidc.provider_logout_url"
+OIDC_CALLBACK_CLASS = "accounts.oidc.SovaOIDCAuthenticationCallbackView"
 OIDC_REDIRECT_ALLOWED_HOSTS = ALLOWED_HOSTS
 OIDC_EXEMPT_URLS = ["/api/health/", "/api/auth/me/"]
 OIDC_RENEW_ID_TOKEN_EXPIRY_SECONDS = 15 * 60

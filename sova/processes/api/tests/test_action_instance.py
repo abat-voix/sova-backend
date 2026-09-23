@@ -4,11 +4,12 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
 from sova.core.tests.base import BaseApiTestMixin
 from sova.core.tests.factories import UserFactory
 from sova.processes.enum import StageInstanceStatus, WorkflowInstanceStatus
-from sova.processes.models import ActionInstance, ActionResult
-from sova.processes.tests.base import COMPLETED, EngineApiTestCase
+from sova.processes.models import ActionInstance, ActionResult, ActionRollback
+from sova.processes.tests.base import COMPLETED, IN_PROGRESS, EngineApiTestCase
 from sova.processes.tests.factories import ActionAttachmentFactory, ActionInstanceFactory
 from sova.workflows.models import ActionOutcome
 
@@ -22,21 +23,46 @@ class ActionInstanceApiTestCase(BaseApiTestMixin, APITestCase):
     allow_update = False
     allow_delete = False
 
+    def setUp(self) -> None:
+        """Даёт пользователю роль администратора платформы: выборка зависит от роли в СОВА."""
+        super().setUp()
+        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
+
     def create_instance(self, **kwargs) -> ActionInstance:
-        """Создаёт экземпляр действия."""
+        """Создаёт экземпляр действия пользователя: по умолчанию список показывает только свои."""
+        kwargs.setdefault("responsible", self.user)
         return ActionInstanceFactory(**kwargs)
 
     def get_expected_data(self, instance: ActionInstance) -> dict:
         """Поля read-представления экземпляра действия."""
+        interaction = instance.stage_instance.workflow_instance.interaction
         return {
             "id": str(instance.pk),
             "action_name_snapshot": instance.action_name_snapshot,
             "status": instance.status,
             "execution_no": instance.execution_no,
             "triggered_at": None,
+            "is_optional": instance.action.is_optional,
+            "is_trigger_only": instance.action.is_trigger_only,
+            "is_triggered": False,
+            "is_overdue": False,
+            "attachments_count": 0,
             "stage_instance": str(instance.stage_instance_id),
+            "stage_name_snapshot": instance.stage_instance.stage.name,
+            "workflow_instance": str(instance.stage_instance.workflow_instance_id),
+            "interaction": {
+                "id": str(interaction.pk),
+                "university": {"id": str(interaction.university_id), "name": interaction.university.name},
+                "b2c_client": None,
+            },
             "action": {"id": str(instance.action_id), "name": instance.action.name},
-            "responsible": None,
+            "responsible": {
+                "id": self.user.pk,
+                "email": self.user.email,
+                "full_name": self.user.get_full_name(),
+            },
+            "result": None,
+            "available_outcomes": [],
         }
 
     def get_post_data(self) -> dict:
@@ -49,7 +75,8 @@ class ActionInstanceApiTestCase(BaseApiTestMixin, APITestCase):
 
     def assert_filter_returns(self, params: dict, expected: list[ActionInstance]) -> None:
         """Проверяет, что список с фильтром содержит ровно ожидаемые экземпляры."""
-        response = self.client.get(path=self.list_url, data=params)
+        # scope=all: фильтры проверяются на всей доступной выборке, а не только на своих действиях
+        response = self.client.get(path=self.list_url, data={"scope": "all", **params})
 
         # Проверяем состав выдачи (порядок не важен)
         self.assertEqual(
@@ -237,6 +264,100 @@ class CompleteActionApiTestCase(EngineApiTestCase):
         self.client.force_authenticate(user=None)
 
         response = self.post(self.find)
+
+        # Проверяем, что доступ запрещён
+        self.assertIn(response.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
+
+
+class CancelActionApiTestCase(EngineApiTestCase):
+    """Тесты POST /api/processes/action-instances/{id}/cancel/: откат выполненного действия."""
+
+    def setUp(self) -> None:
+        """Этап с цепочкой А1→А2; процесс доведён до обоих выполненных действий."""
+        super().setUp()
+        self.stage = self.builder.stage("Этап")
+        self.a1 = self.builder.action(self.stage, "А1")
+        self.a2 = self.builder.action(self.stage, "А2", after=(self.a1,))
+        self.a3 = self.builder.action(self.stage, "А3")
+        self.process = self.start()
+        self.complete(self.process, self.a1)
+        self.complete(self.process, self.a2)
+
+    def url(self, action, context=None) -> str:
+        """URL отката последнего исполнения действия."""
+        instance = self.action_instance(self.process, action, context)
+        return reverse("processes:action-instance-cancel", args=[instance.pk])
+
+    def post(self, action, **data):
+        """Откатывает действие; причина по умолчанию задана."""
+        data.setdefault("reason", "Ошиблись в данных")
+        return self.client.post(path=self.url(action), data=data, format="json")
+
+    def test_cancel_returns_rollback_and_reactivated_action(self) -> None:
+        """Ответ описывает запись журнала и новое исполнение действия."""
+        response = self.post(self.a2, reason="Ошиблись в данных")
+
+        # Проверяем успешный ответ и запись журнала
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        self.assertEqual(response.data["rollback"]["reason"], "Ошиблись в данных")
+        self.assertEqual(response.data["rollback"]["created_by"]["id"], self.user.pk)
+        # Проверяем новое исполнение действия
+        self.assertEqual(response.data["action_instance"]["execution_no"], 2)
+        self.assertEqual(response.data["action_instance"]["status"], IN_PROGRESS)
+        # Проверяем состояние в базе
+        self.assertEqual(ActionRollback.objects.count(), 1)
+
+    def test_cancel_returns_409_for_action_that_is_not_completed(self) -> None:
+        """Незавершённое действие откатить нельзя: 409 и код invalid_state."""
+        response = self.post(self.a3)
+
+        # Проверяем статус и код
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "invalid_state")
+
+    def test_cancel_returns_400_for_completed_dependent(self) -> None:
+        """Нельзя откатить предшественника, пока зависимое действие выполнено: 400 и код has_completed_dependent."""
+        response = self.post(self.a1)
+
+        # Проверяем статус и код
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "has_completed_dependent")
+
+    def test_cancel_returns_409_for_closed_stage(self) -> None:
+        """Действие закрытого этапа откатить нельзя: 409 и код invalid_state."""
+        self.complete(self.process, self.a3)
+        self.assertEqual(self.stage_status(self.process, self.stage), StageInstanceStatus.COMPLETED)
+
+        response = self.post(self.a3)
+
+        # Проверяем статус и код
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "invalid_state")
+
+    def test_cancel_returns_400_for_blank_reason(self) -> None:
+        """Пустая причина отклоняется на уровне сериализатора."""
+        response = self.client.post(path=self.url(self.a2), data={"reason": "   "}, format="json")
+
+        # Проверяем статус и ошибку поля
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("reason", response.data)
+
+    def test_cancel_returns_404_for_unknown_action_instance(self) -> None:
+        """Несуществующее исполнение действия: 404."""
+        response = self.client.post(
+            path=reverse("processes:action-instance-cancel", args=[uuid.uuid4()]),
+            data={"reason": "Ошибка"},
+            format="json",
+        )
+
+        # Проверяем статус
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_cancel_requires_authentication(self) -> None:
+        """Анонимный запрос отклоняется."""
+        self.client.force_authenticate(user=None)
+
+        response = self.post(self.a2)
 
         # Проверяем, что доступ запрещён
         self.assertIn(response.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))

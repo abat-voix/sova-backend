@@ -1,9 +1,12 @@
 from django.contrib.auth.models import AbstractBaseUser
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from sova.interactions.exceptions import NoActiveResponsibleError
 from sova.interactions.models import Interaction, Responsible
+from sova.processes.enum import ActionInstanceStatus
+from sova.processes.models import ActionInstance
 
 
 class ResponsibleService:
@@ -15,7 +18,8 @@ class ResponsibleService:
     Одна действующая запись на взаимодействие гарантируется ограничением БД
     `one_active_responsible_per_interaction`; блокировка строки взаимодействия
     сериализует параллельные назначения, чтобы вместо ошибки ограничения второй
-    запрос дождался первого.
+    запрос дождался первого. При смене менеджера открытые действия прежнего
+    менеджера передаются новому, а завершённые исполнения остаются в истории.
     """
 
     @transaction.atomic
@@ -36,6 +40,7 @@ class ResponsibleService:
 
         if current is not None and current.manager_id == manager.pk:
             return current, False
+        previous_manager_id = current.manager_id if current is not None else None
         if current is not None:
             self._close(responsible=current)
 
@@ -43,6 +48,11 @@ class ResponsibleService:
             interaction=interaction,
             manager=manager,
             assigned_by=assigned_by,
+        )
+        self._sync_open_action_instances(
+            interaction=interaction,
+            previous_manager_id=previous_manager_id,
+            manager=manager,
         )
         return responsible, True
 
@@ -67,6 +77,25 @@ class ResponsibleService:
         """Закрывает назначение текущим моментом."""
         responsible.unassigned_at = timezone.now()
         responsible.save(update_fields=["unassigned_at"])
+
+    def _sync_open_action_instances(
+        self,
+        interaction: Interaction,
+        previous_manager_id: int | None,
+        manager: AbstractBaseUser,
+    ) -> int:
+        """Передаёт открытые задачи новому ответственному, сохраняя историю завершённых."""
+        actions = ActionInstance.objects.filter(
+            stage_instance__workflow_instance__interaction=interaction,
+            status__in=(ActionInstanceStatus.PENDING, ActionInstanceStatus.IN_PROGRESS),
+        )
+        if previous_manager_id is None:
+            actions = actions.filter(responsible__isnull=True)
+        else:
+            actions = actions.filter(
+                Q(responsible_id=previous_manager_id) | Q(responsible__isnull=True),
+            )
+        return actions.update(responsible=manager)
 
 
 responsible_service = ResponsibleService()

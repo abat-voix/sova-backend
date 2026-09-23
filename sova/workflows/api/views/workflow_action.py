@@ -6,9 +6,10 @@ from sova.workflows.api.views.audit import WorkflowAuditMixin
 from sova.workflows.enum import WorkflowChangeType
 from sova.workflows.models import WorkflowAction
 from sova.workflows.services import action_outcome_service
+from sova.workflows.api.permissions import CanManageWorkflows, WorkflowOwnershipMixin
 
 
-class WorkflowActionViewSet(WorkflowAuditMixin, SovaBaseViewSet):
+class WorkflowActionViewSet(WorkflowOwnershipMixin, WorkflowAuditMixin, SovaBaseViewSet):
     """
     Действия workflow. Доступны CRUD операции; правки пишутся в аудит.
     Новое действие сразу получает исход «Выполнено» — без исхода его нельзя завершить.
@@ -20,6 +21,7 @@ class WorkflowActionViewSet(WorkflowAuditMixin, SovaBaseViewSet):
     ordering_fields = "__all__"
     search_fields = ("name", "description")
     filterset_class = filters.WorkflowActionFilter
+    permission_classes = (CanManageWorkflows,)
 
     @transaction.atomic
     def perform_create(self, serializer) -> None:

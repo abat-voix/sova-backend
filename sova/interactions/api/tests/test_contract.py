@@ -1,13 +1,16 @@
 from datetime import date
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
 from sova.core.tests.base import BaseApiTestMixin
+from sova.core.tests.factories import UserFactory
 from sova.core.tests.media import TemporaryMediaMixin
 from sova.interactions.models import Contract
-from sova.interactions.tests.factories import ContractFactory, InteractionFactory
+from sova.interactions.tests.factories import ContractFactory, InteractionFactory, ResponsibleFactory
 
 
 class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
@@ -15,6 +18,11 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
 
     url_basename = "interactions:contract"
     model = Contract
+
+    def setUp(self) -> None:
+        """Администратор платформы видит все взаимодействия — видимость не сужает выборку."""
+        super().setUp()
+        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
 
     def create_instance(self, **kwargs) -> Contract:
         """Создаёт договор."""
@@ -36,6 +44,11 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
                 },
                 "b2c_client": None,
             },
+            "download_url": (
+                reverse("interactions:contract-download", args=[instance.pk])
+                if instance.file
+                else None
+            ),
         }
 
     def get_post_data(self) -> dict:
@@ -64,11 +77,86 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
             format="multipart",
         )
 
-        # Проверяем, что файл сохранён и его URL отдан в ответе
+        # Проверяем, что файл сохранён и попал в журнал, а ссылка на скачивание отдана в ответе
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
         contract = Contract.objects.get(pk=response.data["id"])
         self.assertTrue(contract.file.name.endswith(".pdf"))
-        self.assertIn(".pdf", response.data["file"])
+        self.assertEqual(contract.file_name, "contract.pdf")
+        self.assertEqual(
+            response.data["download_url"],
+            reverse("interactions:contract-download", args=[contract.pk]),
+        )
+        self.assertEqual(contract.files.count(), 1)
+        self.assertEqual(contract.files.get().original_name, "contract.pdf")
+
+    def test_reupload_keeps_previous_file_in_history(self) -> None:
+        """Повторная загрузка файла не теряет прежний — обе версии в журнале, обе скачиваются."""
+        contract = ContractFactory()
+        self.client.patch(
+            path=self.detail_url(contract),
+            data={"file": SimpleUploadedFile("v1.pdf", b"v1", "application/pdf")},
+            format="multipart",
+        )
+
+        response = self.client.patch(
+            path=self.detail_url(contract),
+            data={"file": SimpleUploadedFile("v2.pdf", b"v2", "application/pdf")},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        contract.refresh_from_db()
+        self.assertEqual(contract.file_name, "v2.pdf")
+        self.assertEqual(contract.files.count(), 2)
+        names = set(contract.files.values_list("original_name", flat=True))
+        self.assertEqual(names, {"v1.pdf", "v2.pdf"})
+
+    def test_download_returns_current_file(self) -> None:
+        """Скачивание договора отдаёт текущий файл под исходным именем."""
+        upload = SimpleUploadedFile("Договор.pdf", b"content", "application/pdf")
+        create_response = self.client.post(
+            path=self.list_url,
+            data={"interaction": str(InteractionFactory().pk), "file": upload},
+            format="multipart",
+        )
+
+        response = self.client.get(create_response.data["download_url"])
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("attachment", response["Content-Disposition"])
+
+    def test_download_returns_404_without_file(self) -> None:
+        """У договора без файла скачивать нечего — 404, а не 500."""
+        contract = ContractFactory()
+
+        response = self.client.get(
+            reverse("interactions:contract-download", args=[contract.pk]),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_foreign_contract_is_not_visible(self) -> None:
+        """Договор чужого КАМа не виден в списке, детально и на скачивании (404)."""
+        UserRole.objects.filter(user=self.user).delete()
+        UserRole.objects.create(user=self.user, role=SystemRole.KAM)
+
+        foreign_kam = UserFactory()
+        UserRole.objects.create(user=foreign_kam, role=SystemRole.KAM)
+        responsible = ResponsibleFactory(manager=foreign_kam)
+        foreign_contract = ContractFactory(interaction=responsible.interaction)
+
+        self.assertEqual(self.client.get(self.list_url).data["count"], 0)
+        self.assertEqual(
+            self.client.get(self.detail_url(foreign_contract)).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        create_response = self.client.post(
+            path=self.list_url,
+            data={"interaction": str(responsible.interaction_id)},
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("interaction", create_response.data)
 
     def test_add_returns_400_when_signed_before_sent(self) -> None:
         """Подписание раньше отправки на подписание возвращает 400."""

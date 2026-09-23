@@ -45,6 +45,14 @@ class BoardResultSerializer(serializers.Serializer):
     )
 
 
+class BoardFeatureExecutionSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    feature_code = serializers.CharField()
+    performed_at = serializers.DateTimeField()
+    performed_by = UserShortSerializer(allow_null=True)
+    target = serializers.DictField()
+
+
 class BoardActionSerializer(serializers.Serializer):
     """Действие на доске: последнее исполнение, результат, вложения и доступные исходы."""
 
@@ -111,6 +119,8 @@ class BoardActionSerializer(serializers.Serializer):
         label=_("Доступные исходы"),
         help_text=_("Активные исходы действия; пусто, если действие не в работе"),
     )
+    available_features = serializers.ListField(child=serializers.DictField())
+    feature_executions = BoardFeatureExecutionSerializer(many=True)
 
 
 class BoardReturnOptionSerializer(serializers.Serializer):
