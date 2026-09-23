@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     "sova.workflows",
     "sova.processes",
     "sova.notifications",
+    "sova.messaging",
     "sova.reports",
 ]
 
