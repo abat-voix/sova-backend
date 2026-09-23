@@ -5,4 +5,4 @@ class ConversationKind(TextChoices):
     """Тип беседы."""
 
     DIRECT = "direct", "Личная переписка"
-    SYSTEM = "system", "Системные уведомления"
+    SYSTEM = "system", "Системные сообщения"
