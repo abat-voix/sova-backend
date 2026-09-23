@@ -1,16 +1,16 @@
 from django.conf import settings
-from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import APIException, Throttled
+from rest_framework.exceptions import Throttled
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from sova.core.api.exceptions import ConflictError
+from sova.core.api.exceptions import ConflictError, Gone
+from sova.core.files import file_response
 from sova.reports.api import serializers
 from sova.reports.enum import ReportJobStatus
 from sova.reports.models import ReportJob
@@ -20,12 +20,6 @@ from sova.reports.services.exporters import CONTENT_TYPES
 from sova.reports.services.summary import build_summary
 
 TAGS = ["reports"]
-
-
-class Gone(APIException):
-    status_code = status.HTTP_410_GONE
-    default_detail = _("Срок хранения файла истёк.")
-    default_code = "expired"
 
 
 class InteractionReportPreviewView(APIView):
@@ -143,14 +137,6 @@ class ReportJobDownloadView(APIView):
         if job.status != ReportJobStatus.READY or not job.file:
             raise ConflictError(detail=_("Файл отчёта ещё не готов."), code="not_ready")
         if job.expires_at and job.expires_at <= timezone.now():
-            raise Gone()
-        try:
-            handle = job.file.open("rb")
-        except FileNotFoundError:
-            raise Gone(detail=_("Файл отчёта больше недоступен."), code="missing")
+            raise Gone(detail=_("Срок хранения файла истёк."), code="expired")
         filename = f"report-{timezone.localtime(job.finished_at):%Y%m%d-%H%M%S}.{job.format}"
-        response = FileResponse(
-            handle, as_attachment=True, filename=filename, content_type=CONTENT_TYPES[job.format]
-        )
-        response["Cache-Control"] = "private, no-store"
-        return response
+        return file_response(job.file, filename, content_type=CONTENT_TYPES[job.format])

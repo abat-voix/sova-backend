@@ -8,6 +8,7 @@ router = DefaultRouter()
 router.register("interactions", views.InteractionViewSet, basename="interaction")
 router.register("responsibles", views.ResponsibleViewSet, basename="responsible")
 router.register("contracts", views.ContractViewSet, basename="contract")
+router.register("contract-files", views.ContractFileViewSet, basename="contract-file")
 router.register(
     "interaction-directions",
     views.InteractionDirectionViewSet,

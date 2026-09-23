@@ -6,12 +6,18 @@ import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
+from sova.core.storage import s3_storage
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Loads .env for local runs. Existing environment variables win, so values
 # injected by Docker Compose are never overridden.
 load_dotenv(BASE_DIR / ".env")
+
+# `manage.py test ...` — тесты всегда работают с файловой системой (временный MEDIA_ROOT из
+# TemporaryMediaMixin), независимо от STORAGE_BACKEND в окружении разработчика или CI.
+TESTING = "test" in sys.argv
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -51,6 +57,7 @@ INSTALLED_APPS = [
     "mozilla_django_oidc",
     "accounts",
     "health",
+    "sova.core",
     "sova.catalog",
     "sova.interactions",
     "sova.workflows",
@@ -158,6 +165,17 @@ REPORTS_PREVIEW_MAX_PAGE_SIZE = 200
 REPORTS_PDF_MAX_ROWS = int(os.getenv("REPORTS_PDF_MAX_ROWS", "5000"))
 REPORTS_XLS_MAX_SHEETS = int(os.getenv("REPORTS_XLS_MAX_SHEETS", "4"))
 
+# Хранилище файлов: `filesystem` (по умолчанию, тесты и локальный запуск без Docker) или `s3`
+# (собственный Garage или внешний S3-совместимый провайдер — см. docs/plans/2026-09-23-s3-storage.md).
+# Переключение — только переменными окружения, код хранилища не знает, с каким провайдером
+# работает.
+STORAGE_BACKEND = "filesystem" if TESTING else os.getenv("STORAGE_BACKEND", "filesystem")
+# Как отдавать файл авторизованному пользователю: `proxy` — Django стримит его сам (хранилище
+# остаётся только во внутренней сети), `redirect` — 302 на подписанный URL (для провайдера,
+# чей endpoint виден браузеру).
+S3_DOWNLOAD_MODE = os.getenv("S3_DOWNLOAD_MODE", "proxy")
+FILE_UPLOAD_MAX_SIZE = int(os.getenv("FILE_UPLOAD_MAX_SIZE_MB", "25")) * 1024 * 1024
+
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
@@ -166,6 +184,21 @@ STORAGES = {
         "OPTIONS": {"location": REPORTS_STORAGE_ROOT, "base_url": None},
     },
 }
+
+if STORAGE_BACKEND == "s3":
+    try:
+        S3_MEDIA_BUCKET = os.environ["S3_MEDIA_BUCKET"]
+        S3_REPORTS_BUCKET = os.environ["S3_REPORTS_BUCKET"]
+    except KeyError as exc:
+        raise ImproperlyConfigured(
+            "STORAGE_BACKEND=s3 требует S3_MEDIA_BUCKET и S3_REPORTS_BUCKET."
+        ) from exc
+    STORAGES["default"] = s3_storage(S3_MEDIA_BUCKET)
+    STORAGES["reports"] = s3_storage(S3_REPORTS_BUCKET, location="reports")
+elif STORAGE_BACKEND != "filesystem":
+    raise ImproperlyConfigured(
+        f"Неизвестный STORAGE_BACKEND={STORAGE_BACKEND!r}, допустимо: filesystem, s3."
+    )
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},

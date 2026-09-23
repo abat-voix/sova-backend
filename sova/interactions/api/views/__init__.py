@@ -1,4 +1,5 @@
 from sova.interactions.api.views.contract import ContractViewSet
+from sova.interactions.api.views.contract_file import ContractFileViewSet
 from sova.interactions.api.views.interaction import InteractionViewSet
 from sova.interactions.api.views.interaction_direction import (
     InteractionDirectionViewSet,
@@ -13,6 +14,7 @@ from sova.interactions.api.views.license import LicenseViewSet
 from sova.interactions.api.views.responsible import ResponsibleViewSet
 
 __all__ = [
+    "ContractFileViewSet",
     "ContractViewSet",
     "InteractionDirectionViewSet",
     "InteractionProductViewSet",
