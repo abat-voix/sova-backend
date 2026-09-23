@@ -8,6 +8,7 @@ router = DefaultRouter()
 router.register("workflows", views.WorkflowViewSet, basename="workflow")
 router.register("workflow-stages", views.WorkflowStageViewSet, basename="workflow-stage")
 router.register("workflow-actions", views.WorkflowActionViewSet, basename="workflow-action")
+router.register("action-features", views.ActionFeatureViewSet, basename="action-feature")
 router.register("action-outcomes", views.ActionOutcomeViewSet, basename="action-outcome")
 router.register(
     "action-transitions",

@@ -12,6 +12,7 @@ from sova.workflows.api.views.audit import WorkflowAuditMixin
 from sova.workflows.enum import WorkflowChangeType
 from sova.workflows.models import (
     ActionDependency,
+    ActionFeature,
     ActionOutcome,
     ActionTransition,
     StageTransition,
@@ -48,6 +49,7 @@ class WorkflowViewSet(WorkflowAuditMixin, SovaBaseViewSet):
         """Return the complete graph in one response for the editor."""
         from sova.workflows.api.serializers import (
             ActionDependencySerializer,
+            ActionFeatureSerializer,
             ActionOutcomeSerializer,
             ActionTransitionSerializer,
             StageTransitionSerializer,
@@ -63,6 +65,11 @@ class WorkflowViewSet(WorkflowAuditMixin, SovaBaseViewSet):
             "actions": WorkflowActionSerializer(
                 WorkflowAction.objects.filter(stage__workflow=workflow)
                 .select_related("stage"),
+                many=True,
+            ).data,
+            "features": ActionFeatureSerializer(
+                ActionFeature.objects.filter(action__stage__workflow=workflow)
+                .select_related("action"),
                 many=True,
             ).data,
             "outcomes": ActionOutcomeSerializer(
@@ -171,6 +178,7 @@ class WorkflowViewSet(WorkflowAuditMixin, SovaBaseViewSet):
             "workflow",
             "stages",
             "actions",
+            "features",
             "outcomes",
             "stage_transitions",
             "action_transitions",
@@ -184,6 +192,7 @@ class WorkflowViewSet(WorkflowAuditMixin, SovaBaseViewSet):
 
         from sova.workflows.api.serializers import (
             WriteActionDependencySerializer,
+            WriteActionFeatureSerializer,
             WriteActionOutcomeSerializer,
             WriteActionTransitionSerializer,
             WriteStageTransitionSerializer,
@@ -200,6 +209,7 @@ class WorkflowViewSet(WorkflowAuditMixin, SovaBaseViewSet):
         collections = (
             ("stages", WorkflowStage, WriteWorkflowStageSerializer),
             ("actions", WorkflowAction, WriteWorkflowActionSerializer),
+            ("features", ActionFeature, WriteActionFeatureSerializer),
             ("outcomes", ActionOutcome, WriteActionOutcomeSerializer),
             ("stage_transitions", StageTransition, WriteStageTransitionSerializer),
             ("action_transitions", ActionTransition, WriteActionTransitionSerializer),
@@ -242,6 +252,7 @@ class WorkflowViewSet(WorkflowAuditMixin, SovaBaseViewSet):
         relations = {
             "stages": WorkflowStage.objects.filter(workflow=workflow),
             "actions": WorkflowAction.objects.filter(stage__workflow=workflow),
+            "features": ActionFeature.objects.filter(action__stage__workflow=workflow),
             "outcomes": ActionOutcome.objects.filter(action__stage__workflow=workflow),
             "stage_transitions": StageTransition.objects.filter(from_stage__workflow=workflow),
             "action_transitions": ActionTransition.objects.filter(outcome__action__stage__workflow=workflow),

@@ -1,7 +1,9 @@
 import factory
 
+from sova.workflows.enum import ActionFeatureCode
 from sova.workflows.models import (
     ActionDependency,
+    ActionFeature,
     ActionOutcome,
     ActionTransition,
     StageTransition,
@@ -65,6 +67,17 @@ class ActionOutcomeFactory(factory.django.DjangoModelFactory):
 
     code = factory.Sequence(lambda n: f"outcome-{n}")
     name = factory.Sequence(lambda n: f"Исход {n}")
+    action = factory.SubFactory(WorkflowActionFactory)
+
+
+class ActionFeatureFactory(factory.django.DjangoModelFactory):
+    """Фабрика возможности действия."""
+
+    class Meta:
+        model = ActionFeature
+
+    code = factory.Iterator(ActionFeatureCode.values)
+    sort_order = factory.Sequence(lambda n: n + 1)
     action = factory.SubFactory(WorkflowActionFactory)
 
 
