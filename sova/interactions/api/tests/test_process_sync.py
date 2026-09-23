@@ -102,17 +102,34 @@ class ContractAttachmentApiTestCase(EngineApiTestCase):
         self.assertEqual(interaction.university_id, self.contract.university_id)
         self.assertEqual(InteractionProduct.objects.get(pk=self.item.pk).interaction_id, interaction.pk)
 
-    def test_attach_to_new_interaction_with_unknown_manager_returns_409(self) -> None:
-        """ФИО менеджера не найдено — 409, взаимодействие не создано."""
+    def test_attach_to_new_interaction_with_unknown_manager_creates_interaction_without_responsible(self) -> None:
+        """ФИО менеджера не найдено и manager не передан — взаимодействие без ответственного."""
         self.contract.draft_manager_full_name = "Несуществующий Менеджер"
         self.contract.save(update_fields=["draft_manager_full_name"])
-        interactions_before = Interaction.objects.count()
 
         response = self.client.post(path=self.attach_new_url(self.contract))
 
-        # Проверяем, что транзакция откатилась целиком
-        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
-        self.assertEqual(response.data["code"], "manager_not_found")
-        self.assertEqual(Interaction.objects.count(), interactions_before)
-        self.contract.refresh_from_db()
-        self.assertIsNone(self.contract.interaction_id)
+        # Проверяем, что договор привязан, а ответственного нет
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        interaction = Interaction.objects.get(pk=response.data["interaction"]["id"])
+        self.assertFalse(interaction.responsibles.exists())
+
+    def test_attach_to_new_interaction_with_explicit_manager(self) -> None:
+        """Явно переданный manager назначается ответственным нового взаимодействия."""
+        self.contract.draft_manager_full_name = "Несуществующий Менеджер"
+        self.contract.save(update_fields=["draft_manager_full_name"])
+
+        response = self.client.post(path=self.attach_new_url(self.contract), data={"manager": self.user.pk}, format="json")
+
+        # Проверяем, что ответственный — переданный пользователь
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        interaction = Interaction.objects.get(pk=response.data["interaction"]["id"])
+        self.assertEqual(interaction.responsibles.get(unassigned_at__isnull=True).manager_id, self.user.pk)
+
+    def test_attach_to_new_interaction_with_unknown_manager_id_returns_400(self) -> None:
+        """Несуществующий id менеджера — 400 по полю manager."""
+        response = self.client.post(path=self.attach_new_url(self.contract), data={"manager": 999999}, format="json")
+
+        # Проверяем ошибку валидации
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("manager", response.data)

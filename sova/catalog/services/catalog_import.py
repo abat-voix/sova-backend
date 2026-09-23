@@ -5,7 +5,7 @@ from django.db import models, transaction
 from sova.catalog.enum import CatalogType
 from sova.catalog.models import ContactPerson, Direction, Product, Program, University, Vendor
 from sova.catalog.models.university import InstitutionType
-from sova.catalog.schemas import CATALOG_IMPORT_FIELDS
+from sova.catalog.schemas import CATALOG_IMPORT_FIELDS, CatalogImportResult, ImportRowWarning
 from sova.catalog.services.catalog_lookup import catalog_lookup_service
 from sova.catalog.services.contract_registry_import import contract_registry_import_service
 from sova.catalog.services.import_file import ImportSource, Rows, import_file_service
@@ -19,21 +19,25 @@ class CatalogImportService:
     `ContractRegistryImportService`). Простой каталог: одна строка — одна запись, апсерт по
     external_code/name. Для всех типов весь файл — одна транзакция: ошибки собираются по всем
     строкам (`CatalogImportRowsError`), и при любой ошибке импорт откатывается целиком.
+
+    Файл — источник истины только для своих колонок: колонки нет — поле найденной записи не меняется,
+    ячейка пуста — значение стирается. Исключение — external_code: пустая ячейка не стирает код,
+    по которому запись находится при следующих загрузках. Записи, которых нет в файле, не меняются.
     """
 
-    def import_file(self, catalog_type: str, source: ImportSource) -> tuple[int, int]:
+    def import_file(self, catalog_type: str, source: ImportSource) -> CatalogImportResult:
         """Импорт файла с произвольными заголовками, переведёнными через CatalogImportMapping."""
         rows = import_file_service.read_mapped_rows(
             catalog_type=catalog_type,
             source=source,
             required=CATALOG_IMPORT_FIELDS[catalog_type].required,
         )
-        return self._get_loader(catalog_type=catalog_type)(rows)
+        return self._run_loader(catalog_type=catalog_type, rows=rows)
 
-    def import_canonical_file(self, catalog_type: str, source: ImportSource) -> tuple[int, int]:
+    def import_canonical_file(self, catalog_type: str, source: ImportSource) -> CatalogImportResult:
         """Импорт файла, заголовки которого уже совпадают с каноническими ключами (CLI loaddata)."""
         rows = import_file_service.read_canonical_rows(source=source, required=CATALOG_IMPORT_FIELDS[catalog_type].required)
-        return self._get_loader(catalog_type=catalog_type)(rows)
+        return self._run_loader(catalog_type=catalog_type, rows=rows)
 
     @transaction.atomic
     def load_universities(self, rows: Rows) -> tuple[int, int]:
@@ -69,7 +73,14 @@ class CatalogImportService:
         """Ответственные от вуза: апсерт по паре university+full_name."""
         return self._count(import_file_service.process_rows(rows=rows, handler=self._load_contact_person))
 
-    def _get_loader(self, catalog_type: str) -> Callable[[Rows], tuple[int, int]]:
+    def _run_loader(self, catalog_type: str, rows: Rows) -> CatalogImportResult:
+        """Загружает строки обработчиком типа; предупреждения строк сейчас бывают только у реестра договоров."""
+        warnings: list[ImportRowWarning] = []
+        loader = self._get_loader(catalog_type=catalog_type, warnings=warnings)
+        created, updated = loader(rows)
+        return CatalogImportResult(created=created, updated=updated, warnings=warnings)
+
+    def _get_loader(self, catalog_type: str, warnings: list[ImportRowWarning]) -> Callable[[Rows], tuple[int, int]]:
         """Обработчик строк для catalog_type; реестр договоров группирует строки по номеру договора."""
         return {
             CatalogType.UNIVERSITY: self.load_universities,
@@ -78,7 +89,9 @@ class CatalogImportService:
             CatalogType.PROGRAM: self.load_programs,
             CatalogType.PRODUCT: self.load_products,
             CatalogType.CONTACT_PERSON: self.load_contact_persons,
-            CatalogType.CONTRACT_REGISTRY: contract_registry_import_service.import_rows,
+            CatalogType.CONTRACT_REGISTRY: lambda rows: contract_registry_import_service.import_rows(
+                rows=rows, warnings=warnings
+            ),
         }[catalog_type]
 
     def _count(self, results: list[bool]) -> tuple[int, int]:
@@ -124,11 +137,9 @@ class CatalogImportService:
         if not name:
             raise ValueError("поле name обязательно")
         external_code = import_file_service.to_text(row.get("external_code")) or None
-        is_active = import_file_service.to_bool(row.get("is_active"))
+        defaults = {"name": name, **self._is_active(row=row)}
 
-        _, was_created = self._upsert(
-            model=model, external_code=external_code, name=name, defaults={"name": name, "is_active": is_active}
-        )
+        _, was_created = self._upsert(model=model, external_code=external_code, name=name, defaults=defaults)
         return was_created
 
     def _load_program(self, row: dict) -> bool:
@@ -136,9 +147,8 @@ class CatalogImportService:
         name = import_file_service.to_text(row["name"])
         if not name:
             raise ValueError("поле name обязательно")
-        is_active = import_file_service.to_bool(row.get("is_active"))
         direction = catalog_lookup_service.find_direction(raw_value=row["direction"])
-        defaults = {"name": name, "direction": direction, "is_active": is_active}
+        defaults = {"name": name, "direction": direction, **self._is_active(row=row)}
 
         # У Program нет external_code, поэтому апсерт идёт по паре name+direction
         # (аналогично name+vendor у Product).
@@ -147,9 +157,7 @@ class CatalogImportService:
             Program.objects.create(**defaults)
             return True
 
-        for field, value in defaults.items():
-            setattr(program, field, value)
-        program.save(update_fields=[*defaults, "updated_at"])
+        self._update(instance=program, values=defaults)
         return False
 
     def _load_product(self, row: dict) -> bool:
@@ -158,9 +166,8 @@ class CatalogImportService:
         if not name:
             raise ValueError("поле name обязательно")
         external_code = import_file_service.to_text(row["external_code"]) or None
-        is_active = import_file_service.to_bool(row.get("is_active"))
         vendor = catalog_lookup_service.find_vendor(raw_value=row["vendor"])
-        defaults = {"name": name, "vendor": vendor, "is_active": is_active}
+        defaults = {"name": name, "vendor": vendor, **self._is_active(row=row)}
 
         # Уникальность продукта — в паре с вендором (или одна, если вендора нет), поэтому
         # апсерт по имени ищет среди продуктов того же вендора, а не по всему справочнику.
@@ -174,10 +181,7 @@ class CatalogImportService:
         if was_created:
             product = Product.objects.create(external_code=external_code, **defaults)
         else:
-            product.external_code = external_code
-            for field, value in defaults.items():
-                setattr(product, field, value)
-            product.save(update_fields=["external_code", *defaults, "updated_at"])
+            self._update(instance=product, values=self._with_code(defaults=defaults, external_code=external_code))
 
         # Колонка programs необязательна: если её нет в файле — существующие связи не трогаем,
         # если есть (пусть и пустая) — приводим M2M к тому, что в ней перечислено.
@@ -193,9 +197,7 @@ class CatalogImportService:
             raise ValueError("поле full_name обязательно")
         university = catalog_lookup_service.find_university(raw_value=row["university"])
         defaults = {
-            "position": import_file_service.to_text(row.get("position")),
-            "email": import_file_service.to_text(row.get("email")),
-            "phone": import_file_service.to_text(row.get("phone")),
+            field: import_file_service.to_text(row[field]) for field in ("position", "email", "phone") if field in row
         }
 
         # ФИО сравнивается без учёта регистра, написание из файла перезаписывает сохранённое.
@@ -204,10 +206,7 @@ class CatalogImportService:
             ContactPerson.objects.create(university=university, full_name=full_name, **defaults)
             return True
 
-        contact.full_name = full_name
-        for field, value in defaults.items():
-            setattr(contact, field, value)
-        contact.save(update_fields=["full_name", *defaults, "updated_at"])
+        self._update(instance=contact, values={"full_name": full_name, **defaults})
         return False
 
     def _upsert(
@@ -227,11 +226,24 @@ class CatalogImportService:
         if instance is None:
             return model.objects.create(external_code=external_code, **defaults), True
 
-        instance.external_code = external_code
-        for field, value in defaults.items():
-            setattr(instance, field, value)
-        instance.save(update_fields=["external_code", *defaults, "updated_at"])
+        self._update(instance=instance, values=self._with_code(defaults=defaults, external_code=external_code))
         return instance, False
+
+    def _is_active(self, row: dict) -> dict:
+        """{is_active: значение}, если колонка есть в файле; иначе пусто — поле не меняется (у новой записи — True)."""
+        if "is_active" not in row:
+            return {}
+        return {"is_active": import_file_service.to_bool(row["is_active"])}
+
+    def _with_code(self, defaults: dict, external_code: str | None) -> dict:
+        """Поля обновления найденной записи: пустой код из файла не стирает сохранённый."""
+        return {**defaults, "external_code": external_code} if external_code else defaults
+
+    def _update(self, instance: models.Model, values: dict) -> None:
+        """Записывает значения в найденную запись и сохраняет только эти поля."""
+        for field, value in values.items():
+            setattr(instance, field, value)
+        instance.save(update_fields=[*values, "updated_at"])
 
 
 catalog_import_service = CatalogImportService()

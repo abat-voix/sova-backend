@@ -1,4 +1,5 @@
 from sova.interactions.api.serializers.contract import (
+    AttachToNewInteractionSerializer,
     ContractSerializer,
     ContractShortSerializer,
     WriteContractSerializer,
@@ -33,6 +34,7 @@ from sova.interactions.api.serializers.responsible import (
 
 __all__ = [
     "AssignResponsibleSerializer",
+    "AttachToNewInteractionSerializer",
     "ContractSerializer",
     "ContractShortSerializer",
     "InteractionDirectionSerializer",

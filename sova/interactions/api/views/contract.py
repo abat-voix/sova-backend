@@ -11,11 +11,7 @@ from rest_framework.response import Response
 from sova.core.api.exceptions import ConflictError
 from sova.core.api.views import SovaBaseViewSet
 from sova.interactions.api import filters, serializers
-from sova.interactions.exceptions import (
-    AmbiguousManagerError,
-    ContractAlreadyAttachedError,
-    ManagerNotFoundError,
-)
+from sova.interactions.exceptions import ContractAlreadyAttachedError
 from sova.interactions.models import Contract
 from sova.interactions.services import contract_attachment_service
 
@@ -30,10 +26,6 @@ def translate_attachment_errors() -> Iterator[None]:
             detail=_("Договор уже привязан к взаимодействию."),
             code="contract_already_attached",
         ) from error
-    except ManagerNotFoundError as error:
-        raise ConflictError(detail=str(error), code="manager_not_found") from error
-    except AmbiguousManagerError as error:
-        raise ConflictError(detail=str(error), code="ambiguous_manager") from error
 
 
 class ContractViewSet(SovaBaseViewSet):
@@ -42,9 +34,9 @@ class ContractViewSet(SovaBaseViewSet):
 
     Договор, созданный импортом реестра, существует без взаимодействия («безголовый»). Действие
     `attach-to-new-interaction` создаёт из него взаимодействие: вместе с договором туда переходят его
-    направления, программы и продукты. Ошибки привязки: 409 — договор уже привязан
-    (`contract_already_attached`), ФИО менеджера из файла не найдено или неоднозначно
-    (`manager_not_found`, `ambiguous_manager`).
+    направления, программы и продукты. Ответственный назначается только явно (`manager` в запросе);
+    `suggested_manager` договора — подсказка по ФИО менеджера из реестра. Ошибка привязки: 409 — договор
+    уже привязан (`contract_already_attached`).
     """
 
     read_serializer_class = serializers.ContractSerializer
@@ -58,24 +50,32 @@ class ContractViewSet(SovaBaseViewSet):
     filterset_class = filters.ContractFilter
 
     @extend_schema(
-        request=None,
+        request=serializers.AttachToNewInteractionSerializer,
         responses={200: serializers.ContractSerializer},
     )
     @action(
         methods=["POST"],
         detail=True,
         url_path="attach-to-new-interaction",
+        serializer_class=serializers.AttachToNewInteractionSerializer,
     )
     def attach_to_new_interaction(self, request, pk=None) -> Response:
         """
         Создаёт взаимодействие из договора и привязывает к нему договор.
 
-        Контрагент и комментарий берутся из договора, ответственным назначается менеджер по ФИО
-        из файла. Процесс workflow не запускается — это отдельный запуск процесса.
+        Контрагент и комментарий берутся из договора. Ответственный — только `manager` из запроса;
+        без него взаимодействие создаётся без ответственного, как и при обычном создании. Процесс
+        workflow не запускается — это отдельный запуск процесса.
         """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         with transaction.atomic(), translate_attachment_errors():
             contract = self._lock_contract()
-            contract_attachment_service.attach_to_new_interaction(contract=contract, assigned_by=request.user)
+            contract_attachment_service.attach_to_new_interaction(
+                contract=contract,
+                assigned_by=request.user,
+                manager=serializer.validated_data.get("manager"),
+            )
 
         return self._contract_response()
 

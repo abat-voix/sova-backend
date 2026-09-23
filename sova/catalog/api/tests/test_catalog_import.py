@@ -8,7 +8,12 @@ from rest_framework.test import APITestCase
 
 from sova.catalog.enum import CatalogType
 from sova.catalog.models import Vendor
-from sova.catalog.tests.factories import CatalogImportMappingFactory
+from sova.catalog.tests.factories import (
+    CatalogImportMappingFactory,
+    ProductFactory,
+    UniversityFactory,
+    VendorFactory,
+)
 from sova.core.tests.factories import UserFactory
 
 
@@ -47,7 +52,9 @@ class CatalogImportApiTestCase(APITestCase):
 
         # Проверяем ответ и что записи созданы
         self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
-        self.assertEqual(response.data, {"catalog_type": CatalogType.VENDOR, "created": 2, "updated": 0})
+        self.assertEqual(
+            response.data, {"catalog_type": CatalogType.VENDOR, "created": 2, "updated": 0, "warnings": []}
+        )
         self.assertEqual(Vendor.objects.count(), 2)
 
     def test_row_errors_return_400_with_error_list(self) -> None:
@@ -115,3 +122,49 @@ class CatalogImportApiTestCase(APITestCase):
 
         # Проверяем, что доступ запрещён
         self.assertIn(response.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
+
+
+class ContractRegistryImportWarningsApiTestCase(APITestCase):
+    """Менеджер реестра, не найденный среди пользователей, — предупреждение в ответе, а не ошибка."""
+
+    def setUp(self) -> None:
+        self.client.force_authenticate(user=UserFactory())
+        self.url = reverse("catalog:catalog-import-list")
+        columns = {
+            "university": "Вуз",
+            "vendor": "Вендор",
+            "product": "ПО",
+            "contract_number": "Номер",
+            "draft_manager_full_name": "Менеджер",
+        }
+        for target_field, source_column in columns.items():
+            CatalogImportMappingFactory(
+                catalog_type=CatalogType.CONTRACT_REGISTRY, source_column=source_column, target_field=target_field
+            )
+        UniversityFactory(name="МГУ")
+        ProductFactory(name="IDE", vendor=VendorFactory(name="1С"))
+
+    def test_unknown_manager_is_returned_as_warning(self) -> None:
+        file = _xlsx(
+            "registry.xlsx", ("Вуз", "Вендор", "ПО", "Номер", "Менеджер"), ("МГУ", "1С", "IDE", "Д-1", "Петров Пётр")
+        )
+
+        response = self.client.post(
+            path=self.url, data={"catalog_type": CatalogType.CONTRACT_REGISTRY, "file": file}, format="multipart"
+        )
+
+        # Проверяем, что договор загружен, а по менеджеру — предупреждение со строкой
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        self.assertEqual(response.data["created"], 1)
+        self.assertEqual(
+            response.data["warnings"],
+            [
+                {
+                    "row": 2,
+                    "message": (
+                        "менеджер Петров Пётр договора Д-1 не будет предложен ответственным: "
+                        "нет пользователя с таким ФИО"
+                    ),
+                }
+            ],
+        )

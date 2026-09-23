@@ -1,9 +1,9 @@
 from django.test import TestCase
 
 from sova.catalog.exceptions import CatalogImportError, CatalogImportRowsError
-from sova.catalog.models import ContactPerson, Product, Program, Vendor
-from sova.catalog.services import catalog_import_service
-from sova.catalog.tests.factories import DirectionFactory, UniversityFactory
+from sova.catalog.models import ContactPerson, Direction, Product, Program, University, Vendor
+from sova.catalog.services import catalog_import_service, import_file_service
+from sova.catalog.tests.factories import DirectionFactory, UniversityFactory, VendorFactory
 
 
 class LoadVendorsServiceTestCase(TestCase):
@@ -135,3 +135,130 @@ class CaseInsensitiveMatchingTestCase(TestCase):
         self.assertEqual((created, updated), (0, 1))
         contact = ContactPerson.objects.get()
         self.assertEqual((contact.full_name, contact.email), ("ИВАНОВ ИВАН", "ivanov@example.com"))
+
+
+class FileColumnsAreSourceOfTruthTestCase(TestCase):
+    """Колонки нет — поле не меняется; ячейка пуста — значение стирается; пустой код не стирается."""
+
+    def test_missing_is_active_column_keeps_inactive_vendor(self) -> None:
+        Vendor.objects.create(name="Вендор", external_code="V-1", is_active=False)
+
+        catalog_import_service.load_vendors(iter([(2, {"name": "Вендор", "external_code": "V-1"})]))
+
+        # Проверяем, что вендор остался неактивным
+        self.assertFalse(Vendor.objects.get().is_active)
+
+    def test_missing_is_active_column_creates_active_record(self) -> None:
+        catalog_import_service.load_directions(iter([(2, {"name": "Направление", "external_code": "D-1"})]))
+
+        # Проверяем значение по умолчанию у новой записи
+        self.assertTrue(Direction.objects.get().is_active)
+
+    def test_present_is_active_column_updates_flag(self) -> None:
+        Vendor.objects.create(name="Вендор", external_code="V-1", is_active=False)
+
+        catalog_import_service.load_vendors(iter([(2, {"name": "Вендор", "external_code": "V-1", "is_active": ""})]))
+
+        # Проверяем, что пустая ячейка — «активен»
+        self.assertTrue(Vendor.objects.get().is_active)
+
+    def test_empty_code_keeps_saved_vendor_code(self) -> None:
+        Vendor.objects.create(name="Вендор", external_code="V-1")
+
+        created, updated = catalog_import_service.load_vendors(iter([(2, {"name": "вендор", "external_code": ""})]))
+
+        # Проверяем, что запись найдена по названию, а код сохранился
+        self.assertEqual((created, updated), (0, 1))
+        self.assertEqual(Vendor.objects.get().external_code, "V-1")
+
+    def test_empty_code_keeps_saved_product_code(self) -> None:
+        vendor = VendorFactory(name="Вендор")
+        Product.objects.create(name="Продукт", external_code="P-1", vendor=vendor)
+
+        catalog_import_service.load_products(
+            iter([(2, {"name": "Продукт", "external_code": "", "vendor": "Вендор", "is_active": "нет"})])
+        )
+
+        # Проверяем, что код сохранился, а активность обновилась
+        product = Product.objects.get()
+        self.assertEqual((product.external_code, product.is_active), ("P-1", False))
+
+    def test_filled_code_replaces_saved_code(self) -> None:
+        Vendor.objects.create(name="Вендор", external_code="V-1")
+
+        catalog_import_service.load_vendors(iter([(2, {"name": "Вендор", "external_code": "V-2"})]))
+
+        # Проверяем, что найденная по названию запись получила новый код
+        self.assertEqual(Vendor.objects.get().external_code, "V-2")
+
+    def test_missing_program_active_column_keeps_flag(self) -> None:
+        direction = DirectionFactory(name="DevOps")
+        Program.objects.create(name="DevOps-инженер", direction=direction, is_active=False)
+
+        catalog_import_service.load_programs(iter([(2, {"name": "DevOps-инженер", "direction": "DevOps"})]))
+
+        # Проверяем, что программа осталась неактивной
+        self.assertFalse(Program.objects.get().is_active)
+
+    def test_missing_contact_columns_keep_values(self) -> None:
+        university = UniversityFactory(name="МГУ")
+        ContactPerson.objects.create(
+            full_name="Иванов Иван", university=university, position="Ректор", email="a@example.com", phone="1"
+        )
+
+        catalog_import_service.load_contact_persons(
+            iter([(2, {"full_name": "Иванов Иван", "university": "МГУ", "phone": "2"})])
+        )
+
+        # Проверяем, что отсутствующие колонки не тронуты, а телефон обновлён
+        contact = ContactPerson.objects.get()
+        self.assertEqual((contact.position, contact.email, contact.phone), ("Ректор", "a@example.com", "2"))
+
+    def test_empty_contact_cells_clear_values(self) -> None:
+        university = UniversityFactory(name="МГУ")
+        ContactPerson.objects.create(full_name="Иванов Иван", university=university, position="Ректор")
+
+        catalog_import_service.load_contact_persons(
+            iter([(2, {"full_name": "Иванов Иван", "university": "МГУ", "position": ""})])
+        )
+
+        # Проверяем, что пустая ячейка стёрла должность
+        self.assertEqual(ContactPerson.objects.get().position, "")
+
+
+class ReadableValueErrorsTestCase(TestCase):
+    """Ошибки приведения значений ячеек понятны пользователю."""
+
+    def test_text_instead_of_decimal(self) -> None:
+        with self.assertRaisesMessage(ValueError, "ожидалось число, получено север"):
+            import_file_service.to_decimal("север")
+
+    def test_text_instead_of_positive_int(self) -> None:
+        with self.assertRaisesMessage(ValueError, "ожидалось число, получено много"):
+            import_file_service.to_positive_int("много")
+
+    def test_text_instead_of_year(self) -> None:
+        with self.assertRaisesMessage(ValueError, "ожидалось число, получено двадцать седьмой"):
+            import_file_service.to_year("двадцать седьмой")
+
+    def test_fractional_year(self) -> None:
+        with self.assertRaisesMessage(ValueError, "ожидался год целым числом, получено 2026.5"):
+            import_file_service.to_year(2026.5)
+
+    def test_year_from_float_cell(self) -> None:
+        # Проверяем, что год из числовой ячейки xlsx читается без дробной части
+        self.assertEqual(import_file_service.to_year(2027.0), 2027)
+
+    def test_university_row_error_message(self) -> None:
+        row = {
+            "id": "", "ror": "R-1", "name_en": "", "name": "Вуз", "short_name": "", "country_code": "", "type": "",
+            "works_count": "", "cited_by_count": "", "city": "", "region": "", "lat": "север", "lon": "",
+            "homepage_url": "",
+        }
+
+        with self.assertRaises(CatalogImportRowsError) as context:
+            catalog_import_service.load_universities(iter([(2, row)]))
+
+        # Проверяем текст ошибки строки
+        self.assertEqual(context.exception.errors[0].message, "ожидалось число, получено север")
+        self.assertFalse(University.objects.exists())

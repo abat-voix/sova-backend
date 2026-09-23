@@ -1,4 +1,3 @@
-from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
@@ -21,31 +20,6 @@ class CatalogImportMappingSerializer(serializers.ModelSerializer):
         )
 
 
-class WriteCatalogImportMappingSerializer(serializers.ModelSerializer):
-    """Маппинг колонки файла импорта — валидация входных данных (create/update)."""
-
-    class Meta:
-        model = CatalogImportMapping
-        fields = (
-            "id",
-            "catalog_type",
-            "source_column",
-            "target_field",
-        )
-
-    def validate(self, attrs: dict) -> dict:
-        """target_field должен быть полем выбранного типа — в том числе при PATCH одного из двух полей."""
-        mapping = CatalogImportMapping(
-            catalog_type=attrs.get("catalog_type", getattr(self.instance, "catalog_type", None)),
-            target_field=attrs.get("target_field", getattr(self.instance, "target_field", None)),
-        )
-        try:
-            mapping.clean()
-        except DjangoValidationError as error:
-            raise serializers.ValidationError(error.message_dict) from error
-        return attrs
-
-
 class CatalogImportFieldsQuerySerializer(serializers.Serializer):
     """Параметры запроса списка канонических полей."""
 
@@ -66,4 +40,35 @@ class CatalogImportFieldSerializer(serializers.Serializer):
     required = serializers.BooleanField(
         label=_("Обязательное"),
         help_text=_("Без колонки, замапленной на это поле, файл этого типа не загрузится"),
+    )
+
+
+class CatalogImportTypeMappingFieldSerializer(serializers.Serializer):
+    """Каноническое поле типа каталога и колонка файла, замапленная на него."""
+
+    target_field = serializers.CharField(
+        label=_("Поле"),
+        help_text=_("Канонический ключ, который понимает обработчик импорта"),
+    )
+    required = serializers.BooleanField(
+        label=_("Обязательное"),
+        help_text=_("Без колонки, замапленной на это поле, файл этого типа не загрузится"),
+    )
+    source_column = serializers.CharField(
+        allow_null=True,
+        label=_("Колонка в файле"),
+        help_text=_("Заголовок колонки файла; null — поле не замаплено"),
+    )
+
+
+class WriteCatalogImportTypeMappingSerializer(serializers.Serializer):
+    """Полная замена маппинга типа каталога."""
+
+    mappings = serializers.DictField(
+        child=serializers.CharField(allow_blank=True, allow_null=True, max_length=255),
+        label=_("Маппинг"),
+        help_text=_(
+            "{канонический ключ: заголовок колонки}. Пустое значение или отсутствующий ключ — поле не замаплено. "
+            "Обязательные ключи типа должны быть заполнены, колонки не повторяются (без учёта регистра)"
+        ),
     )

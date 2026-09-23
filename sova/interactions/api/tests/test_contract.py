@@ -1,10 +1,13 @@
 from datetime import date
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from sova.catalog.tests.factories import UniversityFactory
 from sova.core.tests.base import BaseApiTestMixin
+from sova.core.tests.factories import UserFactory
 from sova.core.tests.media import TemporaryMediaMixin
 from sova.interactions.models import Contract
 from sova.interactions.tests.factories import ContractFactory, InteractionFactory
@@ -155,3 +158,53 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
             [item["id"] for item in response.data["results"]],
             [str(inside.pk)],
         )
+
+
+class ContractSuggestedManagerApiTestCase(APITestCase):
+    """suggested_manager договора — подсказка ответственного по ФИО менеджера из реестра."""
+
+    def setUp(self) -> None:
+        self.client.force_authenticate(user=UserFactory())
+        self.manager = UserFactory(first_name="Максим", last_name="Менеджеров")
+        self.university = UniversityFactory()
+
+    def _get(self, contract: Contract) -> dict:
+        response = self.client.get(path=reverse("interactions:contract-detail", args=[contract.pk]))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response.data
+
+    def test_headless_contract_suggests_found_user(self) -> None:
+        contract = ContractFactory(
+            interaction=None, university=self.university, draft_manager_full_name="менеджеров максим"
+        )
+
+        data = self._get(contract)
+
+        # Проверяем ФИО из реестра и подсказку-пользователя
+        self.assertEqual(data["draft_manager_full_name"], "менеджеров максим")
+        self.assertEqual(data["suggested_manager"]["id"], self.manager.pk)
+
+    def test_unknown_manager_gives_null(self) -> None:
+        contract = ContractFactory(interaction=None, university=self.university, draft_manager_full_name="Петров Пётр")
+
+        # Проверяем, что подсказки нет
+        self.assertIsNone(self._get(contract)["suggested_manager"])
+
+    def test_attached_contract_gives_null(self) -> None:
+        contract = ContractFactory(draft_manager_full_name="Менеджеров Максим")
+
+        # Проверяем, что у привязанного договора подсказки нет
+        self.assertIsNone(self._get(contract)["suggested_manager"])
+
+    def test_list_suggests_for_each_headless_contract(self) -> None:
+        ContractFactory(interaction=None, university=self.university, draft_manager_full_name="Менеджеров Максим")
+        ContractFactory(interaction=None, university=self.university, draft_manager_full_name="Петров Пётр")
+
+        response = self.client.get(path=reverse("interactions:contract-list"))
+
+        # Проверяем подсказки в списке
+        suggested = sorted(
+            (item["draft_manager_full_name"], (item["suggested_manager"] or {}).get("id"))
+            for item in response.data["results"]
+        )
+        self.assertEqual(suggested, [("Менеджеров Максим", self.manager.pk), ("Петров Пётр", None)])

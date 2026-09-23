@@ -20,6 +20,32 @@ class CatalogImportSerializer(serializers.Serializer):
     )
 
 
+class CatalogImportRowErrorSerializer(serializers.Serializer):
+    """Ошибка одной строки файла импорта."""
+
+    row = serializers.IntegerField(
+        label=_("Строка"),
+        help_text=_("Номер строки в файле, как в Excel: первая строка — заголовки"),
+    )
+    message = serializers.CharField(
+        label=_("Сообщение"),
+        help_text=_("Причина, по которой строку не удалось загрузить"),
+    )
+
+
+class CatalogImportRowWarningSerializer(serializers.Serializer):
+    """Предупреждение по строке файла импорта: строка загружена, но часть данных не применена."""
+
+    row = serializers.IntegerField(
+        label=_("Строка"),
+        help_text=_("Номер строки в файле, как в Excel: первая строка — заголовки"),
+    )
+    message = serializers.CharField(
+        label=_("Сообщение"),
+        help_text=_("Что именно не применено и почему"),
+    )
+
+
 class CatalogImportResultSerializer(serializers.Serializer):
     """Результат успешного импорта."""
 
@@ -36,18 +62,13 @@ class CatalogImportResultSerializer(serializers.Serializer):
         label=_("Обновлено"),
         help_text=_("Записи, найденные по коду или названию и перезаписанные данными файла"),
     )
-
-
-class CatalogImportRowErrorSerializer(serializers.Serializer):
-    """Ошибка одной строки файла импорта."""
-
-    row = serializers.IntegerField(
-        label=_("Строка"),
-        help_text=_("Номер строки в файле, как в Excel: первая строка — заголовки"),
-    )
-    message = serializers.CharField(
-        label=_("Сообщение"),
-        help_text=_("Причина, по которой строку не удалось загрузить"),
+    warnings = CatalogImportRowWarningSerializer(
+        many=True,
+        label=_("Предупреждения"),
+        help_text=_(
+            "Строки загружены, но часть данных не применена (например, менеджер реестра не найден среди "
+            "пользователей и не назначен ответственным); пустой список — предупреждений нет"
+        ),
     )
 
 

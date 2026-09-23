@@ -63,7 +63,7 @@ class CatalogImportFileTestCase(TestCase):
             source = Path(directory) / "vendors.xlsx"
             _write_workbook(source, ("Наименование вендора", "Код 1С"), ("Вендор", "vendor-1"))
 
-            created, updated = catalog_import_service.import_file(CatalogType.VENDOR, source)
+            created, updated, _ = catalog_import_service.import_file(CatalogType.VENDOR, source)
 
             self.assertEqual((created, updated), (1, 0))
             self.assertTrue(Vendor.objects.filter(external_code="vendor-1").exists())
@@ -99,7 +99,7 @@ class CatalogImportFileTestCase(TestCase):
             source = Path(directory) / "registry.xlsx"
             _write_workbook(source, tuple(columns), ("МГУ", "1С", "1С:Предприятие", "Д-1"))
 
-            created, updated = catalog_import_service.import_file(CatalogType.CONTRACT_REGISTRY, source)
+            created, updated, _ = catalog_import_service.import_file(CatalogType.CONTRACT_REGISTRY, source)
 
             self.assertEqual((created, updated), (1, 0))
             self.assertIsNone(Contract.objects.get(contract_number="Д-1").interaction_id)
@@ -114,7 +114,7 @@ class CatalogImportSourceFormatTestCase(TestCase):
             source = Path(directory) / "vendors.xls"
             _write_xls(source, ("Вендор", "Код"), ("JetBrains", "jb"), ("1С", "one-c"))
 
-            created, updated = catalog_import_service.import_file(CatalogType.VENDOR, source)
+            created, updated, _ = catalog_import_service.import_file(CatalogType.VENDOR, source)
 
         self.assertEqual((created, updated), (2, 0))
         self.assertTrue(Vendor.objects.filter(name="1С", external_code="one-c").exists())
@@ -160,7 +160,7 @@ class CatalogImportSourceFormatTestCase(TestCase):
         workbook.save(content)
         upload = SimpleUploadedFile("vendors.xlsx", content.getvalue())
 
-        created, updated = catalog_import_service.import_file(CatalogType.VENDOR, upload)
+        created, updated, _ = catalog_import_service.import_file(CatalogType.VENDOR, upload)
 
         self.assertEqual((created, updated), (1, 0))
 
@@ -191,7 +191,7 @@ class CatalogImportDisguisedFormatTestCase(TestCase):
         _map(CatalogType.VENDOR, {"Вендор": "name", "Код": "external_code"})
 
     def _import_vendors(self, name: str, content: bytes) -> tuple[int, int]:
-        return catalog_import_service.import_file(CatalogType.VENDOR, SimpleUploadedFile(name, content))
+        return catalog_import_service.import_file(CatalogType.VENDOR, SimpleUploadedFile(name, content))[:2]
 
     def test_html_table_saved_as_xls_is_read(self) -> None:
         content = _html_xls([("Вендор", "Код"), ("Ростелеком", "rt")], charset="utf-8", encoding="utf-8")
@@ -297,7 +297,7 @@ class CatalogImportTextNormalizationTestCase(TestCase):
             source = Path(directory) / "vendors.xlsx"
             _write_workbook(source, ("наименование  вендора ", "КОД"), ("JetBrains", "jb"))
 
-            created, _ = catalog_import_service.import_file(CatalogType.VENDOR, source)
+            created, _, _ = catalog_import_service.import_file(CatalogType.VENDOR, source)
 
         self.assertEqual(created, 1)
 

@@ -22,3 +22,8 @@ def normalize_text(value: str) -> str:
     text = re.sub(r"[^\S\n]+", " ", text)
     text = re.sub(r" *\n *", "\n", text)
     return text.strip()
+
+
+def text_key(value: str) -> str:
+    """Ключ сравнения строк без учёта регистра и невидимых различий (см. `normalize_text`)."""
+    return normalize_text(value).casefold()

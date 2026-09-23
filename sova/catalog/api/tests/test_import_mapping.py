@@ -10,10 +10,13 @@ from sova.core.tests.factories import UserFactory
 
 
 class CatalogImportMappingApiTestCase(BaseApiTestMixin, APITestCase):
-    """Тесты CRUD /api/catalog/import-mappings/."""
+    """Тесты /api/catalog/import-mappings/ — по записям только чтение, запись через by-type."""
 
     url_basename = "catalog:import-mapping"
     model = CatalogImportMapping
+    allow_create = False
+    allow_update = False
+    allow_delete = False
 
     def create_instance(self, **kwargs) -> CatalogImportMapping:
         """Создаёт маппинг колонки."""
@@ -27,14 +30,6 @@ class CatalogImportMappingApiTestCase(BaseApiTestMixin, APITestCase):
             "source_column": instance.source_column,
             "target_field": instance.target_field,
         }
-
-    def get_post_data(self) -> dict:
-        """Данные создания маппинга."""
-        return {"catalog_type": CatalogType.VENDOR, "source_column": "Наименование вендора", "target_field": "name"}
-
-    def get_change_data(self) -> dict:
-        """Данные обновления маппинга."""
-        return {"source_column": "Название"}
 
     def get_search_term(self, instance: CatalogImportMapping) -> str:
         """Поиск по колонке файла."""
@@ -52,40 +47,6 @@ class CatalogImportMappingApiTestCase(BaseApiTestMixin, APITestCase):
             [item["id"] for item in response.data["results"]],
             [str(vendor_mapping.pk)],
         )
-
-    def test_create_returns_400_with_unknown_target_field(self) -> None:
-        """Поле, которого нет у типа каталога, отклоняется."""
-        data = {"catalog_type": CatalogType.VENDOR, "source_column": "Вендор", "target_field": "programs"}
-
-        response = self.client.post(path=self.list_url, data=data, format="json")
-
-        # Проверяем, что ошибка указывает на target_field
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("target_field", response.data)
-
-    def test_change_returns_400_when_type_changes_to_incompatible(self) -> None:
-        """Смена типа проверяет уже сохранённое поле против нового типа."""
-        mapping = CatalogImportMappingFactory(catalog_type=CatalogType.PRODUCT, target_field="programs")
-
-        response = self.client.patch(
-            path=self.detail_url(mapping),
-            data={"catalog_type": CatalogType.VENDOR},
-            format="json",
-        )
-
-        # Проверяем, что у вендора нет поля programs
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("target_field", response.data)
-
-    def test_create_returns_400_with_duplicate_target_field(self) -> None:
-        """Одно каноническое поле нельзя замапить на две колонки одного типа."""
-        CatalogImportMappingFactory(catalog_type=CatalogType.VENDOR, target_field="name")
-        data = {"catalog_type": CatalogType.VENDOR, "source_column": "Другая колонка", "target_field": "name"}
-
-        response = self.client.post(path=self.list_url, data=data, format="json")
-
-        # Проверяем, что дубль отклонён валидацией, а не ошибкой БД
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class CatalogImportFieldsApiTestCase(APITestCase):
@@ -120,3 +81,89 @@ class CatalogImportFieldsApiTestCase(APITestCase):
         # Проверяем, что ошибка указывает на catalog_type
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("catalog_type", response.data)
+
+
+class CatalogImportTypeMappingApiTestCase(APITestCase):
+    """Тесты GET/PUT /api/catalog/import-mappings/by-type/{catalog_type}/."""
+
+    def setUp(self) -> None:
+        """Аутентифицирует клиента."""
+        self.client.force_authenticate(user=UserFactory())
+        self.url = reverse("catalog:import-mapping-by-type", args=[CatalogType.PRODUCT])
+
+    def test_get_returns_all_fields_with_current_columns(self) -> None:
+        """GET возвращает все поля типа: сначала обязательные, незамапленные — с null."""
+        CatalogImportMappingFactory(catalog_type=CatalogType.PRODUCT, target_field="name", source_column="Название")
+        CatalogImportMappingFactory(catalog_type=CatalogType.PRODUCT, target_field="programs", source_column="Программы")
+
+        response = self.client.get(path=self.url)
+
+        # Проверяем состав полей, обязательность и колонки
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data,
+            [
+                {"target_field": "external_code", "required": True, "source_column": None},
+                {"target_field": "name", "required": True, "source_column": "Название"},
+                {"target_field": "vendor", "required": True, "source_column": None},
+                {"target_field": "is_active", "required": False, "source_column": None},
+                {"target_field": "programs", "required": False, "source_column": "Программы"},
+            ],
+        )
+
+    def test_get_returns_404_for_unknown_catalog_type(self) -> None:
+        """Неизвестный тип каталога — 404."""
+        response = self.client.get(path=reverse("catalog:import-mapping-by-type", args=["unknown"]))
+
+        # Проверяем, что тип не найден
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_requires_authentication(self) -> None:
+        """Анонимный запрос отклоняется."""
+        self.client.force_authenticate(user=None)
+
+        response = self.client.get(path=self.url)
+
+        # Проверяем, что доступ запрещён
+        self.assertIn(response.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
+
+    def test_put_replaces_mapping_of_type(self) -> None:
+        """PUT заменяет маппинг типа целиком и возвращает новое состояние."""
+        CatalogImportMappingFactory(catalog_type=CatalogType.PRODUCT, target_field="programs", source_column="Старое")
+        data = {"mappings": {"name": "Название", "external_code": "Артикул", "vendor": "Вендор", "programs": ""}}
+
+        response = self.client.put(path=self.url, data=data, format="json")
+
+        # Проверяем ответ и сохранённый маппинг: programs очищен
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        self.assertEqual(
+            {item["target_field"]: item["source_column"] for item in response.data},
+            {"external_code": "Артикул", "name": "Название", "vendor": "Вендор", "is_active": None, "programs": None},
+        )
+        self.assertEqual(
+            dict(
+                CatalogImportMapping.objects.filter(catalog_type=CatalogType.PRODUCT).values_list(
+                    "target_field", "source_column"
+                )
+            ),
+            {"name": "Название", "external_code": "Артикул", "vendor": "Вендор"},
+        )
+
+    def test_put_returns_400_with_errors_by_field(self) -> None:
+        """Ошибки возвращаются по ключам и ничего не сохраняется."""
+        data = {"mappings": {"name": "Название", "external_code": "название ", "programs_x": "X"}}
+
+        response = self.client.put(path=self.url, data=data, format="json")
+
+        # Проверяем ошибки: дубль колонки, неизвестный ключ, пустое обязательное поле
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(set(response.data["mappings"]), {"external_code", "programs_x", "vendor"})
+        self.assertFalse(CatalogImportMapping.objects.exists())
+
+    def test_put_returns_400_without_mappings(self) -> None:
+        """Без mappings — 400."""
+        response = self.client.put(path=self.url, data={}, format="json")
+
+        # Проверяем, что ошибка указывает на mappings
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("mappings", response.data)

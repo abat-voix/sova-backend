@@ -7,6 +7,7 @@ from sova.catalog.api.serializers.catalog_import import (
     CatalogImportErrorSerializer,
     CatalogImportResultSerializer,
     CatalogImportRowErrorSerializer,
+    CatalogImportRowWarningSerializer,
     CatalogImportSerializer,
 )
 from sova.catalog.api.serializers.contact_person import (
@@ -22,7 +23,8 @@ from sova.catalog.api.serializers.import_mapping import (
     CatalogImportFieldSerializer,
     CatalogImportFieldsQuerySerializer,
     CatalogImportMappingSerializer,
-    WriteCatalogImportMappingSerializer,
+    CatalogImportTypeMappingFieldSerializer,
+    WriteCatalogImportTypeMappingSerializer,
 )
 from sova.catalog.api.serializers.product import (
     ProductSerializer,
@@ -55,7 +57,9 @@ __all__ = [
     "CatalogImportMappingSerializer",
     "CatalogImportResultSerializer",
     "CatalogImportRowErrorSerializer",
+    "CatalogImportRowWarningSerializer",
     "CatalogImportSerializer",
+    "CatalogImportTypeMappingFieldSerializer",
     "ContactPersonSerializer",
     "DirectionSerializer",
     "DirectionShortSerializer",
@@ -69,7 +73,7 @@ __all__ = [
     "VendorSerializer",
     "VendorShortSerializer",
     "WriteB2CClientSerializer",
-    "WriteCatalogImportMappingSerializer",
+    "WriteCatalogImportTypeMappingSerializer",
     "WriteContactPersonSerializer",
     "WriteDirectionSerializer",
     "WriteProductSerializer",

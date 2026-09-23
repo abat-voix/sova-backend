@@ -18,6 +18,8 @@ class CatalogImportViewSet(GenericViewSet):
 
     Колонки файла переводятся в поля через маппинг выбранного типа (/api/catalog/import-mappings/).
     Импорт — всё или ничего: при любой ошибке ничего не сохраняется, в ответе — все ошибки строк.
+    Успешный импорт может вернуть предупреждения (`warnings`): строки загружены, но часть данных не
+    применена — например, менеджер из реестра не найден среди пользователей и не назначен ответственным.
     """
 
     serializer_class = serializers.CatalogImportSerializer
@@ -31,13 +33,13 @@ class CatalogImportViewSet(GenericViewSet):
         },
     )
     def create(self, request) -> Response:
-        """Импортирует файл и возвращает число созданных и обновлённых записей."""
+        """Импортирует файл и возвращает число созданных и обновлённых записей и предупреждения."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         validated_data = serializer.validated_data
 
         try:
-            created, updated = catalog_import_service.import_file(
+            result = catalog_import_service.import_file(
                 catalog_type=validated_data["catalog_type"],
                 source=validated_data["file"],
             )
@@ -64,7 +66,14 @@ class CatalogImportViewSet(GenericViewSet):
 
         return Response(
             data=serializers.CatalogImportResultSerializer(
-                {"catalog_type": validated_data["catalog_type"], "created": created, "updated": updated}
+                {
+                    "catalog_type": validated_data["catalog_type"],
+                    "created": result.created,
+                    "updated": result.updated,
+                    "warnings": [
+                        {"row": warning.row_number, "message": warning.message} for warning in result.warnings
+                    ],
+                }
             ).data,
             status=status.HTTP_200_OK,
         )

@@ -5,6 +5,7 @@ from sova.catalog.tests.factories import UniversityFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.exceptions import AmbiguousManagerError, ManagerNotFoundError
 from sova.interactions.models import InteractionProduct, Responsible
+from sova.interactions.services import responsible_service
 from sova.interactions.services.contract_attachment import contract_attachment_service
 from sova.interactions.tests.factories import ContractFactory, InteractionFactory, InteractionProductFactory
 
@@ -25,7 +26,7 @@ class AttachToNewInteractionTestCase(TestCase):
 
     def test_creates_interaction_and_attaches_headless_records(self) -> None:
         interaction = contract_attachment_service.attach_to_new_interaction(
-            contract=self.contract, assigned_by=self.manager
+            contract=self.contract, assigned_by=self.manager, manager=self.manager
         )
 
         self.contract.refresh_from_db()
@@ -39,29 +40,60 @@ class AttachToNewInteractionTestCase(TestCase):
         responsible = Responsible.objects.get(interaction=interaction, unassigned_at__isnull=True)
         self.assertEqual(responsible.manager_id, self.manager.id)
 
-    def test_manager_full_name_matches_regardless_of_word_order(self) -> None:
-        """draft_manager_full_name хранится «Фамилия Имя», get_full_name() — «Имя Фамилия»."""
-        self.contract.draft_manager_full_name = "  иван   ИВАНОВ "
-        self.contract.save(update_fields=["draft_manager_full_name"])
-
+    def test_manager_from_contract_is_not_assigned_implicitly(self) -> None:
+        """ФИО менеджера из договора — только подсказка: без явного manager ответственного нет."""
         interaction = contract_attachment_service.attach_to_new_interaction(
             contract=self.contract, assigned_by=self.manager
         )
 
-        self.assertTrue(Responsible.objects.filter(interaction=interaction, manager=self.manager).exists())
+        # Проверяем, что ответственный не назначен, хотя пользователь с таким ФИО есть
+        self.assertFalse(Responsible.objects.filter(interaction=interaction).exists())
 
-    def test_unknown_manager_raises(self) -> None:
-        self.contract.draft_manager_full_name = "Несуществующий Менеджер"
-        self.contract.save(update_fields=["draft_manager_full_name"])
+    def test_explicit_manager_other_than_contract_one_is_assigned(self) -> None:
+        """Явно выбранный менеджер назначается, даже если в договоре указан другой."""
+        chosen = UserFactory(first_name="Пётр", last_name="Петров")
 
-        with self.assertRaises(ManagerNotFoundError):
-            contract_attachment_service.attach_to_new_interaction(contract=self.contract, assigned_by=self.manager)
+        interaction = contract_attachment_service.attach_to_new_interaction(
+            contract=self.contract, assigned_by=self.manager, manager=chosen
+        )
 
-    def test_ambiguous_manager_raises(self) -> None:
+        # Проверяем назначение выбранного менеджера и автора назначения
+        current = Responsible.objects.get(interaction=interaction, unassigned_at__isnull=True)
+        self.assertEqual((current.manager_id, current.assigned_by_id), (chosen.id, self.manager.id))
+
+
+class SuggestManagerTestCase(TestCase):
+    """Подбор пользователя по ФИО менеджера из реестра."""
+
+    def setUp(self) -> None:
+        self.manager = UserFactory(first_name="Иван", last_name="Иванов")
+
+    def test_full_name_matches_regardless_of_word_order_and_case(self) -> None:
+        """draft_manager_full_name хранится «Фамилия Имя», get_full_name() — «Имя Фамилия»."""
+        # Проверяем оба порядка слов, регистр и лишние пробелы
+        self.assertEqual(responsible_service.suggest_manager("  иван   ИВАНОВ "), self.manager)
+        self.assertEqual(responsible_service.suggest_manager("Иванов Иван"), self.manager)
+
+    def test_unknown_or_empty_name_gives_no_suggestion(self) -> None:
+        # Проверяем, что подсказки нет
+        self.assertIsNone(responsible_service.suggest_manager("Несуществующий Менеджер"))
+        self.assertIsNone(responsible_service.suggest_manager(""))
+
+    def test_ambiguous_name_gives_no_suggestion(self) -> None:
         UserFactory(first_name="Иван", last_name="Иванов")  # тёзка self.manager
 
+        # Проверяем, что при однофамильцах подсказки нет, а find_manager сообщает причину
+        self.assertIsNone(responsible_service.suggest_manager("Иванов Иван"))
         with self.assertRaises(AmbiguousManagerError):
-            contract_attachment_service.attach_to_new_interaction(contract=self.contract, assigned_by=self.manager)
+            responsible_service.find_manager("Иванов Иван")
+
+    def test_inactive_user_is_not_suggested(self) -> None:
+        self.manager.is_active = False
+        self.manager.save(update_fields=["is_active"])
+
+        # Проверяем, что неактивный пользователь не найден
+        with self.assertRaises(ManagerNotFoundError):
+            responsible_service.find_manager("Иванов Иван")
 
 
 class AttachToExistingInteractionTestCase(TestCase):

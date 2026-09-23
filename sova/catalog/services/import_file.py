@@ -18,7 +18,7 @@ from openpyxl.utils.exceptions import InvalidFileException
 from sova.catalog.exceptions import CatalogImportError, CatalogImportRowsError
 from sova.catalog.models import CatalogImportMapping
 from sova.catalog.schemas import ImportRowError
-from sova.core.text import normalize_text
+from sova.core.text import normalize_text, text_key
 
 Rows = Iterator[tuple[int, dict]]
 # Путь на диске (CLI) или загруженный файл (API) — у обоих есть name с расширением.
@@ -113,13 +113,13 @@ class ImportFileService:
         """Число с плавающей точкой; пустая ячейка — None."""
         if value in (None, ""):
             return None
-        return Decimal(str(value))
+        return self._parse_number(value=value)
 
     def to_positive_int(self, value) -> int:
         """Целое неотрицательное число; пустая ячейка — 0."""
         if value in (None, ""):
             return 0
-        number = Decimal(str(value))
+        number = self._parse_number(value=value)
         if number < 0 or number != number.to_integral_value():
             raise ValueError(f"ожидалось целое неотрицательное число, получено {value}")
         return int(number)
@@ -143,11 +143,24 @@ class ImportFileService:
         text = self.to_text(value)
         if not text:
             return None
-        return int(float(text))
+        year = self._parse_number(value=text)
+        if year != year.to_integral_value():
+            raise ValueError(f"ожидался год целым числом, получено {value}")
+        return int(year)
 
     def split_list(self, value) -> list[str]:
         """Список значений, перечисленных в ячейке через «;»."""
         return [part.strip() for part in self.to_text(value).split(";") if part.strip()]
+
+    def _parse_number(self, value) -> Decimal:
+        """Конечное число из ячейки; текст вместо числа — ValueError с понятным сообщением."""
+        try:
+            number = Decimal(str(value).strip())
+        except InvalidOperation:
+            raise ValueError(f"ожидалось число, получено {value}") from None
+        if not number.is_finite():
+            raise ValueError(f"ожидалось число, получено {value}")
+        return number
 
     def _read_raw_rows(self, source: ImportSource) -> tuple[list[str], Rows]:
         """
@@ -278,10 +291,6 @@ class ImportFileService:
         except UnicodeDecodeError:
             return content.decode(_FALLBACK_ENCODING, errors="replace")
 
-    def _header_key(self, header: str) -> str:
-        """Ключ сравнения заголовка файла с колонкой маппинга — без учёта регистра и невидимых различий."""
-        return normalize_text(header).casefold()
-
     def _xls_value(self, cell: xlrd.sheet.Cell, datemode: int):
         """
         Значение ячейки xls в том же виде, что отдаёт openpyxl для xlsx.
@@ -312,8 +321,8 @@ class ImportFileService:
         )
         if not configured:
             raise CatalogImportError(f"Для типа '{catalog_type}' не настроен маппинг ни одной колонки.")
-        by_key = {self._header_key(source_column): target_field for source_column, target_field in configured.items()}
-        header_keys = {header: self._header_key(header) for header in headers}
+        by_key = {text_key(source_column): target_field for source_column, target_field in configured.items()}
+        header_keys = {header: text_key(header) for header in headers}
         return {header: by_key[key] for header, key in header_keys.items() if key in by_key}
 
     def _translate_rows(self, raw_rows: Rows, header_to_key: dict[str, str]) -> Rows:

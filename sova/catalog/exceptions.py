@@ -12,3 +12,11 @@ class CatalogImportRowsError(CatalogImportError):
         self.errors = errors
         lines = "\n".join(str(error) for error in errors)
         super().__init__(f"Импорт отменён, ошибок в строках: {len(errors)}\n{lines}")
+
+
+class CatalogImportMappingError(Exception):
+    """Маппинг типа каталога не прошёл проверку — `errors` содержит ошибки по каноническим ключам."""
+
+    def __init__(self, errors: dict[str, str]) -> None:
+        self.errors = errors
+        super().__init__("; ".join(f"{key}: {message}" for key, message in errors.items()))

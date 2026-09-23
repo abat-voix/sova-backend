@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import NamedTuple
 
 from sova.catalog.enum import CatalogType
 
@@ -12,6 +13,25 @@ class ImportRowError:
 
     def __str__(self) -> str:
         return f"Строка {self.row_number}: {self.message}"
+
+
+@dataclass(frozen=True)
+class ImportRowWarning:
+    """Предупреждение по строке файла импорта: строка загружена, но часть данных не применена."""
+
+    row_number: int
+    message: str
+
+    def __str__(self) -> str:
+        return f"Строка {self.row_number}: {self.message}"
+
+
+class CatalogImportResult(NamedTuple):
+    """Итог импорта файла: создано, обновлено и предупреждения по строкам."""
+
+    created: int
+    updated: int
+    warnings: list[ImportRowWarning]
 
 
 @dataclass(frozen=True)

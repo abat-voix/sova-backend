@@ -6,7 +6,8 @@ from sova.catalog.exceptions import CatalogImportError, CatalogImportRowsError
 from sova.catalog.models import ContactPerson
 from sova.catalog.services import contract_registry_import_service
 from sova.catalog.tests.factories import DirectionFactory, ProductFactory, ProgramFactory, UniversityFactory, VendorFactory
-from sova.interactions.models import Contract, InteractionProduct, License
+from sova.core.tests.factories import UserFactory
+from sova.interactions.models import Contract, InteractionProduct, License, Responsible
 
 
 class ImportContractRegistryTestCase(TestCase):
@@ -173,3 +174,170 @@ class ImportContractRegistryTestCase(TestCase):
 
         self.assertTrue(ContactPerson.objects.filter(university=self.university, full_name="Петров Пётр").exists())
         self.assertTrue(ContactPerson.objects.filter(university=self.university, full_name="Сидорова Анна").exists())
+
+
+class ContractRegistryDraftFieldsTestCase(TestCase):
+    """Черновые поля договора собираются по всем его строкам файла."""
+
+    def setUp(self) -> None:
+        self.university = UniversityFactory(name="МГУ")
+        vendor = VendorFactory(name="1С")
+        ProductFactory(name="IDE", vendor=vendor)
+        ProductFactory(name="СУБД", vendor=vendor)
+        ProductFactory(name="ML", vendor=vendor)
+        Contract.objects.create(
+            contract_number="Д-1",
+            university=self.university,
+            draft_manager_full_name="Иванов",
+            draft_status="Черновик",
+            draft_comment="Старый комментарий",
+        )
+
+    def _row(self, product: str, **drafts) -> dict:
+        return {"university": "МГУ", "vendor": "1С", "product": product, "contract_number": "Д-1", **drafts}
+
+    def _drafts(self) -> tuple[str, str, str]:
+        contract = Contract.objects.get(contract_number="Д-1")
+        return contract.draft_manager_full_name, contract.draft_status, contract.draft_comment
+
+    def test_value_is_taken_from_any_filled_row(self) -> None:
+        empty = {"draft_manager_full_name": "", "draft_status": "", "draft_comment": ""}
+        rows = [
+            (2, self._row("IDE", **{**empty, "draft_manager_full_name": "Петров", "draft_status": "Передан"})),
+            (3, self._row("СУБД", **empty)),
+            (4, self._row("ML", **{**empty, "draft_comment": "Продление"})),
+        ]
+
+        created, updated = contract_registry_import_service.import_rows(iter(rows))
+
+        # Проверяем, что значения собраны из разных строк договора
+        self.assertEqual((created, updated), (0, 1))
+        self.assertEqual(self._drafts(), ("Петров", "Передан", "Продление"))
+
+    def test_column_empty_in_all_rows_clears_value(self) -> None:
+        empty = {"draft_manager_full_name": "", "draft_status": "", "draft_comment": ""}
+        rows = [
+            (2, self._row("IDE", **{**empty, "draft_manager_full_name": "Петров"})),
+            (3, self._row("СУБД", **empty)),
+        ]
+
+        contract_registry_import_service.import_rows(iter(rows))
+
+        # Проверяем, что пустые во всех строках статус и комментарий стёрты
+        self.assertEqual(self._drafts(), ("Петров", "", ""))
+
+    def test_missing_columns_keep_values(self) -> None:
+        contract_registry_import_service.import_rows(iter([(2, self._row("IDE"))]))
+
+        # Проверяем, что черновые поля не тронуты
+        self.assertEqual(self._drafts(), ("Иванов", "Черновик", "Старый комментарий"))
+
+    def test_different_values_in_one_contract_raise(self) -> None:
+        rows = [
+            (2, self._row("IDE", draft_manager_full_name="Петров", draft_status="Передан")),
+            (3, self._row("СУБД", draft_manager_full_name="Сидоров", draft_status="Передан")),
+        ]
+
+        with self.assertRaises(CatalogImportRowsError) as context:
+            contract_registry_import_service.import_rows(iter(rows))
+
+        # Проверяем, что ошибка во второй строке и только по менеджеру
+        [error] = context.exception.errors
+        self.assertEqual(
+            (error.row_number, error.message),
+            (3, "расходятся значения внутри группы договора Д-1: draft_manager_full_name"),
+        )
+        self.assertEqual(self._drafts(), ("Иванов", "Черновик", "Старый комментарий"))
+
+    def test_contracts_are_grouped_by_university_and_number_case(self) -> None:
+        UniversityFactory(name="МФТИ", external_code="R-2")
+        rows = [
+            (2, self._row("IDE", draft_status="Подписан")),
+            (3, {**self._row("СУБД", draft_status=""), "contract_number": "д-1", "university": "мгу"}),
+            (4, {**self._row("IDE", draft_status=""), "university": "R-2"}),
+        ]
+
+        created, updated = contract_registry_import_service.import_rows(iter(rows))
+
+        # Проверяем: МГУ/Д-1 — один договор со статусом, МФТИ/Д-1 — новый договор без статуса
+        self.assertEqual((created, updated), (1, 1))
+        self.assertEqual(Contract.objects.get(university=self.university).draft_status, "Подписан")
+        self.assertEqual(Contract.objects.get(university__name="МФТИ").draft_status, "")
+
+    def test_new_contract_takes_value_from_any_row(self) -> None:
+        rows = [
+            (2, {**self._row("IDE", draft_status=""), "contract_number": "Д-2"}),
+            (3, {**self._row("СУБД", draft_status="Черновик"), "contract_number": "Д-2"}),
+        ]
+
+        contract_registry_import_service.import_rows(iter(rows))
+
+        # Проверяем статус нового договора
+        self.assertEqual(Contract.objects.get(contract_number="Д-2").draft_status, "Черновик")
+
+
+class ContractRegistryManagersTestCase(TestCase):
+    """«ФИО Менеджера» не назначается: ненайденный пользователь — предупреждение импорта."""
+
+    def setUp(self) -> None:
+        self.university = UniversityFactory(name="МГУ")
+        vendor = VendorFactory(name="1С")
+        ProductFactory(name="IDE", vendor=vendor)
+        ProductFactory(name="СУБД", vendor=vendor)
+        self.manager = UserFactory(first_name="Максим", last_name="Менеджеров")
+
+    def _row(self, product: str = "IDE", **extra) -> dict:
+        return {"university": "МГУ", "vendor": "1С", "product": product, "contract_number": "Д-1", **extra}
+
+    def _import(self, *rows: dict) -> list:
+        warnings: list = []
+        contract_registry_import_service.import_rows(
+            iter([(number, row) for number, row in enumerate(rows, start=2)]), warnings=warnings
+        )
+        return warnings
+
+    def test_found_manager_is_not_assigned_and_gives_no_warning(self) -> None:
+        warnings = self._import(self._row(draft_manager_full_name="Менеджеров Максим"))
+
+        # Проверяем: ФИО сохранено, назначений нет, предупреждений нет
+        self.assertEqual(Contract.objects.get().draft_manager_full_name, "Менеджеров Максим")
+        self.assertFalse(Responsible.objects.exists())
+        self.assertEqual(warnings, [])
+
+    def test_unknown_manager_gives_warning_on_row_with_name(self) -> None:
+        warnings = self._import(
+            self._row(draft_manager_full_name=""), self._row("СУБД", draft_manager_full_name="Петров Пётр")
+        )
+
+        # Проверяем предупреждение на строке, где указано ФИО
+        [warning] = warnings
+        self.assertEqual(
+            (warning.row_number, warning.message),
+            (3, "менеджер Петров Пётр договора Д-1 не будет предложен ответственным: нет пользователя с таким ФИО"),
+        )
+
+    def test_ambiguous_manager_gives_warning(self) -> None:
+        UserFactory(first_name="Максим", last_name="Менеджеров")
+
+        warnings = self._import(self._row(draft_manager_full_name="Менеджеров Максим"))
+
+        # Проверяем причину — однофамильцы
+        self.assertIn("несколько пользователей с таким ФИО", warnings[0].message)
+
+    def test_empty_or_missing_manager_gives_no_warning(self) -> None:
+        # Проверяем пустую ячейку и отсутствие колонки
+        self.assertEqual(self._import(self._row(draft_manager_full_name="")), [])
+        self.assertEqual(self._import(self._row()), [])
+
+    def test_file_with_errors_returns_no_warnings(self) -> None:
+        warnings: list = []
+        rows = [
+            (2, self._row(draft_manager_full_name="Петров Пётр")),
+            (3, {**self._row(product="Неизвестный продукт"), "contract_number": "Д-2"}),
+        ]
+
+        with self.assertRaises(CatalogImportRowsError):
+            contract_registry_import_service.import_rows(iter(rows), warnings=warnings)
+
+        # Проверяем: импорт отменён, предупреждений нет — есть только ошибки
+        self.assertEqual(warnings, [])

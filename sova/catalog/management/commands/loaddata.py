@@ -108,9 +108,11 @@ class Command(DjangoLoadDataCommand):
     def _run_loader(self, source: Path, catalog_type: str, label: str) -> None:
         """CLI читает файл с фиксированными заголовками (без CatalogImportMapping) и вызывает сервис импорта."""
         try:
-            created, updated = catalog_import_service.import_canonical_file(catalog_type=catalog_type, source=source)
+            result = catalog_import_service.import_canonical_file(catalog_type=catalog_type, source=source)
         except CatalogImportError as error:
             raise CommandError(str(error)) from error
         self.stdout.write(
-            self.style.SUCCESS(f"Справочник {label} загружен: создано {created}, обновлено {updated}.")
+            self.style.SUCCESS(f"Справочник {label} загружен: создано {result.created}, обновлено {result.updated}.")
         )
+        for warning in result.warnings:
+            self.stdout.write(self.style.WARNING(str(warning)))
