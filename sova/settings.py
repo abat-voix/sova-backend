@@ -357,6 +357,8 @@ SPECTACULAR_SETTINGS = {
         "StageInstanceStatusEnum": "sova.processes.enum.StageInstanceStatus",
         "ActionInstanceStatusEnum": "sova.processes.enum.ActionInstanceStatus",
         "StageInstanceContextTypeEnum": "sova.processes.enum.StageInstanceContextType",
+        "ClientKindEnum": "sova.catalog.enum.ClientKind",
+        "ConversationKindEnum": "sova.messaging.enum.ConversationKind",
     },
 }
 

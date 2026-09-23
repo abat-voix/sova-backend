@@ -50,13 +50,25 @@ class MessageService:
             "last_read_at",
         )
         for participation in participations:
-            messages = Message.objects.filter(conversation_id=participation["conversation_id"]).exclude(
-                sender=user,
+            total += self._unread_count(
+                conversation_id=participation["conversation_id"],
+                last_read_at=participation["last_read_at"],
+                user=user,
             )
-            if participation["last_read_at"] is not None:
-                messages = messages.filter(created_at__gt=participation["last_read_at"])
-            total += messages.count()
         return total
+
+    def conversation_unread_count(self, conversation: Conversation, user: AbstractBaseUser) -> int:
+        """Число непрочитанных сообщений пользователя в одной беседе."""
+        participant = ConversationParticipant.objects.filter(conversation=conversation, user=user).first()
+        if participant is None:
+            return 0
+        return self._unread_count(conversation_id=conversation.pk, last_read_at=participant.last_read_at, user=user)
+
+    def _unread_count(self, conversation_id, last_read_at, user: AbstractBaseUser) -> int:
+        messages = Message.objects.filter(conversation_id=conversation_id).exclude(sender=user)
+        if last_read_at is not None:
+            messages = messages.filter(created_at__gt=last_read_at)
+        return messages.count()
 
 
 message_service = MessageService()

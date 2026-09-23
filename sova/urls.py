@@ -20,5 +20,6 @@ urlpatterns = [
     path("api/workflows/", include("sova.workflows.api.routers")),
     path("api/processes/", include("sova.processes.api.routers")),
     path("api/notifications/", include("sova.notifications.api.routers")),
+    path("api/messaging/", include("sova.messaging.api.routers")),
     path("api/reports/", include("sova.reports.api.routers")),
 ]
