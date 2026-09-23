@@ -172,6 +172,43 @@ pdf = html_to_pdf(
 завершает запрос ошибкой, если локальный ресурс не загрузился. Дополнительные
 поля Chromium route можно передать через `form_fields`.
 
+## Хранилище файлов
+
+Вложения действий (`ActionAttachment`), файлы договоров (`Contract`, история — `ContractFile`)
+и готовые отчёты (`ReportJob`) хранятся через Django Storage API (`STORAGES["default"]` /
+`STORAGES["reports"]`), а не напрямую на диске — конкретный провайдер задаётся переменными
+окружения и код от него не зависит. Подробности и порядок миграции — в
+`docs/plans/2026-09-23-s3-storage.md`.
+
+- `STORAGE_BACKEND=filesystem` (по умолчанию, всегда — в тестах): `MEDIA_ROOT` и
+  `REPORTS_STORAGE_ROOT`, как раньше.
+- `STORAGE_BACKEND=s3`: S3-совместимое хранилище — свой Garage из `sova-infra` (по умолчанию)
+  или внешний провайдер (Yandex Object Storage, AWS и т. п.). Обязательные переменные:
+  `S3_ENDPOINT_URL`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`,
+  `S3_MEDIA_BUCKET`, `S3_REPORTS_BUCKET`. Опциональные: `S3_ADDRESSING_STYLE` (`path`),
+  `S3_PRESIGNED_TTL` (300 c), `FILE_UPLOAD_MAX_SIZE_MB` (25).
+
+Файл отдаётся только через API (`.../download/`), с проверкой видимости взаимодействия
+(`visible_interactions`), а не напрямую из хранилища — прежний публичный `/media/*` в Caddy
+убран. Способ отдачи — `S3_DOWNLOAD_MODE`:
+
+- `proxy` (по умолчанию): Django сам стримит файл; хранилище остаётся только во внутренней сети;
+- `redirect` (только `STORAGE_BACKEND=s3`): `302` на подписанный URL — когда endpoint хранилища
+  виден браузеру.
+
+Проверить доступность хранилищ и поставить lifecycle-правило на бакет отчётов:
+
+```bash
+poetry run python manage.py check_storage --apply-lifecycle
+```
+
+Перенос уже загруженных файлов при включении S3 (идемпотентно, можно запускать повторно):
+
+```bash
+poetry run python manage.py copy_files_to_storage --source-root ./media --storage default
+poetry run python manage.py copy_files_to_storage --source-root ./private/reports --storage reports
+```
+
 ## Отчёты
 
 Модуль `sova.reports` строит отчёт по взаимодействиям с вузами (`/api/reports/`):

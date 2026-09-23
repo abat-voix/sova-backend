@@ -1,8 +1,9 @@
 from django.contrib import admin
 
-from sova.core.admin import AbstractBaseModelAdmin
+from sova.core.admin import AbstractBaseModelAdmin, AbstractHistoryModelAdmin
 from sova.interactions.models import (
     Contract,
+    ContractFile,
     Interaction,
     InteractionContact,
     InteractionDirection,
@@ -22,6 +23,17 @@ class ContractAdmin(AbstractBaseModelAdmin[Contract]):
     list_select_related = ("interaction",)
     search_fields = ("id", "contract_number")
     autocomplete_fields = ("interaction",)
+
+
+@admin.register(ContractFile)
+class ContractFileAdmin(AbstractHistoryModelAdmin[ContractFile]):
+    """Журнал файлов договора. Запись создаётся системой — не редактируется."""
+
+    list_display = ("id", "original_name", "contract", "uploaded_by", "uploaded_at")
+    list_display_links = ("original_name",)
+    list_select_related = ("contract", "uploaded_by")
+    search_fields = ("id", "original_name")
+    autocomplete_fields = ("contract", "uploaded_by")
 
 
 @admin.register(Interaction)
