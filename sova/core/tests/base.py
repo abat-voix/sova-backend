@@ -5,6 +5,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.utils.encoders import JSONEncoder
 
+from accounts.models import SystemRole, UserRole
 from sova.core.tests.factories import UserFactory
 
 
@@ -34,6 +35,11 @@ class BaseApiTestMixin:
     def setUp(self) -> None:
         """Аутентифицирует клиента обычным пользователем."""
         self.user = UserFactory()
+        # Workflow administration is role-protected. Keep the generic CRUD
+        # fixtures for that app equivalent to their previous authenticated
+        # setup; dedicated permission tests cover head/KAM ownership rules.
+        if self.model.__module__.startswith("sova.workflows"):
+            UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
         self.client.force_authenticate(user=self.user)
 
     def create_instance(self, **kwargs) -> Model:

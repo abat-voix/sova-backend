@@ -2,9 +2,10 @@ from sova.core.api.views import SovaBaseViewSet
 from sova.workflows.api import filters, serializers
 from sova.workflows.api.views.audit import WorkflowAuditMixin
 from sova.workflows.models import WorkflowStage
+from sova.workflows.api.permissions import CanManageWorkflows, WorkflowOwnershipMixin
 
 
-class WorkflowStageViewSet(WorkflowAuditMixin, SovaBaseViewSet):
+class WorkflowStageViewSet(WorkflowOwnershipMixin, WorkflowAuditMixin, SovaBaseViewSet):
     """Этапы workflow. Доступны CRUD операции; правки пишутся в аудит."""
 
     read_serializer_class = serializers.WorkflowStageSerializer
@@ -13,3 +14,4 @@ class WorkflowStageViewSet(WorkflowAuditMixin, SovaBaseViewSet):
     ordering_fields = "__all__"
     search_fields = ("name", "description")
     filterset_class = filters.WorkflowStageFilter
+    permission_classes = (CanManageWorkflows,)

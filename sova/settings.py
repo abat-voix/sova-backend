@@ -314,6 +314,7 @@ OIDC_TIMEOUT = 10
 OIDC_STORE_ACCESS_TOKEN = False
 OIDC_STORE_ID_TOKEN = True
 OIDC_OP_LOGOUT_URL_METHOD = "accounts.oidc.provider_logout_url"
+OIDC_CALLBACK_CLASS = "accounts.oidc.SovaOIDCAuthenticationCallbackView"
 OIDC_REDIRECT_ALLOWED_HOSTS = ALLOWED_HOSTS
 OIDC_EXEMPT_URLS = ["/api/health/", "/api/auth/me/"]
 OIDC_RENEW_ID_TOKEN_EXPIRY_SECONDS = 15 * 60
