@@ -88,6 +88,24 @@ class TelegramChannelSenderTest(SimpleTestCase):
         # Проверяем, что HTTP-ошибка не поднимается наружу
         self.assertFalse(result)
 
+    @override_settings(TELEGRAM_BOT_TOKEN="")
+    @patch("sova.notifications.services.channels.telegram.requests.post")
+    def test_send_without_token_skips_request_and_warns_once(self, post: Mock) -> None:
+        """Без токена send() возвращает False без запроса и предупреждает в лог один раз."""
+        sender = TelegramChannelSender()
+
+        with self.assertLogs("django", level="WARNING") as logs:
+            first = sender.send(target="123456", message=Message(text="Текст"))
+            second = sender.send(target="654321", message=Message(text="Текст"))
+
+        # Проверяем неуспешный результат обеих отправок
+        self.assertFalse(first)
+        self.assertFalse(second)
+        # Проверяем, что запрос к Telegram API не выполнялся
+        post.assert_not_called()
+        # Проверяем, что предупреждение записано один раз
+        self.assertEqual(len(logs.records), 1)
+
 
 @override_settings(
     MAX_BOT_TOKEN="test-max-token",
@@ -126,6 +144,24 @@ class MaxChannelSenderTest(SimpleTestCase):
 
         # Проверяем, что ошибка не поднимается наружу
         self.assertFalse(result)
+
+    @override_settings(MAX_BOT_TOKEN="")
+    @patch("sova.notifications.services.channels.max.requests.post")
+    def test_send_without_token_skips_request_and_warns_once(self, post: Mock) -> None:
+        """Без токена send() возвращает False без запроса и предупреждает в лог один раз."""
+        sender = MaxChannelSender()
+
+        with self.assertLogs("django", level="WARNING") as logs:
+            first = sender.send(target="789", message=Message(text="Текст"))
+            second = sender.send(target="987", message=Message(text="Текст"))
+
+        # Проверяем неуспешный результат обеих отправок
+        self.assertFalse(first)
+        self.assertFalse(second)
+        # Проверяем, что запрос к MAX API не выполнялся
+        post.assert_not_called()
+        # Проверяем, что предупреждение записано один раз
+        self.assertEqual(len(logs.records), 1)
 
 
 class SystemChannelSenderTest(TestCase):

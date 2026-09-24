@@ -13,7 +13,10 @@ class TelegramChannelSender(NotificationChannelSender):
     """Отправка уведомления через Telegram Bot API."""
 
     def send(self, target: str, message: Message) -> bool:
-        """Отправляет message в Telegram-чат target через TELEGRAM_BOT_TOKEN."""
+        """Отправляет message в Telegram-чат target через TELEGRAM_BOT_TOKEN; без токена — False без запроса."""
+        if not settings.TELEGRAM_BOT_TOKEN:
+            self._warn_missing_token(setting_name="TELEGRAM_BOT_TOKEN")
+            return False
         url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage"
         try:
             response = requests.post(
