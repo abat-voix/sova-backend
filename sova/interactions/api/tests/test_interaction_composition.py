@@ -106,6 +106,10 @@ class InteractionProgramApiTestCase(BaseApiTestMixin, APITestCase):
                 "id": str(instance.program_id),
                 "name": instance.program.name,
             },
+            "direction": {
+                "id": str(instance.program.direction_id),
+                "name": instance.program.direction.name,
+            },
         }
 
     def get_post_data(self) -> dict:
