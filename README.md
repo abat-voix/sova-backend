@@ -17,6 +17,7 @@ ghcr.io/abat-voix/sova-backend:<tag>
 - `DJANGO_SECRET_KEY`;
 - `DATABASE_URL`;
 - `REDIS_URL`;
+- `CHANNEL_REDIS_URL` (отдельная Redis DB для Channels; не используйте DB cache/Celery);
 - `DJANGO_ALLOWED_HOSTS`;
 - `CSRF_TRUSTED_ORIGINS`;
 - `GOTENBERG_URL`;
@@ -103,6 +104,18 @@ set +a
 poetry run python manage.py migrate
 poetry run python manage.py runserver
 ```
+
+HTTP API остаётся на Gunicorn/WSGI. WebSocket transport запускается отдельным
+ASGI-процессом (локально удобно использовать порт 8001):
+
+```bash
+poetry run daphne -b 0.0.0.0 -p 8001 sova.asgi:application
+```
+
+Frontend подключается к `/ws/events/`. События доставляются без гарантии и без
+истории: PostgreSQL и REST остаются источником истины, а клиент после reconnect
+повторно сверяет messaging queries. `CHANNEL_REDIS_URL` должен указывать на
+логическую Redis DB, отличную от `REDIS_URL` и `CELERY_BROKER_URL`.
 
 Файл читается через `source`, поэтому значения должны быть shell-safe: без
 пробелов, `$` и `#` вне кавычек.

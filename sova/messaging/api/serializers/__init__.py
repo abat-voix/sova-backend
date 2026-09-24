@@ -1,4 +1,5 @@
 from sova.messaging.api.serializers.conversation import (
+    ConversationRecipientSerializer,
     ConversationSerializer,
     CreateDirectConversationSerializer,
 )
@@ -6,6 +7,7 @@ from sova.messaging.api.serializers.message import MessageSerializer, SendMessag
 
 __all__ = [
     "ConversationSerializer",
+    "ConversationRecipientSerializer",
     "CreateDirectConversationSerializer",
     "MessageSerializer",
     "SendMessageSerializer",

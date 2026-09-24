@@ -1,4 +1,5 @@
-from django.db.models import Prefetch, QuerySet
+from django.contrib.auth import get_user_model
+from django.db.models import Prefetch, Q, QuerySet
 from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, status
@@ -58,6 +59,33 @@ class ConversationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Gene
             data=self.get_serializer(conversation).data,
             status=status.HTTP_200_OK,
         )
+
+    @extend_schema(
+        methods=["GET"],
+        request=None,
+        responses={200: serializers.ConversationRecipientSerializer(many=True)},
+    )
+    @action(
+        methods=["GET"],
+        detail=False,
+        url_path="recipients",
+        pagination_class=StandardPagination,
+    )
+    def recipients(self, request) -> Response:
+        """Активные пользователи, которых текущий пользователь может выбрать для беседы."""
+        queryset = get_user_model().objects.filter(is_active=True).exclude(pk=request.user.pk)
+        search = request.query_params.get("search", "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(email__icontains=search)
+                | Q(username__icontains=search)
+            )
+        queryset = queryset.order_by("last_name", "first_name", "pk")
+        page = self.paginate_queryset(queryset)
+        serializer = serializers.ConversationRecipientSerializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
 
     @extend_schema(
         methods=["GET"],

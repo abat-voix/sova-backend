@@ -3,6 +3,7 @@ from django.db import transaction
 
 from sova.messaging.enum import ConversationKind
 from sova.messaging.models import Conversation, ConversationParticipant
+from sova.messaging.realtime import publish_conversation_created
 
 
 def _direct_dedupe_key(user_a: AbstractBaseUser, user_b: AbstractBaseUser) -> str:
@@ -36,6 +37,7 @@ class ConversationService:
                     ConversationParticipant(conversation=conversation, user=user_b),
                 ]
             )
+            publish_conversation_created(conversation)
         return conversation
 
     @transaction.atomic
@@ -47,6 +49,7 @@ class ConversationService:
         )
         if created:
             ConversationParticipant.objects.create(conversation=conversation, user=user)
+            publish_conversation_created(conversation)
         return conversation
 
 

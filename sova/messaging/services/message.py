@@ -5,6 +5,7 @@ from django.utils import timezone
 from sova.messaging.enum import ConversationKind
 from sova.messaging.exceptions import NotConversationParticipantError, SystemConversationIsReadOnlyError
 from sova.messaging.models import Conversation, ConversationParticipant, Message
+from sova.messaging.realtime import publish_conversation_read, publish_message_created
 
 
 class MessageService:
@@ -32,15 +33,19 @@ class MessageService:
         message = Message.objects.create(conversation=conversation, sender=sender, text=text, link=link)
         conversation.last_message_at = message.created_at
         conversation.save(update_fields=["last_message_at"])
+        publish_message_created(message)
         return message
 
+    @transaction.atomic
     def mark_read(self, conversation: Conversation, user: AbstractBaseUser) -> None:
         """Отмечает беседу прочитанной пользователем по текущий момент."""
+        read_at = timezone.now()
         updated = ConversationParticipant.objects.filter(conversation=conversation, user=user).update(
-            last_read_at=timezone.now(),
+            last_read_at=read_at,
         )
         if not updated:
             raise NotConversationParticipantError
+        publish_conversation_read(conversation, user, read_at)
 
     def unread_count(self, user: AbstractBaseUser) -> int:
         """Суммарное число непрочитанных сообщений пользователя по всем беседам."""
