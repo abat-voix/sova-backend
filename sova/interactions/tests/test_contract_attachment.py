@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
@@ -8,6 +10,7 @@ from sova.interactions.models import InteractionProduct, Responsible
 from sova.interactions.services import responsible_service
 from sova.interactions.services.contract_attachment import contract_attachment_service
 from sova.interactions.tests.factories import ContractFactory, InteractionFactory, InteractionProductFactory
+from sova.notifications.enum import NotificationChannel
 
 
 class AttachToNewInteractionTestCase(TestCase):
@@ -19,7 +22,6 @@ class AttachToNewInteractionTestCase(TestCase):
         self.contract = ContractFactory(
             interaction=None,
             university=self.university,
-            draft_manager_full_name="Иванов Иван",
             draft_comment="Первичный контакт",
         )
         InteractionProductFactory(contract=self.contract, interaction=None)
@@ -40,54 +42,80 @@ class AttachToNewInteractionTestCase(TestCase):
         responsible = Responsible.objects.get(interaction=interaction, unassigned_at__isnull=True)
         self.assertEqual(responsible.manager_id, self.manager.id)
 
-    def test_manager_from_contract_is_not_assigned_implicitly(self) -> None:
-        """ФИО менеджера из договора — только подсказка: без явного manager ответственного нет."""
+    def test_contract_responsibles_move_to_interaction(self) -> None:
+        kam = UserFactory()
+        responsible_service.sync_contract_responsibles(contract=self.contract, managers=[kam], assigned_by=None)
+
         interaction = contract_attachment_service.attach_to_new_interaction(
             contract=self.contract, assigned_by=self.manager
         )
 
-        # Проверяем, что ответственный не назначен, хотя пользователь с таким ФИО есть
-        self.assertFalse(Responsible.objects.filter(interaction=interaction).exists())
+        # Проверяем: КАМ договора — действующий ответственный взаимодействия, назначил привязавший
+        current = Responsible.objects.get(interaction=interaction, unassigned_at__isnull=True)
+        self.assertEqual((current.manager_id, current.assigned_by_id), (kam.pk, self.manager.pk))
 
-    def test_explicit_manager_other_than_contract_one_is_assigned(self) -> None:
-        """Явно выбранный менеджер назначается, даже если в договоре указан другой."""
+    @patch("sova.notifications.services.event_notification.send_event_notification")
+    def test_explicit_manager_equal_to_contract_kam_is_not_duplicated(self, task) -> None:
+        responsible_service.sync_contract_responsibles(
+            contract=self.contract, managers=[self.manager], assigned_by=None
+        )
+        head = UserFactory()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            interaction = contract_attachment_service.attach_to_new_interaction(
+                contract=self.contract, assigned_by=head, manager=self.manager
+            )
+
+        # Проверяем: одна запись и одно уведомление
+        self.assertEqual(Responsible.objects.filter(interaction=interaction).count(), 1)
+        system_calls = [
+            item for item in task.delay.call_args_list if item.kwargs["channels"] == [NotificationChannel.SYSTEM]
+        ]
+        self.assertEqual(len(system_calls), 1)
+
+    def test_explicit_manager_is_added_to_contract_kams(self) -> None:
+        kam = UserFactory()
+        responsible_service.sync_contract_responsibles(contract=self.contract, managers=[kam], assigned_by=None)
         chosen = UserFactory(first_name="Пётр", last_name="Петров")
 
         interaction = contract_attachment_service.attach_to_new_interaction(
             contract=self.contract, assigned_by=self.manager, manager=chosen
         )
 
-        # Проверяем назначение выбранного менеджера и автора назначения
-        current = Responsible.objects.get(interaction=interaction, unassigned_at__isnull=True)
-        self.assertEqual((current.manager_id, current.assigned_by_id), (chosen.id, self.manager.id))
+        # Проверяем: у взаимодействия оба КАМа — с договора и выбранный явно
+        current = set(
+            Responsible.objects.filter(interaction=interaction, unassigned_at__isnull=True).values_list(
+                "manager_id", flat=True
+            )
+        )
+        self.assertEqual(current, {kam.pk, chosen.pk})
 
 
-class SuggestManagerTestCase(TestCase):
-    """Подбор пользователя по ФИО менеджера из реестра."""
+class FindManagerTestCase(TestCase):
+    """Поиск пользователя по ФИО менеджера из реестра."""
 
     def setUp(self) -> None:
         self.manager = UserFactory(first_name="Иван", last_name="Иванов")
 
     def test_full_name_matches_regardless_of_word_order_and_case(self) -> None:
-        """draft_manager_full_name хранится «Фамилия Имя», get_full_name() — «Имя Фамилия»."""
+        """В файле ФИО «Фамилия Имя», get_full_name() — «Имя Фамилия»."""
         # Проверяем оба порядка слов, регистр и лишние пробелы
-        self.assertEqual(responsible_service.suggest_manager("  иван   ИВАНОВ "), self.manager)
-        self.assertEqual(responsible_service.suggest_manager("Иванов Иван"), self.manager)
+        self.assertEqual(responsible_service.find_manager("  иван   ИВАНОВ "), self.manager)
+        self.assertEqual(responsible_service.find_manager("Иванов Иван"), self.manager)
 
-    def test_unknown_or_empty_name_gives_no_suggestion(self) -> None:
-        # Проверяем, что подсказки нет
-        self.assertIsNone(responsible_service.suggest_manager("Несуществующий Менеджер"))
-        self.assertIsNone(responsible_service.suggest_manager(""))
+    def test_unknown_name_raises(self) -> None:
+        # Проверяем, что неизвестное ФИО не найдено
+        with self.assertRaises(ManagerNotFoundError):
+            responsible_service.find_manager("Несуществующий Менеджер")
 
-    def test_ambiguous_name_gives_no_suggestion(self) -> None:
+    def test_ambiguous_name_raises(self) -> None:
         UserFactory(first_name="Иван", last_name="Иванов")  # тёзка self.manager
 
-        # Проверяем, что при однофамильцах подсказки нет, а find_manager сообщает причину
-        self.assertIsNone(responsible_service.suggest_manager("Иванов Иван"))
+        # Проверяем, что при однофамильцах find_manager сообщает причину
         with self.assertRaises(AmbiguousManagerError):
             responsible_service.find_manager("Иванов Иван")
 
-    def test_inactive_user_is_not_suggested(self) -> None:
+    def test_inactive_user_is_not_found(self) -> None:
         self.manager.is_active = False
         self.manager.save(update_fields=["is_active"])
 

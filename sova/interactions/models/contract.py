@@ -55,12 +55,6 @@ class Contract(NormalizedTextFieldsMixin, TimeStampedModel):
         blank=True,
         verbose_name="Подписан",
     )
-    draft_manager_full_name = models.CharField(
-        max_length=255,
-        blank=True,
-        verbose_name="ФИО менеджера (из файла)",
-        help_text="Не резолвится в User на импорте — только на привязке договора к Interaction.",
-    )
     draft_status = models.CharField(
         max_length=255,
         blank=True,
@@ -97,7 +91,7 @@ class Contract(NormalizedTextFieldsMixin, TimeStampedModel):
         verbose_name="B2C-клиент",
     )
 
-    normalized_text_fields = ("contract_number", "draft_manager_full_name", "draft_status")
+    normalized_text_fields = ("contract_number", "draft_status")
 
     class Meta:
         verbose_name = "Договор"

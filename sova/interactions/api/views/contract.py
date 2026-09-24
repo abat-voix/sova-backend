@@ -2,26 +2,30 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from django.db import transaction
+from django.db.models import Prefetch, QuerySet
+from django.http import Http404
 from django.utils.translation import gettext_lazy as _
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from sova.core.api.exceptions import ConflictError
-from django.db import transaction
-from django.db.models import QuerySet
-from django.http import Http404
-from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework.decorators import action
-
 from sova.core.api.views import SovaBaseViewSet
 from sova.core.files import file_response
 from sova.interactions.api import filters, serializers
 from sova.interactions.exceptions import ContractAlreadyAttachedError
-from sova.interactions.models import Contract
-from sova.interactions.services import contract_attachment_service
+from sova.interactions.models import Contract, Responsible
+from sova.interactions.services import contract_attachment_service, visible_contracts
+from sova.interactions.services.contract_files import record_contract_file
+
+_DOWNLOAD_RESPONSES = {
+    (200, "application/octet-stream"): OpenApiResponse(OpenApiTypes.BINARY),
+    302: OpenApiResponse(description="Редирект на подписанный URL (S3_DOWNLOAD_MODE=redirect)"),
+    404: OpenApiResponse(description="Договор не найден, недоступен или без файла"),
+    410: OpenApiResponse(description="Файл больше недоступен в хранилище"),
+}
 
 
 @contextmanager
@@ -34,26 +38,16 @@ def translate_attachment_errors() -> Iterator[None]:
             detail=_("Договор уже привязан к взаимодействию."),
             code="contract_already_attached",
         ) from error
-from sova.interactions.services import visible_interactions
-from sova.interactions.services.contract_files import record_contract_file
-
-_DOWNLOAD_RESPONSES = {
-    (200, "application/octet-stream"): OpenApiResponse(OpenApiTypes.BINARY),
-    302: OpenApiResponse(description="Редирект на подписанный URL (S3_DOWNLOAD_MODE=redirect)"),
-    404: OpenApiResponse(description="Договор не найден, недоступен или без файла"),
-    410: OpenApiResponse(description="Файл больше недоступен в хранилище"),
-}
 
 
 class ContractViewSet(SovaBaseViewSet):
     """
     Договоры. Доступны CRUD операции; файл договора передаётся как multipart.
 
-    Договор, созданный импортом реестра, существует без взаимодействия («безголовый»). Действие
-    `attach-to-new-interaction` создаёт из него взаимодействие: вместе с договором туда переходят его
-    направления, программы и продукты. Ответственный назначается только явно (`manager` в запросе);
-    `suggested_manager` договора — подсказка по ФИО менеджера из реестра. Ошибка привязки: 409 — договор
-    уже привязан (`contract_already_attached`).
+    Договор, созданный импортом реестра, существует без взаимодействия («безголовый»); его КАМы из реестра —
+    `current_responsibles`. Действие `attach-to-new-interaction` создаёт из него взаимодействие: вместе с договором
+    туда переходят его направления, программы, продукты и КАМы; `manager` в запросе добавляет ещё одного.
+    Ошибка привязки: 409 — договор уже привязан (`contract_already_attached`).
     """
 
     read_serializer_class = serializers.ContractSerializer
@@ -80,9 +74,8 @@ class ContractViewSet(SovaBaseViewSet):
         """
         Создаёт взаимодействие из договора и привязывает к нему договор.
 
-        Контрагент и комментарий берутся из договора. Ответственный — только `manager` из запроса;
-        без него взаимодействие создаётся без ответственного, как и при обычном создании. Процесс
-        workflow не запускается — это отдельный запуск процесса.
+        Контрагент и комментарий берутся из договора. Ответственные — КАМы договора и `manager` из запроса,
+        если передан. Процесс workflow не запускается — это отдельный запуск процесса.
         """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -102,17 +95,34 @@ class ContractViewSet(SovaBaseViewSet):
         return Contract.objects.select_for_update().get(pk=contract.pk)
 
     def _contract_response(self) -> Response:
-        """Read-представление договора после привязки."""
-        contract = self.get_queryset().get(pk=self.kwargs["pk"])
+        """
+        Read-представление договора после привязки.
+
+        Без фильтра видимости: с новым КАМом договор может стать чужим для привязавшего, но ответ о
+        выполненной привязке он получить должен.
+        """
+        contract = self._with_responsibles(super().get_queryset()).get(pk=self.kwargs["pk"])
         return Response(
             data=serializers.ContractSerializer(contract, context=self.get_serializer_context()).data,
             status=status.HTTP_200_OK,
         )
 
     def get_queryset(self) -> QuerySet:
-        """Только договоры видимых пользователю взаимодействий."""
-        return super().get_queryset().filter(
-            interaction__in=visible_interactions(self.request.user),
+        """Только видимые пользователю договоры, включая безголовые (см. `visible_contracts`), с их КАМами."""
+        return self._with_responsibles(super().get_queryset().filter(pk__in=visible_contracts(self.request.user)))
+
+    @staticmethod
+    def _with_responsibles(queryset: QuerySet) -> QuerySet:
+        """Подгружает действующих КАМов headless-договора для `current_responsibles`."""
+        return queryset.prefetch_related(
+            Prefetch(
+                "responsibles",
+                queryset=Responsible.objects.filter(
+                    interaction__isnull=True,
+                    unassigned_at__isnull=True,
+                ).select_related("manager").order_by("assigned_at", "pk"),
+                to_attr="current_responsibles",
+            ),
         )
 
     @extend_schema(responses=_DOWNLOAD_RESPONSES)

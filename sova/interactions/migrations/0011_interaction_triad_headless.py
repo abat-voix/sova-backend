@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('catalog', '0005_alter_direction_options_alter_product_options_and_more'),
-        ('interactions', '0004_contract_headless'),
+        ('interactions', '0010_contract_headless'),
     ]
 
     operations = [

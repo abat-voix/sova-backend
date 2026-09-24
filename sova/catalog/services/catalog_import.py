@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+from django.contrib.auth.models import AbstractBaseUser
 from django.db import models, transaction
 
 from sova.catalog.enum import CatalogType
@@ -25,14 +26,23 @@ class CatalogImportService:
     по которому запись находится при следующих загрузках. Записи, которых нет в файле, не меняются.
     """
 
-    def import_file(self, catalog_type: str, source: ImportSource) -> CatalogImportResult:
-        """Импорт файла с произвольными заголовками, переведёнными через CatalogImportMapping."""
+    def import_file(
+        self,
+        catalog_type: str,
+        source: ImportSource,
+        user: AbstractBaseUser | None = None,
+    ) -> CatalogImportResult:
+        """
+        Импорт файла с произвольными заголовками, переведёнными через CatalogImportMapping.
+
+        `user` — загрузивший файл; реестр договоров записывает его автором назначений КАМов.
+        """
         rows = import_file_service.read_mapped_rows(
             catalog_type=catalog_type,
             source=source,
             required=CATALOG_IMPORT_FIELDS[catalog_type].required,
         )
-        return self._run_loader(catalog_type=catalog_type, rows=rows)
+        return self._run_loader(catalog_type=catalog_type, rows=rows, user=user)
 
     def import_canonical_file(self, catalog_type: str, source: ImportSource) -> CatalogImportResult:
         """Импорт файла, заголовки которого уже совпадают с каноническими ключами (CLI loaddata)."""
@@ -73,14 +83,18 @@ class CatalogImportService:
         """Ответственные от вуза: апсерт по паре university+full_name."""
         return self._count(import_file_service.process_rows(rows=rows, handler=self._load_contact_person))
 
-    def _run_loader(self, catalog_type: str, rows: Rows) -> CatalogImportResult:
+    def _run_loader(
+        self, catalog_type: str, rows: Rows, user: AbstractBaseUser | None = None
+    ) -> CatalogImportResult:
         """Загружает строки обработчиком типа; предупреждения строк сейчас бывают только у реестра договоров."""
         warnings: list[ImportRowWarning] = []
-        loader = self._get_loader(catalog_type=catalog_type, warnings=warnings)
+        loader = self._get_loader(catalog_type=catalog_type, warnings=warnings, user=user)
         created, updated = loader(rows)
         return CatalogImportResult(created=created, updated=updated, warnings=warnings)
 
-    def _get_loader(self, catalog_type: str, warnings: list[ImportRowWarning]) -> Callable[[Rows], tuple[int, int]]:
+    def _get_loader(
+        self, catalog_type: str, warnings: list[ImportRowWarning], user: AbstractBaseUser | None = None
+    ) -> Callable[[Rows], tuple[int, int]]:
         """Обработчик строк для catalog_type; реестр договоров группирует строки по номеру договора."""
         return {
             CatalogType.UNIVERSITY: self.load_universities,
@@ -90,7 +104,7 @@ class CatalogImportService:
             CatalogType.PRODUCT: self.load_products,
             CatalogType.CONTACT_PERSON: self.load_contact_persons,
             CatalogType.CONTRACT_REGISTRY: lambda rows: contract_registry_import_service.import_rows(
-                rows=rows, warnings=warnings
+                rows=rows, warnings=warnings, user=user
             ),
         }[catalog_type]
 

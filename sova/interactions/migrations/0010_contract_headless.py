@@ -20,7 +20,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('catalog', '0005_alter_direction_options_alter_product_options_and_more'),
-        ('interactions', '0003_alter_interactiondirection_direction_and_more'),
+        ('interactions', '0009_responsible_many_active'),
     ]
 
     operations = [

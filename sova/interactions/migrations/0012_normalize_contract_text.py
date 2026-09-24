@@ -23,7 +23,7 @@ def normalize_existing_values(apps, schema_editor) -> None:
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("interactions", "0005_interaction_triad_headless"),
+        ("interactions", "0011_interaction_triad_headless"),
     ]
 
     operations = [

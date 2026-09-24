@@ -79,7 +79,7 @@ CATALOG_IMPORT_FIELDS = {
         required=frozenset({"university", "vendor", "product", "contract_number"}),
         optional=frozenset({
             "direction", "program", "license_signed", "license_valid_until_year", "university_contact",
-            "draft_manager_full_name", "draft_status", "draft_comment",
+            "manager_full_name", "draft_status", "draft_comment",
         }),
     ),
 }

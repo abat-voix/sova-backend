@@ -1,8 +1,10 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AbstractBaseUser
 from django.db import transaction
 
+from accounts.models import SystemRole
 from sova.catalog.exceptions import CatalogImportError
 from sova.catalog.models import ContactPerson
 from sova.catalog.schemas import ImportRowWarning
@@ -13,18 +15,18 @@ from sova.interactions.exceptions import AmbiguousManagerError, ManagerNotFoundE
 from sova.interactions.models import Contract, InteractionDirection, InteractionProduct, InteractionProgram
 from sova.interactions.services import license_service, responsible_service
 
-_MANAGER_FIELD = "draft_manager_full_name"
-_DRAFT_FIELDS = (_MANAGER_FIELD, "draft_status", "draft_comment")
+_MANAGER_FIELD = "manager_full_name"
+_DRAFT_FIELDS = ("draft_status", "draft_comment")
 
 
 @dataclass
 class _ContractGroup:
-    """Строки одного договора в файле: итоговые черновые поля и договор, найденный или созданный по ним."""
+    """Строки одного договора в файле: итоговые черновые поля, ФИО менеджеров и договор, найденный или созданный по ним."""
 
     first_row: int
     drafts: dict[str, str]
-    # Строка, из которой взято ФИО менеджера, — для предупреждения «менеджер не найден».
-    manager_row: int
+    # ФИО менеджеров договора без учёта регистра → (ФИО как в файле, строка первого появления — для предупреждения).
+    manager_names: dict[str, tuple[str, int]] = field(default_factory=dict)
     contract: Contract | None = None
 
 
@@ -36,24 +38,32 @@ class ContractRegistryImportService:
     Строки группируются по договору (вуз + contract_number без учёта регистра): несколько строк одного
     договора — несколько продуктов. Привязка договора к Interaction — отдельно, в `ContractAttachmentService`.
 
-    Черновые поля (менеджер, статус, комментарий) — одно значение на договор, поэтому собираются по всем
+    Черновые поля (статус, комментарий) — одно значение на договор, поэтому собираются по всем
     строкам договора до записи: значение берётся из любой заполненной строки; колонка есть, но пуста во
     всех строках договора — значение стирается; колонки нет — поле не меняется; разные непустые значения
     в строках одного договора — ошибка строки.
 
-    «ФИО Менеджера» ответственным не назначается: оно хранится в договоре и при создании взаимодействия
-    служит подсказкой для явного выбора ответственного. Если по ФИО не находится ровно один пользователь,
-    в результат импорта добавляется предупреждение.
+    «ФИО Менеджера» — по одному в строке; КАМы договора — все ФИО его строк. ФИО ищется среди активных КАМов;
+    найденные назначаются ответственными договора (`Responsible` без взаимодействия) от имени загрузившего файл,
+    а при создании взаимодействия из договора переходят на него. Файл — источник правды: при повторной загрузке
+    КАМы, которых в файле больше нет или чьё ФИО не распознано, снимаются. Колонки нет — ответственные не
+    меняются. Не нашёлся ровно один КАМ — предупреждение в результате импорта.
     """
 
     @transaction.atomic
-    def import_rows(self, rows: Rows, warnings: list[ImportRowWarning] | None = None) -> tuple[int, int]:
+    def import_rows(
+        self,
+        rows: Rows,
+        warnings: list[ImportRowWarning] | None = None,
+        user: AbstractBaseUser | None = None,
+    ) -> tuple[int, int]:
         """
-        Апсертит headless Contract + продукты/лицензии по строкам с каноническими ключами.
+        Апсертит headless Contract + продукты/лицензии по строкам с каноническими ключами и назначает КАМов договора.
 
         Весь файл — одна транзакция: ошибки собираются по всем строкам (`CatalogImportRowsError`),
         и при любой ошибке импорт откатывается целиком. Возвращает (создано договоров, обновлено договоров);
-        предупреждения (менеджер не найден) добавляются в `warnings`, если список передан.
+        предупреждения (менеджер не найден) добавляются в `warnings`, если список передан. `user` — загрузивший
+        файл, автор назначений.
         """
         rows = list(rows)
         groups = self._collect_groups(rows=rows)
@@ -66,17 +76,18 @@ class ContractRegistryImportService:
                 (created_ids if was_created else updated_ids).add(contract.pk)
 
         import_file_service.process_rows(rows=iter(rows), handler=_handle_row)
-        manager_warnings = self._check_managers(groups=groups.values())
-        if warnings is not None:
-            warnings.extend(manager_warnings)
+        if rows and _MANAGER_FIELD in rows[0][1]:
+            manager_warnings = self._sync_managers(groups=groups.values(), assigned_by=user)
+            if warnings is not None:
+                warnings.extend(manager_warnings)
         return len(created_ids), len(updated_ids)
 
     def _collect_groups(self, rows: list[tuple[int, dict]]) -> dict[tuple, _ContractGroup]:
         """
-        Итоговые черновые поля каждого договора файла: {(вуз, номер): группа строк договора}.
+        Итоговые черновые поля и ФИО менеджеров каждого договора файла: {(вуз, номер): группа строк договора}.
 
         В значения попадают только колонки, которые есть в файле: первое непустое значение из строк договора,
-        иначе пустая строка (значение будет стёрто). Строки с ошибкой вуза или номера пропускаются — их
+        иначе пустая строка (значение будет стёрто). ФИО менеджеров собираются по всем строкам договора. Строки с ошибкой вуза или номера пропускаются — их
         ошибки сообщит основной проход.
         """
         present = [name for name in _DRAFT_FIELDS if rows and name in rows[0][1]]
@@ -86,46 +97,45 @@ class ContractRegistryImportService:
                 key = self._contract_key(row=row)
             except (CatalogImportError, KeyError):
                 continue
-            group = groups.setdefault(
-                key, _ContractGroup(first_row=row_number, drafts=dict.fromkeys(present, ""), manager_row=row_number)
-            )
+            group = groups.setdefault(key, _ContractGroup(first_row=row_number, drafts=dict.fromkeys(present, "")))
             for name in present:
                 if not group.drafts[name]:
                     group.drafts[name] = import_file_service.to_text(row.get(name))
-                    if name == _MANAGER_FIELD and group.drafts[name]:
-                        group.manager_row = row_number
+            manager_name = import_file_service.to_text(row.get(_MANAGER_FIELD))
+            if manager_name:
+                group.manager_names.setdefault(text_key(manager_name), (manager_name, row_number))
         return groups
 
-    def _check_managers(self, groups) -> list[ImportRowWarning]:
+    def _sync_managers(self, groups, assigned_by: AbstractBaseUser | None) -> list[ImportRowWarning]:
         """
-        Предупреждения о менеджерах, которых нельзя будет предложить ответственными.
+        Назначает договорам КАМов из «ФИО Менеджера» и снимает тех, кого в файле нет.
 
-        Менеджер из файла никуда не назначается: ФИО хранится в договоре, а при создании взаимодействия
-        по нему подбирается подсказка (`ResponsibleService.suggest_manager`). Если пользователя с таким
-        ФИО нет или их несколько, об этом лучше узнать сразу при загрузке.
+        ФИО ищется среди активных КАМов (роль `kam`); не нашёлся ровно один — предупреждение на строку, где ФИО
+        встретилось впервые, и КАМ этому ФИО не назначается.
         """
         warnings: list[ImportRowWarning] = []
-        users = list(get_user_model().objects.filter(is_active=True))
+        kams = list(get_user_model().objects.filter(is_active=True, system_role__role=SystemRole.KAM))
         for group in groups:
-            full_name = group.drafts.get(_MANAGER_FIELD)
-            if group.contract is None or not full_name:
+            if group.contract is None:
                 continue
-            try:
-                responsible_service.find_manager(full_name=full_name, users=users)
-            except ManagerNotFoundError:
-                reason = "нет пользователя с таким ФИО"
-            except AmbiguousManagerError:
-                reason = "несколько пользователей с таким ФИО"
-            else:
-                continue
-            warnings.append(
-                ImportRowWarning(
-                    row_number=group.manager_row,
-                    message=(
-                        f"менеджер {full_name} договора {group.contract.contract_number} не будет предложен "
-                        f"ответственным: {reason}"
-                    ),
+            managers = []
+            for full_name, row_number in group.manager_names.values():
+                try:
+                    managers.append(responsible_service.find_manager(full_name=full_name, users=kams))
+                except ManagerNotFoundError:
+                    reason = "нет КАМа с таким ФИО"
+                except AmbiguousManagerError:
+                    reason = "несколько КАМов с таким ФИО"
+                else:
+                    continue
+                warnings.append(
+                    ImportRowWarning(
+                        row_number=row_number,
+                        message=f"менеджер {full_name} договора {group.contract.contract_number} не назначен: {reason}",
+                    )
                 )
+            responsible_service.sync_contract_responsibles(
+                contract=group.contract, managers=managers, assigned_by=assigned_by
             )
         return warnings
 
@@ -153,7 +163,9 @@ class ContractRegistryImportService:
 
         # Явный filter+create вместо get_or_create: interaction__isnull и contract_number__iexact — лукапы,
         # а не поля модели, их нельзя передать как параметры создания. Номер сравнивается без учёта регистра.
-        contract = Contract.objects.filter(
+        # Блокировка: параллельная привязка договора (она тоже блокирует строку) дождётся конца импорта и
+        # перенесёт назначенных им КАМов, а не оставит их на уже привязанном договоре.
+        contract = Contract.objects.select_for_update().filter(
             contract_number__iexact=contract_number, university=university, interaction__isnull=True
         ).first()
         was_created = contract is None

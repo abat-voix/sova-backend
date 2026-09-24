@@ -8,7 +8,7 @@ from sova.interactions.services.responsible import (
     ResponsibleService,
     responsible_service,
 )
-from sova.interactions.services.visibility import visible_interactions
+from sova.interactions.services.visibility import visible_contracts, visible_interactions
 
 __all__ = [
     "ContactLinkService",
@@ -19,5 +19,6 @@ __all__ = [
     "contract_attachment_service",
     "license_service",
     "responsible_service",
+    "visible_contracts",
     "visible_interactions",
 ]

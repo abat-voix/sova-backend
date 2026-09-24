@@ -19,7 +19,7 @@ class CatalogImportViewSet(GenericViewSet):
     Колонки файла переводятся в поля через маппинг выбранного типа (/api/catalog/import-mappings/).
     Импорт — всё или ничего: при любой ошибке ничего не сохраняется, в ответе — все ошибки строк.
     Успешный импорт может вернуть предупреждения (`warnings`): строки загружены, но часть данных не
-    применена — например, менеджер из реестра не найден среди пользователей и не назначен ответственным.
+    применена — например, менеджер из реестра не найден среди КАМов и не назначен ответственным.
     """
 
     serializer_class = serializers.CatalogImportSerializer
@@ -42,6 +42,7 @@ class CatalogImportViewSet(GenericViewSet):
             result = catalog_import_service.import_file(
                 catalog_type=validated_data["catalog_type"],
                 source=validated_data["file"],
+                user=request.user,
             )
         except CatalogImportRowsError as error:
             return Response(

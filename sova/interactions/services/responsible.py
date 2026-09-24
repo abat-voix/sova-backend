@@ -6,7 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from sova.interactions.exceptions import AmbiguousManagerError, ManagerNotFoundError, NoActiveResponsibleError
-from sova.interactions.models import Interaction, Responsible
+from sova.interactions.models import Contract, Interaction, Responsible
 from sova.notifications.enum import NotifyType
 from sova.notifications.services.event_notification import event_notification_service
 from sova.notifications.services.links import interaction_link
@@ -19,15 +19,6 @@ class ResponsibleService:
     """
     Назначение и снятие ответственных менеджеров (КАМов) взаимодействия.
 
-    Responsible — журнал с историей: запись никогда не перезаписывается, смена
-    ответственного закрывает действующую запись (`unassigned_at`) и создаёт новую.
-    Одна действующая запись на взаимодействие гарантируется ограничением БД
-    `one_active_responsible_per_interaction`; блокировка строки взаимодействия
-    сериализует параллельные назначения, чтобы вместо ошибки ограничения второй
-    запрос дождался первого.
-
-    Менеджер из реестра договоров (ФИО строкой) не назначается автоматически: по ФИО подбирается
-    пользователь-подсказка (`suggest_manager`), а назначение делает человек явно.
     Responsible — журнал с историей: запись никогда не перезаписывается, снятие закрывает
     её (`unassigned_at`). Действующих КАМов у взаимодействия может быть несколько; один
     менеджер не назначается на взаимодействие дважды — это гарантирует ограничение БД
@@ -37,6 +28,10 @@ class ResponsibleService:
     (пул КАМов взаимодействия). При снятии открытые действия снятого менеджера уходят в пул,
     завершённые исполнения остаются в истории. Новый КАМ получает уведомление «Назначение КАМа»
     по настройкам этого типа.
+
+    Менеджеров из реестра договоров назначает импорт: они становятся ответственными договора
+    (`sync_contract_responsibles`) и переходят на взаимодействие при его создании из договора
+    (`transfer_from_contract`).
     """
 
     @transaction.atomic
@@ -76,8 +71,71 @@ class ResponsibleService:
         self._release_open_action_instances(interaction=interaction, manager_id=current.manager_id)
         return current
 
+    @transaction.atomic
+    def sync_contract_responsibles(
+        self,
+        contract: Contract,
+        managers: Iterable[AbstractBaseUser],
+        assigned_by: AbstractBaseUser | None,
+    ) -> None:
+        """
+        Приводит действующих ответственных headless-договора к `managers` (реестр — источник правды).
+
+        Недостающие назначаются от имени `assigned_by`, отсутствующие в `managers` снимаются и остаются в
+        истории. Уведомлений нет: у headless-договора нет карточки, на которую вела бы ссылка.
+        """
+        wanted = {manager.pk: manager for manager in managers}
+        current = Responsible.objects.select_for_update().filter(
+            contract=contract,
+            interaction__isnull=True,
+            unassigned_at__isnull=True,
+        )
+        kept: set[int] = set()
+        for responsible in current:
+            if responsible.manager_id in wanted:
+                kept.add(responsible.manager_id)
+            else:
+                self._close(responsible=responsible)
+        for manager_id, manager in wanted.items():
+            if manager_id not in kept:
+                Responsible.objects.create(contract=contract, manager=manager, assigned_by=assigned_by)
+
+    @transaction.atomic
+    def transfer_from_contract(
+        self,
+        contract: Contract,
+        interaction: Interaction,
+        assigned_by: AbstractBaseUser | None,
+    ) -> None:
+        """
+        Переводит действующих ответственных договора на взаимодействие, созданное из него.
+
+        Это те же записи (`UPDATE`): `contract` остаётся, а дата и автор назначения — момент привязки и тот,
+        кто привязал. Каждый перешедший КАМ получает «Назначение КАМа».
+        """
+        transferred = list(
+            Responsible.objects.select_for_update(of=("self",)).filter(
+                contract=contract,
+                interaction__isnull=True,
+                unassigned_at__isnull=True,
+            ).select_related("manager")
+        )
+        Responsible.objects.filter(pk__in=[responsible.pk for responsible in transferred]).update(
+            interaction=interaction,
+            assigned_at=timezone.now(),
+            assigned_by=assigned_by,
+        )
+        for responsible in transferred:
+            self._notify_assigned(interaction=interaction, manager=responsible.manager, assigned_by=assigned_by)
+
     def _get_active(self, interaction: Interaction, manager_id: int) -> Responsible | None:
         """Возвращает действующее назначение менеджера на взаимодействие."""
+        return Responsible.objects.filter(
+            interaction=interaction,
+            manager_id=manager_id,
+            unassigned_at__isnull=True,
+        ).first()
+
     def find_manager(self, full_name: str, users: Iterable[AbstractBaseUser] | None = None) -> AbstractBaseUser:
         """
         Активный пользователь по ФИО из файла: сравнение с first_name/last_name в обоих порядках слов.
@@ -97,25 +155,6 @@ class ResponsibleService:
         if len(candidates) > 1:
             raise AmbiguousManagerError(f"Менеджер неоднозначен: {full_name}")
         return candidates[0]
-
-    def suggest_manager(
-        self, full_name: str, users: Iterable[AbstractBaseUser] | None = None
-    ) -> AbstractBaseUser | None:
-        """Подсказка ответственного по ФИО из файла: единственный найденный пользователь, иначе None."""
-        if not full_name:
-            return None
-        try:
-            return self.find_manager(full_name=full_name, users=users)
-        except (ManagerNotFoundError, AmbiguousManagerError):
-            return None
-
-    def _get_current(self, interaction: Interaction) -> Responsible | None:
-        """Возвращает действующее назначение взаимодействия."""
-        return Responsible.objects.filter(
-            interaction=interaction,
-            manager_id=manager_id,
-            unassigned_at__isnull=True,
-        ).first()
 
     def _close(self, responsible: Responsible) -> None:
         """Закрывает назначение текущим моментом."""

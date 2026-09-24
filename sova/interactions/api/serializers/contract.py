@@ -5,11 +5,10 @@ from rest_framework import serializers
 
 from drf_spectacular.utils import extend_schema_field
 
-from sova.core.api.serializers import UserShortSerializer
 from sova.core.files import validate_file_size
 from sova.interactions.api.serializers.interaction import InteractionShortSerializer
+from sova.interactions.api.serializers.responsible import ResponsibleShortSerializer
 from sova.interactions.models import Contract
-from sova.interactions.services import responsible_service
 from sova.interactions.services import visible_interactions
 
 
@@ -29,12 +28,11 @@ class ContractSerializer(serializers.ModelSerializer):
         label=_("Взаимодействие"),
         help_text=_("Показывается развёрнуто, для записи см. write-сериализатор"),
     )
-    suggested_manager = serializers.SerializerMethodField(
-        label=_("Предлагаемый ответственный"),
+    current_responsibles = serializers.SerializerMethodField(
+        label=_("Действующие ответственные"),
         help_text=_(
-            "Пользователь, найденный по ФИО менеджера из реестра (draft_manager_full_name), — подсказка для "
-            "выбора ответственного при создании взаимодействия; null — договор уже привязан, ФИО пусто, "
-            "пользователь не найден или найдено несколько"
+            "КАМы headless-договора, назначенные импортом реестра; при создании взаимодействия переходят на "
+            "него. У привязанного договора — пустой список, ответственные — в карточке взаимодействия"
         ),
     )
     files_count = serializers.IntegerField(
@@ -59,24 +57,24 @@ class ContractSerializer(serializers.ModelSerializer):
             "corrected_at",
             "signed_at",
             "interaction",
-            "draft_manager_full_name",
-            "suggested_manager",
+            "current_responsibles",
             "files_count",
             "created_at",
             "updated_at",
         )
 
-    @extend_schema_field(UserShortSerializer(allow_null=True))
-    def get_suggested_manager(self, instance: Contract) -> dict | None:
-        """Подсказка только для договора без взаимодействия; активные пользователи выбираются один раз на ответ."""
-        if instance.interaction_id is not None or not instance.draft_manager_full_name:
-            return None
-        if "active_users" not in self.context:
-            self.context["active_users"] = list(get_user_model().objects.filter(is_active=True))
-        manager = responsible_service.suggest_manager(
-            full_name=instance.draft_manager_full_name, users=self.context["active_users"]
-        )
-        return UserShortSerializer(manager).data if manager is not None else None
+    @extend_schema_field(ResponsibleShortSerializer(many=True))
+    def get_current_responsibles(self, instance: Contract) -> list[dict]:
+        """Действующие КАМы договора без взаимодействия; ViewSet подгружает их через Prefetch."""
+        current = getattr(instance, "current_responsibles", None)
+        if current is None:
+            current = list(
+                instance.responsibles
+                .filter(interaction__isnull=True, unassigned_at__isnull=True)
+                .select_related("manager")
+                .order_by("assigned_at", "pk"),
+            )
+        return ResponsibleShortSerializer(current, many=True, context=self.context).data
 
     def get_download_url(self, obj: Contract) -> str | None:
         if not obj.file:
@@ -110,7 +108,17 @@ class WriteContractSerializer(serializers.ModelSerializer):
         extra_kwargs = {"interaction": {"required": True, "allow_null": False}}
 
     def validate_interaction(self, interaction):
-        """Договор можно создать только для видимого пользователю взаимодействия."""
+        """
+        Договор можно создать только для видимого пользователю взаимодействия; сменить его нельзя.
+
+        Headless-договор привязывается только через `attach-to-new-interaction`: там переносятся его направления,
+        программы, продукты и КАМы и проверяется контрагент.
+        """
+        if self.instance is not None and self.instance.interaction_id != interaction.pk:
+            raise serializers.ValidationError(
+                _("Взаимодействие договора менять нельзя; договор без взаимодействия привязывается отдельным действием."),
+                code="interaction_immutable",
+            )
         request = self.context["request"]
         if not visible_interactions(request.user).filter(pk=interaction.pk).exists():
             raise serializers.ValidationError(_("Взаимодействие не найдено."), code="not_found")
@@ -148,7 +156,7 @@ class WriteContractSerializer(serializers.ModelSerializer):
 
 
 class AttachToNewInteractionSerializer(serializers.Serializer):
-    """Создание взаимодействия из договора — ответственный, если его нужно указать явно."""
+    """Создание взаимодействия из договора — дополнительный ответственный, если нужен."""
 
     manager = serializers.PrimaryKeyRelatedField(
         queryset=get_user_model().objects.filter(is_active=True),
@@ -156,7 +164,7 @@ class AttachToNewInteractionSerializer(serializers.Serializer):
         allow_null=True,
         label=_("Ответственный менеджер"),
         help_text=_(
-            "Id активного пользователя — ответственный нового взаимодействия. Не указан — взаимодействие "
-            "создаётся без ответственного; подсказка — suggested_manager договора"
+            "Id активного пользователя; добавляется к КАМам, перешедшим с договора. Не указан — ответственные "
+            "только с договора"
         ),
     )

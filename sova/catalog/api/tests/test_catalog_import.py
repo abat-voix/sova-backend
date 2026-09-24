@@ -6,6 +6,8 @@ from openpyxl import Workbook
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
+
 from sova.catalog.enum import CatalogType
 from sova.catalog.models import Vendor
 from sova.catalog.tests.factories import (
@@ -15,6 +17,7 @@ from sova.catalog.tests.factories import (
     VendorFactory,
 )
 from sova.core.tests.factories import UserFactory
+from sova.interactions.models import Responsible
 
 
 def _xlsx(name: str, *rows: tuple) -> SimpleUploadedFile:
@@ -125,17 +128,18 @@ class CatalogImportApiTestCase(APITestCase):
 
 
 class ContractRegistryImportWarningsApiTestCase(APITestCase):
-    """Менеджер реестра, не найденный среди пользователей, — предупреждение в ответе, а не ошибка."""
+    """Менеджер реестра, не найденный среди КАМов, — предупреждение в ответе, а не ошибка."""
 
     def setUp(self) -> None:
-        self.client.force_authenticate(user=UserFactory())
+        self.user = UserFactory()
+        self.client.force_authenticate(user=self.user)
         self.url = reverse("catalog:catalog-import-list")
         columns = {
             "university": "Вуз",
             "vendor": "Вендор",
             "product": "ПО",
             "contract_number": "Номер",
-            "draft_manager_full_name": "Менеджер",
+            "manager_full_name": "Менеджер",
         }
         for target_field, source_column in columns.items():
             CatalogImportMappingFactory(
@@ -162,9 +166,25 @@ class ContractRegistryImportWarningsApiTestCase(APITestCase):
                 {
                     "row": 2,
                     "message": (
-                        "менеджер Петров Пётр договора Д-1 не будет предложен ответственным: "
-                        "нет пользователя с таким ФИО"
+                        "менеджер Петров Пётр договора Д-1 не назначен: нет КАМа с таким ФИО"
                     ),
                 }
             ],
         )
+
+    def test_found_kam_is_assigned_by_uploader(self) -> None:
+        kam = UserFactory(first_name="Пётр", last_name="Петров")
+        UserRole.objects.create(user=kam, role=SystemRole.KAM)
+        file = _xlsx(
+            "registry.xlsx", ("Вуз", "Вендор", "ПО", "Номер", "Менеджер"), ("МГУ", "1С", "IDE", "Д-1", "Петров Пётр")
+        )
+
+        response = self.client.post(
+            path=self.url, data={"catalog_type": CatalogType.CONTRACT_REGISTRY, "file": file}, format="multipart"
+        )
+
+        # Проверяем: КАМ назначен договору, автор назначения — загрузивший файл
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        responsible = Responsible.objects.get(contract__contract_number="Д-1")
+        self.assertEqual((responsible.manager_id, responsible.assigned_by_id), (kam.pk, self.user.pk))
+        self.assertEqual(response.data["warnings"], [])

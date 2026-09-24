@@ -33,9 +33,9 @@ class ContractAttachmentService:
         """
         Создаёт новый Interaction из headless-договора и переносит на него все его записи.
 
-        Ответственным назначается только `manager`, выбранный явно. ФИО менеджера из договора — лишь
-        подсказка для выбора (`ResponsibleService.suggest_manager`); без `manager` взаимодействие
-        создаётся без ответственного, как и при обычном создании.
+        Действующие ответственные договора (назначенные импортом реестра) становятся ответственными
+        взаимодействия от имени `assigned_by`. `manager`, если передан, добавляется к ним; уже перешедший
+        с договора менеджер не дублируется.
         """
         self._check_headless(contract=contract)
         interaction = Interaction.objects.create(
@@ -44,6 +44,7 @@ class ContractAttachmentService:
             comment=contract.draft_comment,
         )
         self._attach(contract=contract, interaction=interaction)
+        responsible_service.transfer_from_contract(contract=contract, interaction=interaction, assigned_by=assigned_by)
 
         if manager is not None:
             responsible_service.assign(interaction=interaction, manager=manager, assigned_by=assigned_by)
@@ -52,7 +53,11 @@ class ContractAttachmentService:
 
     @transaction.atomic
     def attach_to_existing_interaction(self, contract: Contract, interaction: Interaction) -> None:
-        """Привязывает дополнительный договор к уже существующему Interaction (переиздание/расширение)."""
+        """
+        Привязывает дополнительный договор к уже существующему Interaction (переиздание/расширение).
+
+        Ответственные договора не переносятся и остаются на договоре.
+        """
         self._check_headless(contract=contract)
         self._attach(contract=contract, interaction=interaction)
 
