@@ -142,6 +142,26 @@ class MyTasksScopeTestCase(APITestCase):
         self.assertEqual(self.response_ids(), {str(own.pk)})
         self.assertEqual(self.response_ids({"scope": "mine"}), {str(own.pk)})
 
+    def test_default_scope_includes_pool_of_own_interactions(self) -> None:
+        """«Мои» — ещё и действия без ответственного во взаимодействиях, где пользователь действующий КАМ."""
+        kam = self.create_user(SystemRole.KAM)
+        colleague = self.create_user(SystemRole.KAM)
+        pool = self.create_action(manager=kam)
+        responsible_service.assign(
+            interaction=pool.stage_instance.workflow_instance.interaction,
+            manager=colleague,
+            assigned_by=None,
+        )
+        self.create_action(manager=colleague)
+        left = self.create_action(manager=kam)
+        responsible_service.unassign(interaction=left.stage_instance.workflow_instance.interaction, manager=kam)
+        self.client.force_authenticate(user=kam)
+
+        # Проверяем, что общий пул виден обоим КАМам, а пул чужого и покинутого взаимодействия — нет
+        self.assertEqual(self.response_ids(), {str(pool.pk)})
+        self.client.force_authenticate(user=colleague)
+        self.assertIn(str(pool.pk), self.response_ids())
+
     def test_scope_all_returns_everything_available_to_the_kam(self) -> None:
         """scope=all у КАМа не расширяет выдачу за пределы его взаимодействий, а не отклоняется."""
         kam = self.create_user(SystemRole.KAM)

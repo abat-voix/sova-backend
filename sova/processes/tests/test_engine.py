@@ -112,16 +112,16 @@ class StartTest(EngineTestCase):
         untimed_instance = self.action_instance(process, untimed)
         self.assertEqual(untimed_instance.planned_end - untimed_instance.planned_start, timedelta(days=1))
 
-    def test_start_assigns_current_responsible_manager(self) -> None:
-        """Ответственный за действие — действующий менеджер взаимодействия."""
-        manager = ResponsibleFactory(interaction=self.interaction).manager
+    def test_start_leaves_responsible_empty_with_manager(self) -> None:
+        """Действия создаются в пуле КАМов взаимодействия, даже если КАМ один."""
+        ResponsibleFactory(interaction=self.interaction)
         stage = self.builder.stage("Первый")
         action = self.builder.action(stage, "А")
 
         process = self.start()
 
-        # Проверяем ответственного
-        self.assertEqual(self.action_instance(process, action).responsible, manager)
+        # Проверяем пустого ответственного
+        self.assertIsNone(self.action_instance(process, action).responsible)
 
     def test_start_leaves_responsible_empty_without_manager(self) -> None:
         """Без назначенного менеджера ответственного у действия нет."""
@@ -292,6 +292,9 @@ class CompleteActionTest(EngineTestCase):
         """Назначенный ответственный не заменяется."""
         manager = ResponsibleFactory(interaction=self.interaction).manager
         process = self.start()
+        instance = self.action_instance(process, self.action)
+        instance.responsible = manager
+        instance.save(update_fields=["responsible"])
 
         self.complete(process, self.action)
 
@@ -668,6 +671,9 @@ class ConditionalActionTest(EngineTestCase):
         self.assertEqual(executions[0].status, COMPLETED)
         self.assertTrue(ActionResult.objects.filter(action_instance=executions[0]).exists())
         self.assertEqual(executions[1].status, IN_PROGRESS)
+        # Проверяем, что старое исполнение за выполнившим, а новое — в пуле
+        self.assertEqual(executions[0].responsible, self.user)
+        self.assertIsNone(executions[1].responsible)
         # Проверяем, что этап остался открытым
         self.assertEqual(self.stage_status(process, self.stage), StageInstanceStatus.IN_PROGRESS)
 
@@ -877,6 +883,8 @@ class CancelStageTest(EngineTestCase):
         self.assertEqual(self.action_status(process, self.a2), IN_PROGRESS)
         self.assertEqual(self.action_instance(process, self.a3).execution_no, 2)
         self.assertEqual(self.action_status(process, self.a3), PENDING)
+        # Проверяем, что новые исполнения в пуле
+        self.assertIsNone(self.action_instance(process, self.a2).responsible)
         # Проверяем, что старые результаты остались
         self.assertEqual(ActionResult.objects.filter(action_instance__action__in=(self.a2, self.a3)).count(), 2)
         # Проверяем описание отката

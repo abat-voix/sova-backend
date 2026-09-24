@@ -39,7 +39,7 @@ class DeadlineItem:
 
 @dataclass(frozen=True)
 class _Candidate:
-    """Объект со сроком до получателей: ответственный известен только у действия."""
+    """Объект со сроком до получателей: ответственный известен только у действия, и то не всегда (пул)."""
 
     object_id: UUID
     deadline: datetime
@@ -87,16 +87,16 @@ class DeadlineService:
             event = self._event(rule=rule, deadline=candidate.deadline, now=now)
             if event is None:
                 continue
-            responsible = (
-                candidate.responsible
-                if rule.notify_type == NotifyType.ACTION_DEADLINE
-                else resolver.interaction_responsible(candidate.interaction.pk)
-            )
+            # У действия свой ответственный; действие из пула, этап и процесс — все КАМы взаимодействия
+            if rule.notify_type == NotifyType.ACTION_DEADLINE and candidate.responsible is not None:
+                responsibles = [candidate.responsible]
+            else:
+                responsibles = resolver.interaction_responsibles(candidate.interaction.pk)
             recipients = resolver.recipients(
                 rule=rule,
                 event=event,
                 interaction_id=candidate.interaction.pk,
-                responsible=responsible,
+                responsibles=responsibles,
             )
             if not recipients:
                 continue

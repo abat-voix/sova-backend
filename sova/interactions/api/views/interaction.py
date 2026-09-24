@@ -83,7 +83,7 @@ class InteractionViewSet(SovaBaseViewSet):
                     "responsibles",
                     queryset=Responsible.objects.filter(
                         unassigned_at__isnull=True,
-                    ).select_related("manager"),
+                    ).select_related("manager").order_by("assigned_at", "pk"),
                     to_attr="current_responsibles",
                 ),
             )
@@ -115,9 +115,9 @@ class InteractionViewSet(SovaBaseViewSet):
     )
     def assign_responsible(self, request, pk=None) -> Response:
         """
-        Назначает ответственного менеджера.
+        Добавляет ответственного менеджера.
 
-        Действующий ответственный, если он есть, закрывается и остаётся в истории.
+        Действующие ответственные остаются: у взаимодействия может быть несколько КАМов.
         Повторное назначение того же менеджера ничего не меняет и возвращает 200.
         """
         interaction = self.get_object()
@@ -139,23 +139,29 @@ class InteractionViewSet(SovaBaseViewSet):
         )
 
     @extend_schema(
-        request=None,
+        request=serializers.UnassignResponsibleSerializer,
         responses={200: serializers.ResponsibleSerializer},
     )
     @action(
         methods=["POST"],
         detail=True,
         url_path="unassign-responsible",
+        serializer_class=serializers.UnassignResponsibleSerializer,
     )
     def unassign_responsible(self, request, pk=None) -> Response:
-        """Снимает действующего ответственного; запись остаётся в истории."""
+        """Снимает указанного ответственного; запись остаётся в истории, остальные КАМы не меняются."""
         interaction = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
         try:
-            responsible = responsible_service.unassign(interaction=interaction)
+            responsible = responsible_service.unassign(
+                interaction=interaction,
+                manager=serializer.validated_data["manager"],
+            )
         except NoActiveResponsibleError:
             raise ConflictError(
-                detail=_("У взаимодействия нет действующего ответственного."),
+                detail=_("Менеджер не назначен ответственным за взаимодействие."),
                 code="no_active_responsible",
             )
 

@@ -18,6 +18,8 @@ def build_summary(rows: Iterable[ReportRow]) -> dict:
 
     Взаимодействие с несколькими продуктами даёт несколько строк, но в распределениях
     считается один раз в каждой группе; число строк, программ и продуктов — отдельно.
+    Взаимодействие с несколькими КАМами входит в группу каждого из них, поэтому сумма
+    `by_responsible` может превышать `interactions_count`.
     """
     interactions = set()
     programs = set()
@@ -39,8 +41,13 @@ def build_summary(rows: Iterable[ReportRow]) -> dict:
         if row.interaction_product_id:
             products.add(row.interaction_product_id)
 
-        by_responsible[row.responsible_id].add(row.interaction_id)
-        responsible_names[row.responsible_id] = row.responsible or NO_RESPONSIBLE
+        if row.responsible_ids:
+            for responsible_id, name in zip(row.responsible_ids, row.responsible):
+                by_responsible[responsible_id].add(row.interaction_id)
+                responsible_names[responsible_id] = name
+        else:
+            by_responsible[None].add(row.interaction_id)
+            responsible_names[None] = NO_RESPONSIBLE
         by_university[row.university_id].add(row.interaction_id)
         university_names[row.university_id] = row.university
 

@@ -155,14 +155,18 @@ class ReportRowSerializer(serializers.Serializer):
     interaction_program_id = serializers.UUIDField(allow_null=True)
     product_id = serializers.UUIDField(allow_null=True)
     interaction_product_id = serializers.UUIDField(allow_null=True)
-    responsible_id = serializers.IntegerField(allow_null=True)
+    responsible_ids = serializers.ListField(
+        child=serializers.IntegerField(), help_text="Действующие КАМы взаимодействия по алфавиту."
+    )
     university = serializers.CharField(required=False)
     direction = serializers.CharField(required=False)
     program = serializers.CharField(required=False)
     product = serializers.CharField(required=False)
     process_status = ProcessStatusSerializer(many=True, required=False)
     active_stages = ActiveStageSerializer(many=True, required=False)
-    responsible = serializers.CharField(required=False)
+    responsible = serializers.ListField(
+        child=serializers.CharField(), required=False, help_text="Имена КАМов в порядке `responsible_ids`."
+    )
     created_at = serializers.DateTimeField(required=False)
     updated_at = serializers.DateTimeField(required=False)
     contract_numbers = serializers.ListField(child=serializers.CharField(), required=False)

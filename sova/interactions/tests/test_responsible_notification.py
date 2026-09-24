@@ -43,20 +43,31 @@ class ResponsibleNotificationTest(TestCase):
         self.assertEqual(kwargs["user_ids"], [self.kam.pk])
         self.assertEqual(kwargs["link"], f"/interactions?interaction={self.interaction.pk}")
 
-    def test_text_counts_transferred_tasks(self, task) -> None:
-        """Открытые задачи взаимодействия переходят новому КАМу — их число в тексте."""
-        ActionInstanceFactory(
+    def test_open_tasks_are_not_transferred(self, task) -> None:
+        """Открытые задачи взаимодействия новому КАМу не передаются — в тексте нет строки о задачах."""
+        instance = ActionInstanceFactory(
             stage_instance__workflow_instance__interaction=self.interaction,
             responsible=None,
         )
 
         self.assign(manager=self.kam, assigned_by=self.head)
+        instance.refresh_from_db()
 
-        # Проверяем строку о переданных задачах
-        self.assertEqual(
-            self.system_texts(task),
-            [f"Вас назначили КАМом — {self.interaction.university.name}\n\nПередано открытых задач: 1"],
-        )
+        # Проверяем, что задача осталась в пуле
+        self.assertIsNone(instance.responsible_id)
+        # Проверяем текст без строки о задачах
+        self.assertEqual(self.system_texts(task), [f"Вас назначили КАМом — {self.interaction.university.name}"])
+
+    def test_second_kam_is_notified(self, task) -> None:
+        """Второй КАМ взаимодействия тоже получает уведомление о назначении."""
+        self.assign(manager=self.kam, assigned_by=self.head)
+        task.delay.reset_mock()
+        second = UserFactory()
+
+        self.assign(manager=second, assigned_by=self.head)
+
+        # Проверяем получателя
+        self.assertEqual(task.delay.call_args_list[0].kwargs["user_ids"], [second.pk])
 
     def test_same_kam_again_sends_nothing(self, task) -> None:
         """Повторное назначение того же КАМа ничего не отправляет."""

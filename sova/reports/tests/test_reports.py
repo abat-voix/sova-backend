@@ -155,8 +155,39 @@ class InteractionReportRowsTestCase(ReportTestMixin, APITestCase):
         Responsible.objects.filter(interaction=interaction).update(unassigned_at="2026-01-01T00:00:00Z")
         responsible_service.assign(interaction=interaction, manager=new, assigned_by=None)
 
-        self.assertEqual(self.preview()["results"][0]["responsible_id"], new.pk)
+        self.assertEqual(self.preview()["results"][0]["responsible_ids"], [new.pk])
         self.assertEqual(self.preview(responsibles=[old.pk])["count"], 0)
+
+    def test_several_responsibles(self) -> None:
+        """Все действующие КАМы в строке по алфавиту; фильтр находит взаимодействие по любому из них."""
+        interaction = InteractionFactory()
+        yakovlev = UserFactory(first_name="Яков", last_name="Яковлев")
+        antonov = UserFactory(first_name="Антон", last_name="Антонов")
+        for manager in (yakovlev, antonov):
+            responsible_service.assign(interaction=interaction, manager=manager, assigned_by=None)
+
+        row = self.preview()["results"][0]
+
+        self.assertEqual(row["responsible_ids"], [antonov.pk, yakovlev.pk])
+        self.assertEqual(row["responsible"], ["Антон Антонов", "Яков Яковлев"])
+        self.assertEqual(self.preview(responsibles=[yakovlev.pk])["count"], 1)
+
+    def test_ordering_by_first_responsible(self) -> None:
+        """Сортировка по ответственному — по первому КАМу по алфавиту, без КАМа — в конце."""
+        several = InteractionFactory()
+        for last_name in ("Яковлев", "Антонов"):
+            responsible_service.assign(
+                interaction=several, manager=UserFactory(last_name=last_name), assigned_by=None
+            )
+        single = InteractionFactory()
+        responsible_service.assign(interaction=single, manager=UserFactory(last_name="Борисов"), assigned_by=None)
+        nobody = InteractionFactory()
+
+        rows = self.preview(ordering="responsible")["results"]
+
+        self.assertEqual(
+            [row["interaction_id"] for row in rows], [str(several.pk), str(single.pk), str(nobody.pk)]
+        )
 
     def test_selected_columns_only(self) -> None:
         InteractionFactory()
@@ -268,6 +299,20 @@ class InteractionReportSummaryTestCase(ReportTestMixin, APITestCase):
         self.assertEqual(data["products_count"], 2)
         self.assertEqual(data["by_university"][0]["interactions"], 2)
         self.assertEqual(data["by_process_status"][0]["status"], None)
+
+    def test_interaction_counts_for_each_responsible(self) -> None:
+        """Взаимодействие с двумя КАМами попадает в группу каждого; без КАМа — в «Без ответственного»."""
+        first, second = UserFactory(), UserFactory()
+        shared = InteractionFactory()
+        for manager in (first, second):
+            responsible_service.assign(interaction=shared, manager=manager, assigned_by=None)
+        InteractionFactory()
+
+        data = self.client.post(self.summary_url, data={}, format="json").data
+
+        groups = {item["id"]: item["interactions"] for item in data["by_responsible"]}
+        self.assertEqual(groups, {str(first.pk): 1, str(second.pk): 1, None: 1})
+        self.assertEqual(data["interactions_count"], 2)
 
 
 @override_settings(CELERY_TASK_ALWAYS_EAGER=True)

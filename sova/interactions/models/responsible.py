@@ -10,7 +10,8 @@ class Responsible(UUIDModel):
 
     Привязана к Interaction (взаимодействию), а не к University/B2CClient целиком — у каждого взаимодействия
     своя история ответственных, параллельные взаимодействия одного контрагента могут вести
-    разных людей.
+    разных людей. Действующих КАМов у взаимодействия может быть несколько, но один менеджер
+    не может быть назначен на одно взаимодействие дважды одновременно.
     """
 
     assigned_at = models.DateTimeField(
@@ -50,9 +51,9 @@ class Responsible(UUIDModel):
         ordering = ["-assigned_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["interaction"],
+                fields=["interaction", "manager"],
                 condition=models.Q(unassigned_at__isnull=True),
-                name="one_active_responsible_per_interaction",
+                name="one_active_responsible_per_manager",
             ),
         ]
 

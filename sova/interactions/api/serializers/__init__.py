@@ -34,6 +34,7 @@ from sova.interactions.api.serializers.responsible import (
     AssignResponsibleSerializer,
     ResponsibleSerializer,
     ResponsibleShortSerializer,
+    UnassignResponsibleSerializer,
 )
 
 __all__ = [
@@ -52,6 +53,7 @@ __all__ = [
     "LinkContactPersonSerializer",
     "ResponsibleSerializer",
     "ResponsibleShortSerializer",
+    "UnassignResponsibleSerializer",
     "WriteContractSerializer",
     "WriteInteractionDirectionSerializer",
     "WriteInteractionProductSerializer",

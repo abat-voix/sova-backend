@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from accounts.models import SystemRole, UserRole
 from sova.core.tests.factories import UserFactory
+from sova.interactions.models import Responsible
 from sova.interactions.tests.factories import InteractionFactory, ResponsibleFactory
 from sova.notifications.enum import NotifyEvent, NotifyType
 from sova.notifications.models import NotifySettings
@@ -99,12 +100,30 @@ class ActionDeadlineTest(DeadlineServiceTestCase):
         # Проверяем, что пунктов нет
         self.assertEqual(self.items(NotifyType.ACTION_DEADLINE), [])
 
-    def test_action_without_responsible_goes_to_head(self) -> None:
-        """Ответственного нет — по умолчанию письмо назначившему руководителю."""
+    def test_pool_action_goes_to_all_kams(self) -> None:
+        """Действие без ответственного (пул) — письмо всем действующим КАМам взаимодействия."""
+        second = UserFactory()
+        ResponsibleFactory(interaction=self.interaction, manager=second, assigned_by=self.head)
+        self.action(responsible=None)
+
+        # Проверяем получателей
+        self.assertEqual(self.items(NotifyType.ACTION_DEADLINE)[0].recipients, (self.kam, second))
+
+    def test_pool_action_without_kams_goes_to_head(self) -> None:
+        """Действие без ответственного и без КАМов — по умолчанию письмо всем руководителям."""
+        Responsible.objects.filter(interaction=self.interaction).update(unassigned_at=self.now)
         self.action(responsible=None)
 
         # Проверяем получателя
         self.assertEqual(self.items(NotifyType.ACTION_DEADLINE)[0].recipients, (self.head,))
+
+    def test_owned_action_goes_only_to_its_responsible(self) -> None:
+        """У действия есть ответственный — второй КАМ взаимодействия письмо не получает."""
+        ResponsibleFactory(interaction=self.interaction, manager=UserFactory(), assigned_by=self.head)
+        self.action()
+
+        # Проверяем получателя
+        self.assertEqual(self.items(NotifyType.ACTION_DEADLINE)[0].recipients, (self.kam,))
 
     def test_reminder_window(self) -> None:
         """Предупреждение — только в окне remind_before_days до срока."""
@@ -164,6 +183,15 @@ class StageDeadlineTest(DeadlineServiceTestCase):
         self.assertEqual(items[0].deadline, latest.planned_end)
         # Проверяем получателей по умолчанию для этапа
         self.assertEqual(items[0].recipients, (self.kam, self.head))
+
+    def test_stage_deadline_goes_to_all_kams(self) -> None:
+        """Срок этапа — письмо всем действующим КАМам взаимодействия и руководителю."""
+        second = UserFactory()
+        ResponsibleFactory(interaction=self.interaction, manager=second, assigned_by=self.head)
+        self.action()
+
+        # Проверяем получателей
+        self.assertEqual(self.items(NotifyType.STAGE_DEADLINE)[0].recipients, (self.kam, second, self.head))
 
     def test_stage_is_not_overdue_while_any_action_ends_later(self) -> None:
         """Этап не просрочен, пока хоть одно действие заканчивается в будущем."""
