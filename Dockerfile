@@ -30,8 +30,8 @@ RUN groupadd --system --gid 10001 sova \
 COPY --from=builder /app/.venv /app/.venv
 COPY --chown=sova:sova . .
 
-RUN mkdir -p /app/staticfiles /app/media \
-    && chown -R sova:sova /app/staticfiles /app/media
+RUN mkdir -p /app/staticfiles /app/media /app/private/reports \
+    && chown -R sova:sova /app/staticfiles /app/media /app/private
 
 USER sova
 

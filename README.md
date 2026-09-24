@@ -17,6 +17,7 @@ ghcr.io/abat-voix/sova-backend:<tag>
 - `DJANGO_SECRET_KEY`;
 - `DATABASE_URL`;
 - `REDIS_URL`;
+- `CHANNEL_REDIS_URL` (отдельная Redis DB для Channels; не используйте DB cache/Celery);
 - `DJANGO_ALLOWED_HOSTS`;
 - `CSRF_TRUSTED_ORIGINS`;
 - `GOTENBERG_URL`;
@@ -104,6 +105,18 @@ poetry run python manage.py migrate
 poetry run python manage.py runserver
 ```
 
+HTTP API остаётся на Gunicorn/WSGI. WebSocket transport запускается отдельным
+ASGI-процессом (локально удобно использовать порт 8001):
+
+```bash
+poetry run daphne -b 0.0.0.0 -p 8001 sova.asgi:application
+```
+
+Frontend подключается к `/ws/events/`. События доставляются без гарантии и без
+истории: PostgreSQL и REST остаются источником истины, а клиент после reconnect
+повторно сверяет messaging queries. `CHANNEL_REDIS_URL` должен указывать на
+логическую Redis DB, отличную от `REDIS_URL` и `CELERY_BROKER_URL`.
+
 Файл читается через `source`, поэтому значения должны быть shell-safe: без
 пробелов, `$` и `#` вне кавычек.
 
@@ -171,6 +184,92 @@ pdf = html_to_pdf(
 По умолчанию клиент генерирует A4, печатает CSS-фоны, учитывает `@page` и
 завершает запрос ошибкой, если локальный ресурс не загрузился. Дополнительные
 поля Chromium route можно передать через `form_fields`.
+
+## Хранилище файлов
+
+Вложения действий (`ActionAttachment`), файлы договоров (`Contract`, история — `ContractFile`)
+и готовые отчёты (`ReportJob`) хранятся через Django Storage API (`STORAGES["default"]` /
+`STORAGES["reports"]`), а не напрямую на диске — конкретный провайдер задаётся переменными
+окружения и код от него не зависит. Подробности и порядок миграции — в
+`docs/plans/2026-09-23-s3-storage.md`.
+
+- `STORAGE_BACKEND=filesystem` (по умолчанию, всегда — в тестах): `MEDIA_ROOT` и
+  `REPORTS_STORAGE_ROOT`, как раньше.
+- `STORAGE_BACKEND=s3`: S3-совместимое хранилище — свой Garage из `sova-infra` (по умолчанию)
+  или внешний провайдер (Yandex Object Storage, AWS и т. п.). Обязательные переменные:
+  `S3_ENDPOINT_URL`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`,
+  `S3_MEDIA_BUCKET`, `S3_REPORTS_BUCKET`. Опциональные: `S3_ADDRESSING_STYLE` (`path`),
+  `S3_PRESIGNED_TTL` (300 c), `FILE_UPLOAD_MAX_SIZE_MB` (25).
+
+Файл отдаётся только через API (`.../download/`), с проверкой видимости взаимодействия
+(`visible_interactions`), а не напрямую из хранилища — прежний публичный `/media/*` в Caddy
+убран. Способ отдачи — `S3_DOWNLOAD_MODE`:
+
+- `proxy` (по умолчанию): Django сам стримит файл; хранилище остаётся только во внутренней сети;
+- `redirect` (только `STORAGE_BACKEND=s3`): `302` на подписанный URL — когда endpoint хранилища
+  виден браузеру.
+
+Проверить доступность хранилищ и поставить lifecycle-правило на бакет отчётов:
+
+```bash
+poetry run python manage.py check_storage --apply-lifecycle
+```
+
+Перенос уже загруженных файлов при включении S3 (идемпотентно, можно запускать повторно):
+
+```bash
+poetry run python manage.py copy_files_to_storage --source-root ./media --storage default
+poetry run python manage.py copy_files_to_storage --source-root ./private/reports --storage reports
+```
+
+## Отчёты
+
+Модуль `sova.reports` строит отчёт по взаимодействиям с вузами (`/api/reports/`):
+
+| Метод и путь | Назначение |
+| --- | --- |
+| `POST /api/reports/interactions/preview/` | страница строк, общее число строк и метаданные (`page_size` ≤ 200) |
+| `POST /api/reports/interactions/summary/` | уникальные взаимодействия и распределения по ответственным, вузам, статусам процесса и этапам |
+| `POST /api/reports/interactions/exports/` | задание на файл `xlsx`/`xls`/`pdf`/`json`, ответ `202` |
+| `GET /api/reports/exports/{id}/` | состояние задания `queued/running/ready/failed` |
+| `GET /api/reports/exports/{id}/download/` | готовый файл; `409` — не готов, `410` — срок хранения истёк |
+
+Семантика отчёта:
+
+- **Период** (`date_from`, `date_to`) — даты создания взаимодействия
+  (`Interaction.created_at`, часовой пояс `Europe/Moscow`).
+- **Состояние** — статус процесса, актуальные этапы, ответственный и состав отражают
+  состояние на момент построения (`meta.generated_at`), а не на конец периода.
+  Исторического среза «как было на дату» нет.
+- **Строка** — активный продукт взаимодействия с программой и направлением
+  (`Program.direction`); затем активные программы без продуктов и направления без программ;
+  взаимодействие без состава — одна строка. Фильтры по направлению/программе/продукту
+  ограничивают и сами строки.
+- **Актуальный этап** — `StageInstance` со статусом `in_progress` на уровне взаимодействия
+  или контекста строки. Несколько этапов возвращаются массивом, в файлах — через `; `.
+- **Статистика** считает уникальные `Interaction.id`; число строк, программ и продуктов
+  возвращается отдельно.
+- Все ответы и файлы строятся из `visible_interactions(user)`; фоновое задание заново
+  применяет видимость владельца. Задания и файлы доступны только владельцу.
+
+Выгрузки выполняет Celery. Worker запускается из того же образа:
+
+```bash
+celery -A sova worker --loglevel=info --concurrency=2
+celery -A sova beat --loglevel=info   # очистка просроченных файлов и зависших заданий
+```
+
+При локальном запуске на macOS пул worker по умолчанию — `solo`: он обходит сбой
+`fast_trace_task` в дочерних процессах `SpawnPoolWorker`. Перезапустите уже
+работающий worker после обновления настроек. Для явного запуска используйте
+`celery -A sova worker --loglevel=info --pool=solo`; задания выполняются по одному.
+В Linux-контейнере остаётся стандартный `prefork`.
+
+Переменные: `CELERY_BROKER_URL` (по умолчанию `REDIS_URL`), `REPORTS_STORAGE_ROOT` —
+приватный каталог файлов, общий для API и worker (общий том), `REPORTS_RETENTION_HOURS`
+(72), `REPORTS_JOB_TIMEOUT_SECONDS` (1800), `REPORTS_PDF_MAX_ROWS` (5000),
+`REPORTS_XLS_MAX_SHEETS` (4 листа по 65 536 строк), `REPORTS_MAX_ACTIVE_JOBS_PER_USER` (5).
+Без брокера задания выполняются синхронно в процессе API — это режим только для разработки.
 
 ## API documentation
 

@@ -1,5 +1,6 @@
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
 from sova.core.tests.factories import UserFactory
 from sova.workflows.enum import WorkflowChangeType
 from sova.workflows.models import Workflow, WorkflowChange
@@ -20,8 +21,9 @@ class WorkflowAuditTestCase(APITestCase):
     def setUp(self) -> None:
         """Аутентифицирует клиента и создаёт workflow с этапом."""
         self.user = UserFactory()
+        UserRole.objects.create(user=self.user, role=SystemRole.HEAD)
         self.client.force_authenticate(user=self.user)
-        self.workflow = WorkflowFactory()
+        self.workflow = WorkflowFactory(created_by=self.user)
         self.stage = WorkflowStageFactory(workflow=self.workflow)
 
     def assert_single_change(

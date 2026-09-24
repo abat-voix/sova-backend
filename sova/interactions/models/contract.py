@@ -3,6 +3,8 @@ from django.db import models
 from django.db.models import Q
 
 from sova.core.models import NormalizedTextFieldsMixin, TimeStampedModel
+from sova.core.files import uuid_upload_to
+from sova.core.models import TimeStampedModel
 
 
 class Contract(NormalizedTextFieldsMixin, TimeStampedModel):
@@ -15,13 +17,23 @@ class Contract(NormalizedTextFieldsMixin, TimeStampedModel):
     Может существовать без `Interaction` ("безголовый" договор, созданный импортом реестра
     договоров) — тогда `university`/`b2c_client` хранят контрагента напрямую. После привязки к `Interaction` оба поля остаются заполненными как
     исторический снимок и должны совпадать со стороной взаимодействия (`clean()`).
+
+    `file` — текущий файл договора; при повторной загрузке ссылка заменяется, но прежний
+    файл не пропадает — история всех загруженных файлов ведётся в `ContractFile`
+    (см. `sova.interactions.services.contract_files.record_contract_file`).
     """
 
     file = models.FileField(
-        upload_to="contracts/%Y/%m/",
+        upload_to=uuid_upload_to("contracts"),
+        max_length=500,
         null=True,
         blank=True,
         verbose_name="Файл договора",
+    )
+    file_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Исходное имя файла договора",
     )
     contract_number = models.CharField(
         max_length=255,

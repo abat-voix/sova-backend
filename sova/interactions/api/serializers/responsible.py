@@ -58,7 +58,17 @@ class AssignResponsibleSerializer(serializers.Serializer):
         queryset=get_user_model().objects.filter(is_active=True),
         label=_("Ответственный менеджер"),
         help_text=_(
-            "Id активного пользователя; действующий ответственный, "
-            "если он есть, будет заменён с сохранением истории",
+            "Id активного пользователя; добавляется к действующим ответственным, "
+            "уже назначенный менеджер не дублируется",
         ),
+    )
+
+
+class UnassignResponsibleSerializer(serializers.Serializer):
+    """Снятие ответственного менеджера с взаимодействия."""
+
+    manager = serializers.PrimaryKeyRelatedField(
+        queryset=get_user_model().objects.all(),
+        label=_("Ответственный менеджер"),
+        help_text=_("Id менеджера, которого нужно снять; остальные ответственные остаются"),
     )

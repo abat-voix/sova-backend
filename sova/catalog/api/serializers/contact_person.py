@@ -1,9 +1,13 @@
+from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 from sova.catalog.api.serializers.b2c_client import B2CClientShortSerializer
 from sova.catalog.api.serializers.university import UniversityShortSerializer
 from sova.catalog.models import ContactPerson
+from sova.core.api.validators import validate_exactly_one_counterparty
+from sova.core.api.exceptions import ConflictError
+from sova.interactions.models import InteractionContact
 from sova.core.api.validators import validate_exactly_one_counterparty, validate_model_constraints
 
 
@@ -54,7 +58,60 @@ class WriteContactPersonSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs: dict) -> dict:
-        """Проверка, что задан ровно один контрагент, и уникальности ФИО у него без учёта регистра."""
+        """Проверка, что задан ровно один контрагент, и уникальности ФИО у него."""
         validate_exactly_one_counterparty(attrs=attrs, instance=self.instance)
-        validate_model_constraints(model=ContactPerson, attrs=attrs, instance=self.instance)
+
+        full_name = attrs.get("full_name", getattr(self.instance, "full_name", None))
+        university = attrs.get("university", getattr(self.instance, "university", None))
+        b2c_client = attrs.get("b2c_client", getattr(self.instance, "b2c_client", None))
+
+        self._ensure_counterparty_can_change(
+            instance=self.instance,
+            university=university,
+            b2c_client=b2c_client,
+        )
+
+        duplicates = ContactPerson.objects.filter(
+            full_name=full_name,
+            university=university,
+            b2c_client=b2c_client,
+        )
+        if self.instance is not None:
+            duplicates = duplicates.exclude(pk=self.instance.pk)
+        if duplicates.exists():
+            raise serializers.ValidationError(
+                {"full_name": _("Контактное лицо с таким ФИО у этого контрагента уже есть.")},
+            )
+
         return attrs
+
+    @staticmethod
+    def _ensure_counterparty_can_change(instance, university, b2c_client) -> None:
+        if instance is None or not InteractionContact.objects.filter(
+            contact_person=instance,
+            unlinked_at__isnull=True,
+        ).exists():
+            return
+        current_counterparty = (instance.university_id, instance.b2c_client_id)
+        new_counterparty = (
+            getattr(university, "pk", university),
+            getattr(b2c_client, "pk", b2c_client),
+        )
+        if current_counterparty != new_counterparty:
+            raise ConflictError(
+                detail=_(
+                    "Нельзя изменить контрагента: контактное лицо уже привязано к взаимодействию.",
+                ),
+                code="contact_counterparty_locked",
+            )
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        """Повторно проверяет блокировку под блокировкой строки контакта."""
+        locked_instance = ContactPerson.objects.select_for_update().get(pk=instance.pk)
+        self._ensure_counterparty_can_change(
+            instance=locked_instance,
+            university=validated_data.get("university", locked_instance.university),
+            b2c_client=validated_data.get("b2c_client", locked_instance.b2c_client),
+        )
+        return super().update(locked_instance, validated_data)

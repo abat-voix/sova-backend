@@ -4,6 +4,8 @@ from rest_framework.validators import UniqueTogetherValidator
 
 from sova.catalog.api.serializers import ProgramShortSerializer
 from sova.interactions.models import Interaction, InteractionProgram
+from sova.catalog.api.serializers import DirectionShortSerializer, ProgramShortSerializer
+from sova.interactions.models import InteractionProgram
 
 
 class InteractionProgramSerializer(serializers.ModelSerializer):
@@ -14,6 +16,12 @@ class InteractionProgramSerializer(serializers.ModelSerializer):
         label=_("Программа"),
         help_text=_("Показывается развёрнуто, для записи см. write-сериализатор"),
     )
+    direction = DirectionShortSerializer(
+        source="program.direction",
+        read_only=True,
+        label=_("Направление"),
+        help_text=_("Выводится из направления каталожной программы"),
+    )
 
     class Meta:
         model = InteractionProgram
@@ -21,6 +29,7 @@ class InteractionProgramSerializer(serializers.ModelSerializer):
             "id",
             "interaction",
             "program",
+            "direction",
             "is_active",
             "added_at",
         )

@@ -23,6 +23,8 @@ from sova.interactions.tests.factories import (
     InteractionProgramFactory,
     ResponsibleFactory,
 )
+from sova.processes.enum import ActionInstanceStatus
+from sova.processes.tests.factories import ActionInstanceFactory
 
 
 class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
@@ -53,7 +55,7 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
                 else None
             ),
             "b2c_client": None,
-            "current_responsible": None,
+            "current_responsibles": [],
             "directions_count": 0,
             "programs_count": 0,
             "products_count": 0,
@@ -130,8 +132,8 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(response.data["code"], "protected")
 
-    def test_list_returns_counts_and_current_responsible(self) -> None:
-        """В списке считаются активные направления/программы/продукты и виден ответственный."""
+    def test_list_returns_counts_and_current_responsibles(self) -> None:
+        """В списке считаются активные направления/программы/продукты и видны действующие ответственные."""
         interaction = InteractionFactory()
         InteractionDirectionFactory.create_batch(size=2, interaction=interaction)
         InteractionDirectionFactory(interaction=interaction, is_active=False)
@@ -144,6 +146,7 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
             unassigned_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
         )
         current = ResponsibleFactory(interaction=interaction, manager=manager)
+        second = ResponsibleFactory(interaction=interaction)
 
         response = self.client.get(path=self.list_url)
         item = response.data["results"][0]
@@ -152,10 +155,13 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
         self.assertEqual(item["directions_count"], 2)
         self.assertEqual(item["programs_count"], 1)
         self.assertEqual(item["products_count"], 3)
-        # Проверяем, что показан именно действующий ответственный
-        self.assertEqual(item["current_responsible"]["id"], str(current.pk))
+        # Проверяем, что показаны все действующие ответственные в порядке назначения, закрытые — нет
         self.assertEqual(
-            item["current_responsible"]["manager"]["full_name"],
+            [responsible["id"] for responsible in item["current_responsibles"]],
+            [str(current.pk), str(second.pk)],
+        )
+        self.assertEqual(
+            item["current_responsibles"][0]["manager"]["full_name"],
             "Пётр Петров",
         )
 
@@ -170,7 +176,7 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
         # Проверяем, что аннотации доступны сразу после создания
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["products_count"], 0)
-        self.assertIsNone(response.data["current_responsible"])
+        self.assertEqual(response.data["current_responsibles"], [])
 
     def assert_filter_returns(self, params: dict, expected: list[Interaction]) -> None:
         """Проверяет, что список с фильтром содержит ровно ожидаемые взаимодействия."""
@@ -326,8 +332,8 @@ class InteractionResponsibleActionsTestCase(APITestCase):
         # Проверяем, что назначение действующее
         self.assertIsNone(response.data["unassigned_at"])
 
-    def test_assign_another_manager_closes_previous_record(self) -> None:
-        """Смена ответственного закрывает прежнюю запись и сохраняет историю."""
+    def test_assign_another_manager_keeps_current(self) -> None:
+        """Назначение второго менеджера добавляет КАМа, действующий остаётся."""
         first = ResponsibleFactory(interaction=self.interaction)
         new_manager = UserFactory()
 
@@ -340,13 +346,40 @@ class InteractionResponsibleActionsTestCase(APITestCase):
 
         # Проверяем, что создано новое назначение
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
-        # Проверяем, что прежнее назначение закрыто, а не удалено
-        self.assertIsNotNone(first.unassigned_at)
-        self.assertEqual(self.interaction.responsibles.count(), 2)
+        # Проверяем, что прежнее назначение не закрыто — у взаимодействия два действующих КАМа
+        self.assertIsNone(first.unassigned_at)
         self.assertEqual(
             self.interaction.responsibles.filter(unassigned_at__isnull=True).count(),
-            1,
+            2,
         )
+
+    def test_assign_does_not_touch_open_actions(self) -> None:
+        """Назначение не переносит открытые действия: действия из пула остаются без ответственного."""
+        first = ResponsibleFactory(interaction=self.interaction)
+        pool = ActionInstanceFactory(
+            stage_instance__workflow_instance__interaction=self.interaction,
+            status=ActionInstanceStatus.PENDING,
+            responsible=None,
+        )
+        owned = ActionInstanceFactory(
+            stage_instance__workflow_instance__interaction=self.interaction,
+            status=ActionInstanceStatus.IN_PROGRESS,
+            responsible=first.manager,
+        )
+
+        response = self.client.post(
+            path=self.assign_url,
+            data={"manager": UserFactory().pk},
+            format="json",
+        )
+        pool.refresh_from_db()
+        owned.refresh_from_db()
+
+        # Проверяем, что назначение прошло
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
+        # Проверяем, что действия остались при своих ответственных
+        self.assertIsNone(pool.responsible_id)
+        self.assertEqual(owned.responsible_id, first.manager_id)
 
     def test_assign_same_manager_is_idempotent(self) -> None:
         """Повторное назначение того же менеджера возвращает 200 без новой записи."""
@@ -381,7 +414,7 @@ class InteractionResponsibleActionsTestCase(APITestCase):
         """Снятие закрывает действующую запись."""
         current = ResponsibleFactory(interaction=self.interaction)
 
-        response = self.client.post(path=self.unassign_url)
+        response = self.client.post(path=self.unassign_url, data={"manager": current.manager_id}, format="json")
         current.refresh_from_db()
 
         # Проверяем, что запись закрыта и осталась в истории
@@ -389,9 +422,86 @@ class InteractionResponsibleActionsTestCase(APITestCase):
         self.assertIsNotNone(current.unassigned_at)
         self.assertIsNotNone(response.data["unassigned_at"])
 
+    def test_unassign_releases_open_actions_of_the_manager(self) -> None:
+        """Снятие обнуляет ответственного у открытых действий снятого менеджера, завершённые не трогает."""
+        current = ResponsibleFactory(interaction=self.interaction)
+        in_progress = ActionInstanceFactory(
+            stage_instance__workflow_instance__interaction=self.interaction,
+            status=ActionInstanceStatus.IN_PROGRESS,
+            responsible=current.manager,
+        )
+        pending = ActionInstanceFactory(
+            stage_instance__workflow_instance__interaction=self.interaction,
+            status=ActionInstanceStatus.PENDING,
+            responsible=current.manager,
+        )
+        completed = ActionInstanceFactory(
+            stage_instance__workflow_instance__interaction=self.interaction,
+            status=ActionInstanceStatus.COMPLETED,
+            responsible=current.manager,
+        )
+        foreign = ActionInstanceFactory(status=ActionInstanceStatus.IN_PROGRESS, responsible=current.manager)
+
+        response = self.client.post(path=self.unassign_url, data={"manager": current.manager_id}, format="json")
+        for instance in (in_progress, pending, completed, foreign):
+            instance.refresh_from_db()
+
+        # Проверяем, что снятие прошло успешно
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Проверяем, что открытые действия взаимодействия остались без ответственного
+        self.assertIsNone(in_progress.responsible_id)
+        self.assertIsNone(pending.responsible_id)
+        # Проверяем, что завершённое исполнение сохранило ответственного в истории
+        self.assertEqual(completed.responsible_id, current.manager_id)
+        # Проверяем, что действия другого взаимодействия не затронуты
+        self.assertEqual(foreign.responsible_id, current.manager_id)
+
+    def test_unassign_one_of_two_keeps_the_other(self) -> None:
+        """Снятие одного из двух КАМов закрывает только его запись, действия второго не трогает."""
+        leaving = ResponsibleFactory(interaction=self.interaction)
+        staying = ResponsibleFactory(interaction=self.interaction)
+        staying_action = ActionInstanceFactory(
+            stage_instance__workflow_instance__interaction=self.interaction,
+            status=ActionInstanceStatus.PENDING,
+            responsible=staying.manager,
+        )
+
+        response = self.client.post(path=self.unassign_url, data={"manager": leaving.manager_id}, format="json")
+        leaving.refresh_from_db()
+        staying.refresh_from_db()
+        staying_action.refresh_from_db()
+
+        # Проверяем, что снят указанный менеджер
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], str(leaving.pk))
+        self.assertIsNotNone(leaving.unassigned_at)
+        # Проверяем, что второй КАМ и его действие остались
+        self.assertIsNone(staying.unassigned_at)
+        self.assertEqual(staying_action.responsible_id, staying.manager_id)
+
+    def test_unassign_returns_400_without_manager(self) -> None:
+        """Снятие без указания менеджера возвращает 400."""
+        ResponsibleFactory(interaction=self.interaction)
+
+        response = self.client.post(path=self.unassign_url, data={}, format="json")
+
+        # Проверяем, что менеджер обязателен
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("manager", response.data)
+
+    def test_unassign_returns_409_for_not_assigned_manager(self) -> None:
+        """Снятие менеджера, который не назначен на взаимодействие, возвращает 409."""
+        ResponsibleFactory(interaction=self.interaction)
+
+        response = self.client.post(path=self.unassign_url, data={"manager": UserFactory().pk}, format="json")
+
+        # Проверяем код ошибки
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "no_active_responsible")
+
     def test_unassign_returns_409_without_current_responsible(self) -> None:
         """Снятие при отсутствии ответственного возвращает 409."""
-        response = self.client.post(path=self.unassign_url)
+        response = self.client.post(path=self.unassign_url, data={"manager": UserFactory().pk}, format="json")
 
         # Проверяем код ошибки
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)

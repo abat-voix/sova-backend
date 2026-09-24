@@ -15,6 +15,14 @@ class ConflictError(APIException):
     default_code = "conflict"
 
 
+class Gone(APIException):
+    """Файл, на который ссылалась запись, больше недоступен (HTTP 410)."""
+
+    status_code = status.HTTP_410_GONE
+    default_detail = _("Файл больше недоступен.")
+    default_code = "missing"
+
+
 def exception_handler(exc: Exception, context: dict) -> Response | None:
     """
     Обработчик ошибок API.

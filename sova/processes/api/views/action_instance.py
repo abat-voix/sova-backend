@@ -1,5 +1,6 @@
 from django.db.models import Count, IntegerField, OuterRef, Prefetch, QuerySet, Subquery
 from django.db.models.functions import Coalesce
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import status
 from rest_framework.decorators import action
@@ -10,8 +11,11 @@ from sova.interactions.services import visible_interactions
 from sova.processes.api import filters, serializers
 from sova.processes.api.errors import translate_engine_errors
 from sova.processes.models import ActionAttachment, ActionInstance
+from sova.processes.models import ActionFeatureExecution
+from sova.processes.action_features import execute_action_feature
+from sova.core.api.serializers import UserShortSerializer
 from sova.processes.services import workflow_engine_service
-from sova.workflows.models import ActionOutcome
+from sova.workflows.models import ActionFeature, ActionOutcome
 
 _ORDERING_FIELDS = (
     "planned_start",
@@ -100,6 +104,8 @@ class ActionInstanceViewSet(SovaReadOnlyViewSet):
                     queryset=ActionOutcome.objects.filter(is_active=True).order_by("code"),
                     to_attr="active_outcomes",
                 ),
+                Prefetch("action__features", queryset=ActionFeature.objects.filter(is_active=True).order_by("sort_order"), to_attr="active_features"),
+                Prefetch("feature_executions", queryset=ActionFeatureExecution.objects.select_related("performed_by"), to_attr="prefetched_feature_executions"),
             )
             .annotate(attachments_count=Coalesce(Subquery(attachments, output_field=IntegerField()), 0))
         )
@@ -177,3 +183,31 @@ class ActionInstanceViewSet(SovaReadOnlyViewSet):
             ).data,
             status=status.HTTP_200_OK,
         )
+
+    @extend_schema(
+        request=OpenApiTypes.OBJECT,
+        responses={200: serializers.ActionFeatureExecutionResponseSerializer},
+    )
+    @action(methods=["POST"], detail=True, url_path=r"features/(?P<code>[^/]+)/execute")
+    def execute_feature(self, request, pk=None, code=None) -> Response:
+        """Выполняет настроенный feature внутри действия, не завершая его."""
+        instance = self.get_object()
+        if not isinstance(request.data, dict):
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("Ожидается JSON-объект.")
+        execution = execute_action_feature(
+            action_instance=instance, feature_code=code, user=request.user, data=request.data,
+        )
+        return Response({
+            "execution": {
+                "id": execution.pk,
+                "feature_code": execution.feature_code_snapshot,
+                "performed_at": execution.performed_at,
+                "performed_by": UserShortSerializer(request.user).data,
+            },
+            "target": {
+                "type": execution.target_type,
+                "id": execution.target_id,
+                "data": execution.result,
+            },
+        }, status=status.HTTP_200_OK)

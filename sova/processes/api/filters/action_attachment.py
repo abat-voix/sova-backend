@@ -12,6 +12,11 @@ class ActionAttachmentFilter(SearchFilterMixin):
         label=_("Экземпляры действий"),
         help_text=_("Фильтр по списку ID экземпляров действий через запятую"),
     )
+    interaction__ids = UUIDInFilter(
+        field_name="action_instance__stage_instance__workflow_instance__interaction",
+        label=_("Взаимодействия"),
+        help_text=_("Фильтр по списку ID взаимодействий через запятую"),
+    )
     uploaded_by__ids = NumberInFilter(
         field_name="uploaded_by",
         label=_("Кто загрузил"),

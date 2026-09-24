@@ -8,6 +8,8 @@ from sova.interactions.api.serializers import InteractionShortSerializer
 from sova.processes.api.serializers.board import BoardOutcomeSerializer
 from sova.processes.enum import ActionInstanceStatus
 from sova.processes.models import ActionInstance, ActionResult
+from sova.processes.action_features.registry import FEATURE_HANDLERS
+from sova.workflows.models import ActionFeature
 from sova.workflows.api.serializers import WorkflowActionShortSerializer
 
 
@@ -100,6 +102,8 @@ class ActionInstanceSerializer(serializers.ModelSerializer):
         label=_("Доступные исходы"),
         help_text=_("Активные исходы действия; пусто, если действие не в работе"),
     )
+    available_features = serializers.SerializerMethodField()
+    feature_executions = serializers.SerializerMethodField()
 
     class Meta:
         model = ActionInstance
@@ -126,6 +130,8 @@ class ActionInstanceSerializer(serializers.ModelSerializer):
             "responsible",
             "result",
             "available_outcomes",
+            "available_features",
+            "feature_executions",
         )
 
     def get_is_triggered(self, instance: ActionInstance) -> bool:
@@ -151,3 +157,37 @@ class ActionInstanceSerializer(serializers.ModelSerializer):
         if outcomes is None:
             outcomes = instance.action.action_outcomes.filter(is_active=True).order_by("code")
         return BoardOutcomeSerializer(outcomes, many=True).data
+
+    def get_available_features(self, instance: ActionInstance) -> list[dict]:
+        if instance.status != ActionInstanceStatus.IN_PROGRESS:
+            return []
+        features = getattr(instance.action, "active_features", None)
+        if features is None:
+            features = instance.action.features.filter(is_active=True).order_by("sort_order")
+        return [
+            {"code": feature.code, "settings": feature.settings}
+            for feature in features
+            if feature.code in FEATURE_HANDLERS
+        ]
+
+    def get_feature_executions(self, instance: ActionInstance) -> list[dict]:
+        executions = getattr(instance, "prefetched_feature_executions", None)
+        if executions is None:
+            executions = instance.feature_executions.select_related("performed_by").all()
+        return [
+            {
+                "id": item.pk,
+                "feature_code": item.feature_code_snapshot,
+                "performed_at": item.performed_at,
+                "performed_by": UserShortSerializer(item.performed_by).data if item.performed_by else None,
+                "target": {"type": item.target_type, "id": item.target_id, "data": item.result},
+            }
+            for item in executions
+        ]
+
+
+class ActionFeatureExecutionResponseSerializer(serializers.Serializer):
+    """Стандартный ответ выполнения любой feature действия."""
+
+    execution = serializers.DictField(read_only=True)
+    target = serializers.DictField(read_only=True)

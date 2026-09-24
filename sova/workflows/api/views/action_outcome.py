@@ -2,9 +2,10 @@ from sova.core.api.views import SovaBaseViewSet
 from sova.workflows.api import filters, serializers
 from sova.workflows.api.views.audit import WorkflowAuditMixin
 from sova.workflows.models import ActionOutcome
+from sova.workflows.api.permissions import CanManageWorkflows, WorkflowOwnershipMixin
 
 
-class ActionOutcomeViewSet(WorkflowAuditMixin, SovaBaseViewSet):
+class ActionOutcomeViewSet(WorkflowOwnershipMixin, WorkflowAuditMixin, SovaBaseViewSet):
     """Исходы действий. Доступны CRUD операции; правки пишутся в аудит."""
 
     read_serializer_class = serializers.ActionOutcomeSerializer
@@ -13,3 +14,4 @@ class ActionOutcomeViewSet(WorkflowAuditMixin, SovaBaseViewSet):
     ordering_fields = "__all__"
     search_fields = ("code", "name")
     filterset_class = filters.ActionOutcomeFilter
+    permission_classes = (CanManageWorkflows,)

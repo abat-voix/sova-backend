@@ -11,7 +11,6 @@ from sova.interactions.models import (
     InteractionDirection,
     InteractionProduct,
     InteractionProgram,
-    Responsible,
 )
 from sova.processes.enum import (
     ActionInstanceStatus,
@@ -555,7 +554,6 @@ class WorkflowEngineService:
                 action_name_snapshot=target.name,
                 status=ActionInstanceStatus.PENDING,
                 execution_no=latest.execution_no + 1,
-                responsible=latest.responsible,
                 triggered_at=now,
             )
         elif latest.status == ActionInstanceStatus.PENDING and latest.triggered_at is None:
@@ -638,7 +636,6 @@ class WorkflowEngineService:
             StageInstance.objects.filter(workflow_instance=process).values_list("stage_id", "context_id"),
         )
         actions_by_stage: dict | None = None
-        responsible = None
         for stage in stages:
             for context_id in self._context_ids(interaction=process.interaction, context_type=stage.type):
                 if (stage.pk, context_id) in existing:
@@ -647,7 +644,6 @@ class WorkflowEngineService:
                     actions_by_stage = defaultdict(list)
                     for action in WorkflowAction.objects.filter(stage__workflow_id=process.workflow_id, is_active=True):
                         actions_by_stage[action.stage_id].append(action)
-                    responsible = self._current_manager(interaction=process.interaction)
                 stage_instance = StageInstance.objects.create(
                     workflow_instance=process,
                     stage=stage,
@@ -664,20 +660,10 @@ class WorkflowEngineService:
                             action_name_snapshot=action.name,
                             status=ActionInstanceStatus.PENDING,
                             execution_no=1,
-                            responsible=responsible,
                         )
                         for action in actions_by_stage[stage.pk]
                     ],
                 )
-
-    def _current_manager(self, interaction: Interaction) -> AbstractBaseUser | None:
-        """Действующий ответственный менеджер взаимодействия."""
-        current = (
-            Responsible.objects.select_related("manager")
-            .filter(interaction=interaction, unassigned_at__isnull=True)
-            .first()
-        )
-        return current.manager if current is not None else None
 
     def _source_instances(
         self,
@@ -801,7 +787,6 @@ class WorkflowEngineService:
                 action_name_snapshot=instance.action.name,
                 status=ActionInstanceStatus.PENDING,
                 execution_no=instance.execution_no + 1,
-                responsible=instance.responsible,
             )
             return
         instance.status = ActionInstanceStatus.PENDING

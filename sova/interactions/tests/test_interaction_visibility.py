@@ -99,7 +99,7 @@ class InteractionVisibilityApiTestCase(APITestCase):
         """Снятый с ответственности КАМ видит взаимодействие как ничьё, а после передачи — нет."""
         kam = self.create_user(SystemRole.KAM)
         interaction = self.create_interaction(manager=kam)
-        responsible_service.unassign(interaction=interaction)
+        responsible_service.unassign(interaction=interaction, manager=kam)
         self.client.force_authenticate(user=kam)
 
         response = self.client.get(path=self.list_url)
@@ -110,6 +110,24 @@ class InteractionVisibilityApiTestCase(APITestCase):
             manager=self.create_user(SystemRole.KAM),
             assigned_by=None,
         )
+
+        response = self.client.get(path=self.list_url)
+        self.assertEqual(self.response_ids(response), set())
+
+    def test_each_of_several_kams_sees_the_interaction(self) -> None:
+        """Каждый из действующих КАМов видит взаимодействие; снятый — перестаёт, пока остаётся второй."""
+        first = self.create_user(SystemRole.KAM)
+        second = self.create_user(SystemRole.KAM)
+        interaction = self.create_interaction(manager=first)
+        responsible_service.assign(interaction=interaction, manager=second, assigned_by=None)
+
+        for kam in (first, second):
+            self.client.force_authenticate(user=kam)
+            response = self.client.get(path=self.list_url)
+            self.assertEqual(self.response_ids(response), {str(interaction.pk)})
+
+        responsible_service.unassign(interaction=interaction, manager=first)
+        self.client.force_authenticate(user=first)
 
         response = self.client.get(path=self.list_url)
         self.assertEqual(self.response_ids(response), set())

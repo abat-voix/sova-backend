@@ -13,9 +13,11 @@ htmlcov/
 .ruff_cache/
 
 media/
+private/
 staticfiles/
 
 .DS_Store
 .idea/
 
+docsprivate/
 docs
