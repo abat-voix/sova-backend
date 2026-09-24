@@ -54,3 +54,17 @@ class CreateDirectConversationSerializer(serializers.Serializer):
     """Создание (или получение существующей) личной беседы с другим пользователем."""
 
     user = serializers.PrimaryKeyRelatedField(queryset=get_user_model().objects.all())
+
+
+class ConversationRecipientSerializer(serializers.ModelSerializer):
+    """Минимальные данные активного пользователя для выбора собеседника."""
+
+    full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = get_user_model()
+        fields = ("id", "full_name")
+
+    def get_full_name(self, instance) -> str:
+        """ФИО пользователя или логин, если ФИО не заполнено."""
+        return instance.get_full_name() or instance.get_username()

@@ -45,6 +45,7 @@ ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
 
 INSTALLED_APPS = [
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -64,6 +65,7 @@ INSTALLED_APPS = [
     "sova.processes",
     "sova.notifications",
     "sova.messaging",
+    "sova.realtime",
     "sova.reports",
 ]
 
@@ -97,6 +99,52 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "sova.wsgi.application"
 ASGI_APPLICATION = "sova.asgi.application"
+
+try:
+    REALTIME_MAX_CONNECTION_AGE_SECONDS = int(
+        os.getenv("REALTIME_MAX_CONNECTION_AGE_SECONDS", "1800")
+    )
+except ValueError as error:
+    raise ImproperlyConfigured(
+        "REALTIME_MAX_CONNECTION_AGE_SECONDS must be an integer."
+    ) from error
+if REALTIME_MAX_CONNECTION_AGE_SECONDS <= 0:
+    raise ImproperlyConfigured(
+        "REALTIME_MAX_CONNECTION_AGE_SECONDS must be greater than zero."
+    )
+
+try:
+    REALTIME_CHANNEL_CAPACITY = int(os.getenv("REALTIME_CHANNEL_CAPACITY", "100"))
+except ValueError as error:
+    raise ImproperlyConfigured("REALTIME_CHANNEL_CAPACITY must be an integer.") from error
+if REALTIME_CHANNEL_CAPACITY <= 0:
+    raise ImproperlyConfigured("REALTIME_CHANNEL_CAPACITY must be greater than zero.")
+
+CHANNEL_REDIS_URL = os.getenv("CHANNEL_REDIS_URL", "").strip()
+CHANNEL_REDIS_URL_MISSING = not CHANNEL_REDIS_URL
+if TESTING or ENVIRONMENT in {"test", "testing"}:
+    CHANNEL_LAYERS = {
+        "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"},
+    }
+else:
+    if not CHANNEL_REDIS_URL:
+        CHANNEL_REDIS_URL = "redis://localhost:6379/2"
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                # channels_redis waits up to 5 seconds in its blocking receive.
+                # Keep redis-py's socket read timeout above that interval; its
+                # default timeout of 5 seconds can otherwise disconnect idle
+                # WebSockets before the Redis command returns normally.
+                "hosts": [{"address": CHANNEL_REDIS_URL, "socket_timeout": 10}],
+                "prefix": "sova-realtime",
+                "expiry": 60,
+                "group_expiry": REALTIME_MAX_CONNECTION_AGE_SECONDS + 60,
+                "capacity": REALTIME_CHANNEL_CAPACITY,
+            },
+        },
+    }
 
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
 DATABASES = {
@@ -253,6 +301,9 @@ if missing_smtp_settings:
     )
 else:
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+
+if CHANNEL_REDIS_URL_MISSING and ENVIRONMENT not in {"development", "test", "testing"}:
+    raise ImproperlyConfigured("CHANNEL_REDIS_URL must be set outside development.")
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 MAX_BOT_TOKEN = os.getenv("MAX_BOT_TOKEN", "")
