@@ -104,8 +104,6 @@ class WorkflowEngineService:
     в сервисе.
     """
 
-    # === ПУБЛИЧНЫЕ МЕТОДЫ ===
-
     @transaction.atomic
     def start(
         self,
@@ -334,8 +332,6 @@ class WorkflowEngineService:
             options.extend(sources)
         return options
 
-    # === ПРИВАТНЫЕ МЕТОДЫ: ПРОВЕРКИ ===
-
     def _check_can_start(self, workflow: Workflow, interaction: Interaction) -> None:
         """Проверяет, что workflow активен, подходит контрагенту взаимодействия и содержит этапы."""
         if not workflow.is_active:
@@ -365,8 +361,6 @@ class WorkflowEngineService:
             raise RuleViolationError("Для этого исхода нужен комментарий.", code="is_comment_required")
         if outcome.is_attachment_required and not ActionAttachment.objects.filter(action_instance=instance).exists():
             raise RuleViolationError("Для этого исхода нужно приложить файл.", code="is_attachment_required")
-
-    # === ПРИВАТНЫЕ МЕТОДЫ: ПРОДВИЖЕНИЕ ПРОЦЕССА ===
 
     def _lock_process(self, process_id: object) -> WorkflowInstance:
         """Блокирует процесс на время операции и возвращает его актуальное состояние."""
@@ -465,8 +459,6 @@ class WorkflowEngineService:
         process.completed_at = now
         process.save(update_fields=["status", "completed_at"])
         trace.is_workflow_completed = True
-
-    # === ПРИВАТНЫЕ МЕТОДЫ: ДЕЙСТВИЯ ===
 
     def _activate_ready(self, stage_instance: StageInstance, now: datetime, trace: _Trace) -> None:
         """
@@ -574,8 +566,6 @@ class WorkflowEngineService:
         ).values_list("action_id", "depends_on_action_id"):
             dependents[depends_on_id].append(action_id)
         return dependents
-
-    # === ПРИВАТНЫЕ МЕТОДЫ: ЭТАПЫ И КОНТЕКСТЫ ===
 
     def _load_graph(self, process: WorkflowInstance) -> _Graph:
         """Загружает активные этапы workflow и активные связи между ними."""
@@ -702,8 +692,6 @@ class WorkflowEngineService:
             if any(source.status != StageInstanceStatus.COMPLETED for source in sources):
                 return False
         return True
-
-    # === ПРИВАТНЫЕ МЕТОДЫ: ОТКАТ ===
 
     def _pick_return_stage(
         self,

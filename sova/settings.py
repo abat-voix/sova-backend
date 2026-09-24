@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import dj_database_url
+from celery.schedules import crontab
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
@@ -146,10 +147,22 @@ CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 if sys.platform == "darwin" and ENVIRONMENT == "development":
     CELERY_WORKER_POOL = os.getenv("CELERY_WORKER_POOL", "solo")
 CELERY_TIMEZONE = "Europe/Moscow"
+# Час ежедневной рассылки уведомлений о сроках (по CELERY_TIMEZONE)
+OVERDUE_NOTIFY_HOUR = int(os.getenv("OVERDUE_NOTIFY_HOUR", "9"))
+# Срок хранения уведомлений в системе, дней (прочитанных и непрочитанных)
+NOTIFICATIONS_RETENTION_DAYS = int(os.getenv("NOTIFICATIONS_RETENTION_DAYS", "60"))
 CELERY_BEAT_SCHEDULE = {
     "cleanup-report-jobs": {
         "task": "sova.reports.tasks.cleanup_report_jobs",
         "schedule": 60 * 60,
+    },
+    "notify-deadlines": {
+        "task": "sova.processes.tasks.notify_deadlines",
+        "schedule": crontab(hour=OVERDUE_NOTIFY_HOUR, minute=0),
+    },
+    "cleanup-notifications": {
+        "task": "sova.notifications.tasks.cleanup_notifications",
+        "schedule": crontab(hour=3, minute=0),
     },
 }
 
@@ -357,8 +370,8 @@ SPECTACULAR_SETTINGS = {
         "StageInstanceStatusEnum": "sova.processes.enum.StageInstanceStatus",
         "ActionInstanceStatusEnum": "sova.processes.enum.ActionInstanceStatus",
         "StageInstanceContextTypeEnum": "sova.processes.enum.StageInstanceContextType",
-        "ClientKindEnum": "sova.catalog.enum.ClientKind",
-        "ConversationKindEnum": "sova.messaging.enum.ConversationKind",
+        "KindEnum": "sova.catalog.enum.ClientKind",
+        "NotificationKindEnum": "sova.notifications.enum.NotificationKind",
     },
 }
 

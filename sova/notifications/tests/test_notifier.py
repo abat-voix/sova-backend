@@ -3,8 +3,9 @@ from unittest.mock import patch
 from django.test import TestCase
 
 from sova.core.tests.factories import UserFactory
-from sova.notifications.enum import NotificationChannel
+from sova.notifications.enum import NotificationChannel, NotificationKind
 from sova.notifications.services.notifier import NotificationService
+from sova.notifications.services.message import Message
 from sova.notifications.services.recipient import Recipient
 from sova.notifications.tests.factories import NotificationProfileFactory
 
@@ -12,8 +13,8 @@ from sova.notifications.tests.factories import NotificationProfileFactory
 class NotificationServiceSendTest(TestCase):
     """Тесты NotificationService.send()."""
 
-    def test_send_to_user_without_profile_only_sends_email(self) -> None:
-        """send() пользователю без NotificationProfile отправляет только email, минуя telegram/max."""
+    def test_send_to_user_without_profile_sends_email_and_system(self) -> None:
+        """send() пользователю без NotificationProfile отправляет email и в систему, минуя telegram/max."""
         user = UserFactory()
         service = NotificationService()
 
@@ -21,15 +22,19 @@ class NotificationServiceSendTest(TestCase):
             patch.object(service._senders[NotificationChannel.EMAIL], "send", return_value=True) as email_send,
             patch.object(service._senders[NotificationChannel.TELEGRAM], "send") as telegram_send,
             patch.object(service._senders[NotificationChannel.MAX], "send") as max_send,
+            patch.object(service._senders[NotificationChannel.SYSTEM], "send", return_value=True) as system_send,
         ):
             results = service.send(recipient=user, message="Текст")
 
-        # Проверяем, что отправка была только по email
-        self.assertEqual([result.channel for result in results], [NotificationChannel.EMAIL])
-        # Проверяем, что результат успешен
-        self.assertTrue(results[0].success)
+        # Проверяем каналы отправки
+        self.assertEqual(
+            [result.channel for result in results],
+            [NotificationChannel.EMAIL, NotificationChannel.SYSTEM],
+        )
         # Проверяем, что email реально вызван с адресом пользователя
-        email_send.assert_called_once_with(target=user.email, message="Текст")
+        email_send.assert_called_once_with(target=user.email, message=Message(text="Текст"))
+        # Проверяем, что системный канал вызван с id пользователя
+        system_send.assert_called_once_with(target=user.pk, message=Message(text="Текст"))
         # Проверяем, что telegram и max не вызывались — адресов нет
         telegram_send.assert_not_called()
         max_send.assert_not_called()
@@ -44,6 +49,7 @@ class NotificationServiceSendTest(TestCase):
             patch.object(service._senders[NotificationChannel.EMAIL], "send", return_value=True),
             patch.object(service._senders[NotificationChannel.TELEGRAM], "send", return_value=True) as telegram_send,
             patch.object(service._senders[NotificationChannel.MAX], "send") as max_send,
+            patch.object(service._senders[NotificationChannel.SYSTEM], "send", return_value=True),
         ):
             results = service.send(recipient=[first_profile.user, second_profile.user], message="Текст")
 
@@ -51,8 +57,8 @@ class NotificationServiceSendTest(TestCase):
         self.assertEqual(telegram_send.call_count, 2)
         # Проверяем, что max не вызывался — у обоих получателей пустой max_chat_id
         max_send.assert_not_called()
-        # Проверяем общее число результатов: 2 канала (email+telegram) на каждого из двух получателей
-        self.assertEqual(len(results), 4)
+        # Проверяем общее число результатов: 3 канала (email+telegram+system) на каждого из двух получателей
+        self.assertEqual(len(results), 6)
 
     def test_send_with_channels_filter_uses_only_requested_channels(self) -> None:
         """send() с channels=[...] отправляет только по указанным каналам."""
@@ -101,3 +107,15 @@ class NotificationServiceSendTest(TestCase):
 
         # Проверяем, что результатов нет и исключение не поднято
         self.assertEqual(results, [])
+
+    def test_send_passes_message_object_as_is(self) -> None:
+        """send() с Message передаёт его отправителям без изменений — группа и ссылка доходят до канала."""
+        recipient = Recipient(user_id=1)
+        message = Message(text="Текст", kind=NotificationKind.DEADLINE, link="/tasks")
+        service = NotificationService()
+
+        with patch.object(service._senders[NotificationChannel.SYSTEM], "send", return_value=True) as system_send:
+            service.send(recipient=recipient, message=message)
+
+        # Проверяем, что канал получил тот же Message
+        system_send.assert_called_once_with(target=1, message=message)

@@ -5,6 +5,10 @@ from django.utils import timezone
 
 from sova.interactions.exceptions import NoActiveResponsibleError
 from sova.interactions.models import Interaction, Responsible
+from sova.notifications.enum import NotifyType
+from sova.notifications.services.event_notification import event_notification_service
+from sova.notifications.services.links import interaction_link
+from sova.notifications.services.message import Message
 from sova.processes.enum import ActionInstanceStatus
 from sova.processes.models import ActionInstance
 
@@ -19,7 +23,9 @@ class ResponsibleService:
     `one_active_responsible_per_interaction`; блокировка строки взаимодействия
     сериализует параллельные назначения, чтобы вместо ошибки ограничения второй
     запрос дождался первого. При смене менеджера открытые действия прежнего
-    менеджера передаются новому, а завершённые исполнения остаются в истории.
+    менеджера передаются новому, при снятии без замены — остаются без ответственного,
+    а завершённые исполнения остаются в истории. Новый КАМ получает уведомление «Назначение КАМа» по настройкам
+    этого типа.
     """
 
     @transaction.atomic
@@ -49,21 +55,28 @@ class ResponsibleService:
             manager=manager,
             assigned_by=assigned_by,
         )
-        self._sync_open_action_instances(
+        transferred = self._sync_open_action_instances(
             interaction=interaction,
             previous_manager_id=previous_manager_id,
             manager=manager,
+        )
+        self._notify_assigned(
+            interaction=interaction,
+            manager=manager,
+            assigned_by=assigned_by,
+            transferred=transferred,
         )
         return responsible, True
 
     @transaction.atomic
     def unassign(self, interaction: Interaction) -> Responsible:
-        """Снимает действующего ответственного, не назначая нового."""
+        """Снимает действующего ответственного, не назначая нового; его открытые действия остаются без ответственного."""
         Interaction.objects.select_for_update().get(pk=interaction.pk)
         current = self._get_current(interaction=interaction)
         if current is None:
             raise NoActiveResponsibleError
         self._close(responsible=current)
+        self._release_open_action_instances(interaction=interaction, manager_id=current.manager_id)
         return current
 
     def _get_current(self, interaction: Interaction) -> Responsible | None:
@@ -96,6 +109,33 @@ class ResponsibleService:
                 Q(responsible_id=previous_manager_id) | Q(responsible__isnull=True),
             )
         return actions.update(responsible=manager)
+
+    def _notify_assigned(
+        self,
+        interaction: Interaction,
+        manager: AbstractBaseUser,
+        assigned_by: AbstractBaseUser | None,
+        transferred: int,
+    ) -> None:
+        """Уведомляет нового КАМа; назначившему самого себя не отправляется — его отсекает actor."""
+        text = f"Вас назначили КАМом — {interaction.university or interaction.b2c_client}"
+        if transferred:
+            text += f"\n\nПередано открытых задач: {transferred}"
+        event_notification_service.notify(
+            notify_type=NotifyType.KAM_ASSIGNED,
+            message=Message(text=text, link=interaction_link(interaction_id=interaction.pk)),
+            responsible=manager,
+            head=assigned_by,
+            actor=assigned_by,
+        )
+
+    def _release_open_action_instances(self, interaction: Interaction, manager_id: int) -> int:
+        """Снимает снятого менеджера с открытых задач взаимодействия; завершённые исполнения остаются в истории."""
+        return ActionInstance.objects.filter(
+            stage_instance__workflow_instance__interaction=interaction,
+            status__in=(ActionInstanceStatus.PENDING, ActionInstanceStatus.IN_PROGRESS),
+            responsible_id=manager_id,
+        ).update(responsible=None)
 
 
 responsible_service = ResponsibleService()

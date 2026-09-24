@@ -23,6 +23,8 @@ from sova.interactions.tests.factories import (
     InteractionProgramFactory,
     ResponsibleFactory,
 )
+from sova.processes.enum import ActionInstanceStatus
+from sova.processes.tests.factories import ActionInstanceFactory
 
 
 class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
@@ -388,6 +390,40 @@ class InteractionResponsibleActionsTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIsNotNone(current.unassigned_at)
         self.assertIsNotNone(response.data["unassigned_at"])
+
+    def test_unassign_releases_open_actions_of_the_manager(self) -> None:
+        """Снятие обнуляет ответственного у открытых действий снятого менеджера, завершённые не трогает."""
+        current = ResponsibleFactory(interaction=self.interaction)
+        in_progress = ActionInstanceFactory(
+            stage_instance__workflow_instance__interaction=self.interaction,
+            status=ActionInstanceStatus.IN_PROGRESS,
+            responsible=current.manager,
+        )
+        pending = ActionInstanceFactory(
+            stage_instance__workflow_instance__interaction=self.interaction,
+            status=ActionInstanceStatus.PENDING,
+            responsible=current.manager,
+        )
+        completed = ActionInstanceFactory(
+            stage_instance__workflow_instance__interaction=self.interaction,
+            status=ActionInstanceStatus.COMPLETED,
+            responsible=current.manager,
+        )
+        foreign = ActionInstanceFactory(status=ActionInstanceStatus.IN_PROGRESS, responsible=current.manager)
+
+        response = self.client.post(path=self.unassign_url)
+        for instance in (in_progress, pending, completed, foreign):
+            instance.refresh_from_db()
+
+        # Проверяем, что снятие прошло успешно
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Проверяем, что открытые действия взаимодействия остались без ответственного
+        self.assertIsNone(in_progress.responsible_id)
+        self.assertIsNone(pending.responsible_id)
+        # Проверяем, что завершённое исполнение сохранило ответственного в истории
+        self.assertEqual(completed.responsible_id, current.manager_id)
+        # Проверяем, что действия другого взаимодействия не затронуты
+        self.assertEqual(foreign.responsible_id, current.manager_id)
 
     def test_unassign_returns_409_without_current_responsible(self) -> None:
         """Снятие при отсутствии ответственного возвращает 409."""

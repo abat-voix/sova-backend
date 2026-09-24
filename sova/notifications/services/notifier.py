@@ -5,8 +5,14 @@ from dataclasses import dataclass
 from django.contrib.auth.models import AbstractBaseUser
 
 from sova.notifications.enum import NotificationChannel
-from sova.notifications.services.channels import EmailChannelSender, MaxChannelSender, TelegramChannelSender
+from sova.notifications.services.channels import (
+    EmailChannelSender,
+    MaxChannelSender,
+    SystemChannelSender,
+    TelegramChannelSender,
+)
 from sova.notifications.services.channels.base import NotificationChannelSender
+from sova.notifications.services.message import Message
 from sova.notifications.services.recipient import Recipient
 
 logger = logging.getLogger("django")
@@ -15,6 +21,7 @@ CHANNEL_RECIPIENT_FIELD: dict[NotificationChannel, str] = {
     NotificationChannel.EMAIL: "email",
     NotificationChannel.TELEGRAM: "telegram_chat_id",
     NotificationChannel.MAX: "max_chat_id",
+    NotificationChannel.SYSTEM: "user_id",
 }
 
 
@@ -28,29 +35,33 @@ class NotificationResult:
 
 
 class NotificationService:
-    """Универсальная отправка уведомлений по email, Telegram и MAX."""
+    """Универсальная отправка уведомлений по email, Telegram, MAX и в систему."""
 
     def __init__(self) -> None:
         self._senders: dict[NotificationChannel, NotificationChannelSender] = {
             NotificationChannel.EMAIL: EmailChannelSender(),
             NotificationChannel.TELEGRAM: TelegramChannelSender(),
             NotificationChannel.MAX: MaxChannelSender(),
+            NotificationChannel.SYSTEM: SystemChannelSender(),
         }
 
     def send(
         self,
         recipient: AbstractBaseUser | Recipient | Iterable[AbstractBaseUser | Recipient],
-        message: str,
+        message: str | Message,
         channels: Iterable[NotificationChannel] | None = None,
     ) -> list[NotificationResult]:
         """
         Отправляет message получателю(ям) по всем каналам, для которых есть адрес.
 
-        recipient — один или несколько User/Recipient. channels сужает набор
-        каналов (по умолчанию — все три). Получатель без адреса для канала —
+        message — строка или Message; строка становится Message системной группы
+        без ссылки. recipient — один или несколько User/Recipient. channels сужает набор
+        каналов (по умолчанию — все). Получатель без адреса для канала —
         канал для него молча пропускается. Ошибка одного канала логируется и
         не прерывает отправку остальным получателям/каналам.
         """
+        if isinstance(message, str):
+            message = Message(text=message)
         recipients = self._as_recipients(recipient)
         channel_list = list(channels) if channels is not None else list(NotificationChannel)
 
@@ -83,7 +94,7 @@ class NotificationService:
         self,
         recipient: Recipient,
         channel: NotificationChannel,
-        message: str,
+        message: Message,
     ) -> list[NotificationResult]:
         """Отправляет message получателю по одному каналу, если у него есть адрес."""
         target = getattr(recipient, CHANNEL_RECIPIENT_FIELD[channel])
