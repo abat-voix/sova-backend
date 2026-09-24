@@ -8,7 +8,7 @@ class InteractionProgramViewSet(SovaBaseViewSet):
 
     read_serializer_class = serializers.InteractionProgramSerializer
     serializer_class = serializers.WriteInteractionProgramSerializer
-    queryset = InteractionProgram.objects.select_related("program")
+    queryset = InteractionProgram.objects.select_related("program", "program__direction")
     ordering_fields = "__all__"
     search_fields = ("program__name",)
     filterset_class = filters.InteractionProgramFilter
