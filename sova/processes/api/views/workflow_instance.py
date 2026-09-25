@@ -5,12 +5,13 @@ from rest_framework.response import Response
 
 from sova.core.api.views import ReadWriteCreateModelMixin, SovaReadOnlyViewSet
 from sova.processes.api import filters, serializers
+from sova.processes.api.views.mixins import VisibleInteractionMixin
 from sova.processes.api.errors import translate_engine_errors
 from sova.processes.models import WorkflowInstance
 from sova.processes.services import workflow_board_service, workflow_engine_service
 
 
-class WorkflowInstanceViewSet(ReadWriteCreateModelMixin, SovaReadOnlyViewSet):
+class WorkflowInstanceViewSet(VisibleInteractionMixin, ReadWriteCreateModelMixin, SovaReadOnlyViewSet):
     """
     Процессы workflow: просмотр, запуск и доска.
 
@@ -18,10 +19,14 @@ class WorkflowInstanceViewSet(ReadWriteCreateModelMixin, SovaReadOnlyViewSet):
     действий, открытие начальных этапов. Ошибки: 400 — workflow неактивен, не подходит контрагенту или пуст
     (`workflow_inactive`, `audience_mismatch`, `empty_workflow`); 409 (`already_started`) — этот workflow
     уже запущен для взаимодействия. Состояние процесса дальше меняют только действия над этапами и действиями.
+
+    Видны и доступны только процессы видимых пользователю взаимодействий (`visible_interactions`); запустить
+    процесс на невидимом взаимодействии нельзя — 400 на поле `interaction`.
     """
 
     read_serializer_class = serializers.WorkflowInstanceSerializer
     serializer_class = serializers.WriteWorkflowInstanceSerializer
+    interaction_lookup = "interaction"
     queryset = WorkflowInstance.objects.select_related(
         "workflow",
         "interaction__university",

@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from accounts.models import SystemRole, UserRole
+from accounts.exceptions import KamHasHeadError
+from accounts.models import Supervision, SystemRole, UserRole
 from sova.catalog.tests.factories import (
     B2CClientFactory,
     DirectionFactory,
@@ -15,6 +17,7 @@ from sova.catalog.tests.factories import (
 from sova.core.tests.factories import UserFactory
 from sova.core.tests.base import BaseApiTestMixin
 from sova.interactions.models import Interaction
+from sova.interactions.services import responsible_service
 from sova.interactions.tests.factories import (
     ContractFactory,
     InteractionDirectionFactory,
@@ -314,9 +317,16 @@ class InteractionResponsibleActionsTestCase(APITestCase):
             args=[self.interaction.pk],
         )
 
+    @staticmethod
+    def create_kam(**kwargs):
+        """КАМ — допустимый ответственный для администратора."""
+        user = UserFactory(**kwargs)
+        UserRole.objects.create(user=user, role=SystemRole.KAM)
+        return user
+
     def test_assign_creates_active_responsible(self) -> None:
         """Назначение создаёт действующую запись с assigned_by из запроса."""
-        manager = UserFactory()
+        manager = self.create_kam()
 
         response = self.client.post(
             path=self.assign_url,
@@ -335,7 +345,7 @@ class InteractionResponsibleActionsTestCase(APITestCase):
     def test_assign_another_manager_keeps_current(self) -> None:
         """Назначение второго менеджера добавляет КАМа, действующий остаётся."""
         first = ResponsibleFactory(interaction=self.interaction)
-        new_manager = UserFactory()
+        new_manager = self.create_kam()
 
         response = self.client.post(
             path=self.assign_url,
@@ -369,7 +379,7 @@ class InteractionResponsibleActionsTestCase(APITestCase):
 
         response = self.client.post(
             path=self.assign_url,
-            data={"manager": UserFactory().pk},
+            data={"manager": self.create_kam().pk},
             format="json",
         )
         pool.refresh_from_db()
@@ -383,7 +393,7 @@ class InteractionResponsibleActionsTestCase(APITestCase):
 
     def test_assign_same_manager_is_idempotent(self) -> None:
         """Повторное назначение того же менеджера возвращает 200 без новой записи."""
-        current = ResponsibleFactory(interaction=self.interaction)
+        current = ResponsibleFactory(interaction=self.interaction, manager=self.create_kam())
 
         response = self.client.post(
             path=self.assign_url,
@@ -398,7 +408,7 @@ class InteractionResponsibleActionsTestCase(APITestCase):
 
     def test_assign_returns_400_for_inactive_user(self) -> None:
         """Назначение неактивного пользователя возвращает 400."""
-        manager = UserFactory(is_active=False)
+        manager = self.create_kam(is_active=False)
 
         response = self.client.post(
             path=self.assign_url,
@@ -506,3 +516,148 @@ class InteractionResponsibleActionsTestCase(APITestCase):
         # Проверяем код ошибки
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(response.data["code"], "no_active_responsible")
+
+
+@patch("sova.notifications.services.event_notification.send_event_notification")
+class ResponsibleRulesApiTestCase(APITestCase):
+    """Права на назначение и снятие ответственных по ролям."""
+
+    def setUp(self) -> None:
+        """Руководитель с КАМом, чужой руководитель с КАМом, свободный КАМ, администратор."""
+        self.admin = self.create_user(SystemRole.PLATFORM_ADMIN)
+        self.head = self.create_user(SystemRole.HEAD)
+        self.other_head = self.create_user(SystemRole.HEAD)
+        self.mine = self.create_user(SystemRole.KAM)
+        self.foreign = self.create_user(SystemRole.KAM)
+        self.free = self.create_user(SystemRole.KAM)
+        Supervision.objects.create(kam=self.mine, head=self.head)
+        Supervision.objects.create(kam=self.foreign, head=self.other_head)
+        self.interaction = InteractionFactory()
+
+    @staticmethod
+    def create_user(role: str):
+        """Пользователь с ролью СОВА."""
+        user = UserFactory()
+        UserRole.objects.create(user=user, role=role)
+        return user
+
+    def post(self, actor, action: str, manager):
+        """POST assign-/unassign-responsible от имени `actor`."""
+        self.client.force_authenticate(user=actor)
+        return self.client.post(
+            reverse(f"interactions:interaction-{action}-responsible", args=[self.interaction.pk]),
+            {"manager": manager.pk},
+            format="json",
+        )
+
+    def test_head_assigns_own_kam_and_self(self, task) -> None:
+        """Руководитель назначает своего КАМа и себя."""
+        # Проверяем оба допустимых назначения
+        self.assertEqual(self.post(self.head, "assign", self.mine).status_code, status.HTTP_201_CREATED)
+        self.assertEqual(self.post(self.head, "assign", self.head).status_code, status.HTTP_201_CREATED)
+        # Проверяем, что назначение себя не создало связь «сам себе руководитель»
+        self.assertFalse(Supervision.objects.filter(kam=self.head).exists())
+
+    def test_head_assigning_free_kam_claims_him(self, task) -> None:
+        """Свободный КАМ при назначении руководителем вступает в его команду."""
+        response = self.post(self.head, "assign", self.free)
+
+        # Проверяем назначение и новую связь
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
+        self.assertEqual(Supervision.objects.get(kam=self.free).head, self.head)
+
+    def test_head_cannot_assign_foreign_kam_other_head_or_admin(self, task) -> None:
+        """Чужой КАМ, другой руководитель и администратор руководителю недоступны."""
+        for manager in (self.foreign, self.other_head, self.admin):
+            response = self.post(self.head, "assign", manager)
+
+            # Проверяем ошибку на поле manager
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, msg=manager)
+            self.assertIn("manager", response.data)
+
+    def test_race_on_free_kam_returns_409_and_rolls_back(self, task) -> None:
+        """КАМа забрал другой руководитель после валидации — 409, назначение не создано."""
+        with patch(
+            "sova.interactions.services.responsible.account_service.claim",
+            side_effect=KamHasHeadError,
+        ):
+            response = self.post(self.head, "assign", self.free)
+
+        # Проверяем код и отсутствие назначения
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "kam_has_head")
+        self.assertFalse(self.interaction.responsibles.exists())
+
+    def test_kam_assigns_only_self(self, task) -> None:
+        """КАМ назначает себя, но не другого КАМа и не руководителя."""
+        # Проверяем допустимое и недопустимые назначения
+        self.assertEqual(self.post(self.mine, "assign", self.mine).status_code, status.HTTP_201_CREATED)
+        self.assertEqual(self.post(self.mine, "assign", self.free).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.post(self.mine, "assign", self.head).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_admin_assigns_head_but_not_admin(self, task) -> None:
+        """Администратор назначает руководителя, но не администратора."""
+        # Проверяем оба случая
+        self.assertEqual(self.post(self.admin, "assign", self.head).status_code, status.HTTP_201_CREATED)
+        self.assertEqual(self.post(self.admin, "assign", self.admin).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_head_removes_own_kam_but_not_foreign(self, task) -> None:
+        """Руководитель снимает своего КАМа, но не чужого."""
+        responsible_service.assign(interaction=self.interaction, manager=self.mine, assigned_by=None)
+        responsible_service.assign(interaction=self.interaction, manager=self.foreign, assigned_by=None)
+
+        # Проверяем оба случая; сначала чужого: после снятия своего взаимодействие руководителю не видно (404)
+        self.assertEqual(self.post(self.head, "unassign", self.foreign).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.post(self.head, "unassign", self.mine).status_code, status.HTTP_200_OK)
+
+    def test_kam_cannot_unassign_even_self(self, task) -> None:
+        """КАМ никого не снимает — 403 `responsible_change_forbidden`."""
+        responsible_service.assign(interaction=self.interaction, manager=self.mine, assigned_by=None)
+
+        response = self.post(self.mine, "unassign", self.mine)
+
+        # Проверяем запрет и код
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "responsible_change_forbidden")
+
+    def create_interaction(self, actor):
+        """POST /interactions/ от имени `actor`."""
+        self.client.force_authenticate(user=actor)
+        return self.client.post(
+            reverse("interactions:interaction-list"),
+            {"university": str(UniversityFactory().pk)},
+            format="json",
+        )
+
+    def test_kam_author_becomes_responsible(self, task) -> None:
+        """КАМ, создавший взаимодействие, сразу его ответственный."""
+        response = self.create_interaction(self.mine)
+
+        # Проверяем ответ: ответственный — автор
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
+        self.assertEqual(
+            [item["manager"]["id"] for item in response.data["current_responsibles"]],
+            [self.mine.pk],
+        )
+
+    def test_kam_repeat_self_assign_is_idempotent(self, task) -> None:
+        """Старый фронт после создания назначает КАМа ещё раз — 200, дубля нет."""
+        interaction_id = self.create_interaction(self.mine).data["id"]
+
+        response = self.client.post(
+            reverse("interactions:interaction-assign-responsible", args=[interaction_id]),
+            {"manager": self.mine.pk},
+            format="json",
+        )
+
+        # Проверяем код и число назначений
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Interaction.objects.get(pk=interaction_id).responsibles.count(), 1)
+
+    def test_head_author_is_not_assigned(self, task) -> None:
+        """Руководитель при создании не назначается — ответственных выбирает он сам."""
+        response = self.create_interaction(self.head)
+
+        # Проверяем, что взаимодействие ничьё
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
+        self.assertEqual(response.data["current_responsibles"], [])

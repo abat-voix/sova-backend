@@ -1,5 +1,6 @@
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
 from sova.core.tests.base import BaseApiTestMixin
 from sova.core.tests.factories import UserFactory
 from sova.processes.models import ActionResult
@@ -14,6 +15,11 @@ class ActionResultApiTestCase(BaseApiTestMixin, APITestCase):
     allow_create = False
     allow_update = False
     allow_delete = False
+
+    def setUp(self) -> None:
+        """Администратор платформы: процессы видны только по видимым взаимодействиям."""
+        super().setUp()
+        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
 
     def create_instance(self, **kwargs) -> ActionResult:
         """Создаёт результат действия."""

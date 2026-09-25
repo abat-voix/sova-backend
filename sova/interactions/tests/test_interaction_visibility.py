@@ -2,7 +2,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from accounts.models import SystemRole, UserRole
+from accounts.models import Supervision, SystemRole, UserRole
 from sova.catalog.tests.factories import UniversityFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.services import responsible_service
@@ -48,18 +48,59 @@ class InteractionVisibilityApiTestCase(APITestCase):
         self.assertEqual(self.response_ids(response), {str(own.pk), str(unassigned.pk)})
         self.assertNotIn(str(another.pk), self.response_ids(response))
 
-    def test_head_sees_his_own_and_kams(self) -> None:
-        """Руководитель видит свои взаимодействия и взаимодействия КАМов, но не чужих руководителей."""
+    def test_head_sees_own_team_free_and_unassigned(self) -> None:
+        """Руководитель видит свои, своей команды, свободных КАМов и ничьи — но не чужую команду."""
         head = self.create_user(SystemRole.HEAD)
+        other_head = self.create_user(SystemRole.HEAD)
+        mine_kam = self.create_user(SystemRole.KAM)
+        foreign_kam = self.create_user(SystemRole.KAM)
+        Supervision.objects.create(kam=mine_kam, head=head)
+        Supervision.objects.create(kam=foreign_kam, head=other_head)
         own = self.create_interaction(manager=head)
-        kam_interaction = self.create_interaction(manager=self.create_user(SystemRole.KAM))
-        another_head = self.create_interaction(manager=self.create_user(SystemRole.HEAD))
+        team = self.create_interaction(manager=mine_kam)
+        free = self.create_interaction(manager=self.create_user(SystemRole.KAM))
+        unassigned = self.create_interaction()
+        foreign = self.create_interaction(manager=foreign_kam)
+        other_head_own = self.create_interaction(manager=other_head)
         self.client.force_authenticate(user=head)
 
         response = self.client.get(path=self.list_url)
 
-        self.assertEqual(self.response_ids(response), {str(own.pk), str(kam_interaction.pk)})
-        self.assertNotIn(str(another_head.pk), self.response_ids(response))
+        # Проверяем состав выборки
+        self.assertEqual(
+            self.response_ids(response),
+            {str(own.pk), str(team.pk), str(free.pk), str(unassigned.pk)},
+        )
+        self.assertNotIn(str(foreign.pk), self.response_ids(response))
+        self.assertNotIn(str(other_head_own.pk), self.response_ids(response))
+
+    def test_released_kam_stays_visible_as_free(self) -> None:
+        """Отпущенный КАМ свободен — его взаимодействия руководитель по-прежнему видит."""
+        head = self.create_user(SystemRole.HEAD)
+        kam = self.create_user(SystemRole.KAM)
+        supervision = Supervision.objects.create(kam=kam, head=head)
+        interaction = self.create_interaction(manager=kam)
+        supervision.delete()
+        self.client.force_authenticate(user=head)
+
+        response = self.client.get(path=self.list_url)
+
+        # Проверяем, что взаимодействие видно
+        self.assertIn(str(interaction.pk), self.response_ids(response))
+
+    def test_stale_team_link_gives_no_visibility(self) -> None:
+        """Связь с КАМом, сменившим роль в обход сервиса, видимости не даёт."""
+        head = self.create_user(SystemRole.HEAD)
+        former_kam = self.create_user(SystemRole.KAM)
+        Supervision.objects.create(kam=former_kam, head=head)
+        UserRole.objects.filter(user=former_kam).update(role=SystemRole.PLATFORM_ADMIN)
+        interaction = self.create_interaction(manager=former_kam)
+        self.client.force_authenticate(user=head)
+
+        response = self.client.get(path=self.list_url)
+
+        # Проверяем, что бывший КАМ через устаревшую связь не виден
+        self.assertNotIn(str(interaction.pk), self.response_ids(response))
 
     def test_platform_admin_sees_everything(self) -> None:
         """Администратор платформы видит все взаимодействия, включая чужие."""

@@ -2,6 +2,8 @@ from django.contrib.auth.models import AbstractBaseUser
 from django.db import transaction
 from django.utils import timezone
 
+from accounts.models import SystemRole
+from accounts.services import account_service, get_system_role
 from sova.interactions.exceptions import NoActiveResponsibleError
 from sova.interactions.models import Interaction, Responsible
 from sova.notifications.enum import NotifyType
@@ -25,6 +27,9 @@ class ResponsibleService:
     (пул КАМов взаимодействия). При снятии открытые действия снятого менеджера уходят в пул,
     завершённые исполнения остаются в истории. Новый КАМ получает уведомление «Назначение КАМа»
     по настройкам этого типа.
+
+    Права (кого можно назначить и снять) проверяются снаружи — `responsible_policy`; `assign` / `unassign` —
+    низкоуровневые, ими пользуются и служебные пути (демо-данные, импорт).
     """
 
     @transaction.atomic
@@ -54,6 +59,23 @@ class ResponsibleService:
         return responsible, True
 
     @transaction.atomic
+    def assign_by(
+        self,
+        interaction: Interaction,
+        manager: AbstractBaseUser,
+        actor: AbstractBaseUser,
+    ) -> tuple[Responsible, bool]:
+        """
+        Назначение от имени пользователя: руководитель, назначающий свободного КАМа, забирает его в команду.
+
+        Права (кого можно назначить) проверяет вызывающий через `assignable_managers`. Если КАМа забрал другой
+        руководитель после проверки, `KamHasHeadError` откатывает и назначение.
+        """
+        if get_system_role(actor) == SystemRole.HEAD and manager.pk != actor.pk:
+            account_service.claim(kam=manager, head=actor, actor=actor)
+        return self.assign(interaction=interaction, manager=manager, assigned_by=actor)
+
+    @transaction.atomic
     def unassign(self, interaction: Interaction, manager: AbstractBaseUser) -> Responsible:
         """Снимает менеджера с взаимодействия; его открытые действия уходят в пул."""
         Interaction.objects.select_for_update().get(pk=interaction.pk)
@@ -63,6 +85,17 @@ class ResponsibleService:
         self._close(responsible=current)
         self._release_open_action_instances(interaction=interaction, manager_id=current.manager_id)
         return current
+
+    @transaction.atomic
+    def unassign_everywhere(self, manager: AbstractBaseUser) -> list[Responsible]:
+        """
+        Снимает менеджера со всех взаимодействий — при деактивации учётной записи.
+
+        Каждое снятие — как `unassign`: запись закрывается, открытые задачи менеджера уходят в пул. Взаимодействие,
+        где он был единственным КАМом, становится ничьим и видно всем ролям.
+        """
+        current = Responsible.objects.select_related("interaction").filter(manager=manager, unassigned_at__isnull=True)
+        return [self.unassign(interaction=responsible.interaction, manager=manager) for responsible in current]
 
     def _get_active(self, interaction: Interaction, manager_id: int) -> Responsible | None:
         """Возвращает действующее назначение менеджера на взаимодействие."""
