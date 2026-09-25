@@ -349,6 +349,7 @@ if CHANNEL_REDIS_URL_MISSING and ENVIRONMENT not in {"development", "test", "tes
     raise ImproperlyConfigured("CHANNEL_REDIS_URL must be set outside development.")
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_PROXY = os.getenv("TELEGRAM_PROXY", "")
 MAX_BOT_TOKEN = os.getenv("MAX_BOT_TOKEN", "")
 MAX_API_URL = os.getenv("MAX_API_URL", "https://platform-api.max.ru").rstrip("/")
 NOTIFICATION_HTTP_TIMEOUT = float(os.getenv("NOTIFICATION_HTTP_TIMEOUT", "10"))
