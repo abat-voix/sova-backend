@@ -4,8 +4,16 @@ from django.contrib import admin, messages
 from django.db import transaction
 
 from sova.integrations.enum import IntegrationDirection, IntegrationStatus
-from sova.integrations.models import IntegrationMessage
+from sova.integrations.models import IntegrationMapping, IntegrationMessage
 from sova.integrations.services import _schedule
+
+
+@admin.register(IntegrationMapping)
+class IntegrationMappingAdmin(admin.ModelAdmin):
+    list_display = ("name", "system", "direction", "entity", "version", "is_active", "updated_at")
+    list_filter = ("system", "direction", "entity", "is_active")
+    search_fields = ("name", "event_type")
+    readonly_fields = ("id", "version", "created_at", "updated_at")
 
 
 @admin.register(IntegrationMessage)

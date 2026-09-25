@@ -6,6 +6,29 @@ from sova.core.models import TimeStampedModel
 from sova.integrations.enum import IntegrationDirection, IntegrationStatus
 
 
+class IntegrationMapping(TimeStampedModel):
+    """A versioned, administrator-managed payload mapping."""
+
+    name = models.CharField(max_length=255, verbose_name="Название")
+    system = models.CharField(max_length=50, verbose_name="Система")
+    event_type = models.CharField(max_length=100, verbose_name="Тип события")
+    direction = models.CharField(
+        max_length=8, choices=IntegrationDirection.choices, verbose_name="Направление"
+    )
+    entity = models.CharField(max_length=100, verbose_name="Сущность CRM")
+    is_active = models.BooleanField(default=False, verbose_name="Активен")
+    version = models.PositiveIntegerField(default=1, verbose_name="Версия")
+    rules = models.JSONField(default=list, verbose_name="Правила")
+
+    class Meta:
+        verbose_name = "маппинг интеграции"
+        verbose_name_plural = "маппинги интеграций"
+        ordering = ("-updated_at", "name")
+
+    def __str__(self):
+        return self.name
+
+
 class IntegrationMessage(TimeStampedModel):
     system = models.CharField(max_length=50, verbose_name="Система")
     direction = models.CharField(
