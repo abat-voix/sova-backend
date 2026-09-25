@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     "sova.messaging",
     "sova.realtime",
     "sova.reports",
+    "sova.integrations",
 ]
 
 MIDDLEWARE = [
@@ -189,6 +190,9 @@ CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", default=not CELE
 CELERY_TASK_EAGER_PROPAGATES = False
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_ROUTES = {
+    "sova.integrations.tasks.*": {"queue": "integrations"},
+}
 # На macOS prefork запускает дочерние процессы через spawn: в Celery 5.6
 # fast_trace_task остаётся без инициализированного реестра задач. Для локального
 # worker используем однопроцессный пул; Linux в контейнере сохраняет prefork.
@@ -200,6 +204,10 @@ OVERDUE_NOTIFY_HOUR = int(os.getenv("OVERDUE_NOTIFY_HOUR", "9"))
 # Срок хранения уведомлений в системе, дней (прочитанных и непрочитанных)
 NOTIFICATIONS_RETENTION_DAYS = int(os.getenv("NOTIFICATIONS_RETENTION_DAYS", "60"))
 CELERY_BEAT_SCHEDULE = {
+    "dispatch-integration-messages": {
+        "task": "sova.integrations.tasks.dispatch_pending_integration_messages",
+        "schedule": 60,
+    },
     "cleanup-report-jobs": {
         "task": "sova.reports.tasks.cleanup_report_jobs",
         "schedule": 60 * 60,
@@ -213,6 +221,28 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=3, minute=0),
     },
 }
+
+INTEGRATION_SYSTEMS = {
+    "lms": {
+        "url": os.getenv("INTEGRATION_LMS_URL", "").strip(),
+        "inbound_token": os.getenv("INTEGRATION_LMS_INBOUND_TOKEN", ""),
+        "outbound_token": os.getenv("INTEGRATION_LMS_OUTBOUND_TOKEN", ""),
+    },
+    "cms": {
+        "url": os.getenv("INTEGRATION_CMS_URL", "").strip(),
+        "inbound_token": os.getenv("INTEGRATION_CMS_INBOUND_TOKEN", ""),
+        "outbound_token": os.getenv("INTEGRATION_CMS_OUTBOUND_TOKEN", ""),
+    },
+}
+INTEGRATION_HTTP_TIMEOUT = float(os.getenv("INTEGRATION_HTTP_TIMEOUT", "10"))
+INTEGRATION_MAX_ATTEMPTS = int(os.getenv("INTEGRATION_MAX_ATTEMPTS", "5"))
+INTEGRATION_MAX_PAYLOAD_BYTES = int(os.getenv("INTEGRATION_MAX_PAYLOAD_BYTES", str(1024 * 1024)))
+if ENVIRONMENT in {"production", "prod"}:
+    for _system_name, _system_config in INTEGRATION_SYSTEMS.items():
+        if _system_config["url"] and not _system_config["inbound_token"]:
+            raise ImproperlyConfigured(
+                f"INTEGRATION_{_system_name.upper()}_INBOUND_TOKEN must be set when the integration is enabled."
+            )
 
 # Приватное хранилище файлов отчётов: вне MEDIA_ROOT, отдаётся только через API.
 # API и worker должны видеть один и тот же каталог (общий том) или общий backend.
