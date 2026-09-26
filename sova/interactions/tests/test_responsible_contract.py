@@ -118,7 +118,10 @@ class TransferFromContractTestCase(TestCase):
             item.kwargs for item in task.delay.call_args_list if item.kwargs["channels"] == [NotificationChannel.SYSTEM]
         ]
         self.assertEqual([call["user_ids"] for call in system_calls], [[self.kam.pk]])
-        self.assertEqual(system_calls[0]["text"], f"Вас назначили КАМом — {self.university.name}")
+        self.assertEqual(
+            system_calls[0]["text"],
+            f"{self.kam.get_full_name()}({self.kam.email}), Вас назначили КАМом — {self.university.name}",
+        )
 
     def test_self_assignment_is_not_notified(self, task) -> None:
         self.transfer(assigned_by=self.kam)
