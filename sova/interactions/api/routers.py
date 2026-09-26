@@ -1,6 +1,8 @@
+from django.urls import path
 from rest_framework.routers import DefaultRouter
 
 from sova.interactions.api import views
+from sova.interactions.api.views.document_template import DocumentTemplateFieldsView
 
 app_name = "interactions"
 
@@ -26,4 +28,7 @@ router.register(
 )
 router.register("licenses", views.LicenseViewSet, basename="license")
 
-urlpatterns = router.urls
+urlpatterns = [
+    path("document-templates/fields/", DocumentTemplateFieldsView.as_view(), name="document-template-fields"),
+    *router.urls,
+]

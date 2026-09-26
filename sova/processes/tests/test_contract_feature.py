@@ -1,3 +1,7 @@
+from io import BytesIO
+
+from django.core.files.base import ContentFile
+from docx import Document
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -5,6 +9,7 @@ from accounts.models import SystemRole, UserRole
 
 from sova.catalog.tests.factories import ContactPersonFactory, UniversityFactory
 from sova.core.tests.factories import UserFactory
+from sova.core.tests.media import TemporaryMediaMixin
 from sova.interactions.enum import DocumentTemplateKind
 from sova.interactions.models import Contract, DocumentTemplate, InteractionContact
 from sova.interactions.tests.factories import (
@@ -20,8 +25,8 @@ from sova.processes.tests.factories import ActionInstanceFactory
 from sova.workflows.tests.factories import ActionFeatureFactory
 
 
-class CreateContractFeatureApiTestCase(APITestCase):
-    """Feature `contract.create`: начальные данные формы и приём JSON договора (без файла)."""
+class CreateContractFeatureApiTestCase(TemporaryMediaMixin, APITestCase):
+    """Feature `contract.create`: выбор шаблона и генерация договора из JSON."""
 
     def setUp(self) -> None:
         self.user = UserFactory()
@@ -35,7 +40,21 @@ class CreateContractFeatureApiTestCase(APITestCase):
         )
         ActionFeatureFactory(action=self.action_instance.action, code="contract.create")
         self.template = DocumentTemplate.objects.get(kind=DocumentTemplateKind.CONTRACT)
+        self._set_template(
+            "№ {{ contract_number }} от {{ contract_date }}",
+            "{{ counterparty.name }} / {{ signatory.full_name }}",
+            "{% for product in products %}{{ product.name }} {% endfor %}",
+            "Сумма: {{ amount }}",
+        )
         self.base_url = f"/api/processes/action-instances/{self.action_instance.pk}/features/contract.create"
+
+    def _set_template(self, *paragraphs: str) -> None:
+        source = Document()
+        for paragraph in paragraphs:
+            source.add_paragraph(paragraph)
+        content = BytesIO()
+        source.save(content)
+        self.template.file.save("contract.docx", ContentFile(content.getvalue()), save=True)
 
     def payload(self, **document) -> dict:
         return {
@@ -135,21 +154,78 @@ class CreateContractFeatureApiTestCase(APITestCase):
         self.assertIn("products", response.data["document"])
         self.assertFalse(Contract.objects.exists())
 
-    def test_execute_accepts_json_and_creates_contract_without_file(self) -> None:
+    def test_execute_renders_json_and_creates_contract_file(self) -> None:
         response = self.client.post(f"{self.base_url}/execute/", self.payload(), format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
         contract = Contract.objects.get(pk=response.data["target"]["id"])
         self.assertEqual(contract.interaction, self.interaction)
         self.assertEqual(contract.contract_number, "Д-1")
-        self.assertFalse(contract.file)
+        self.assertTrue(contract.file)
+        self.assertEqual(contract.file_name, "Договор.docx")
+        with contract.file.open("rb") as generated:
+            text = "\n".join(paragraph.text for paragraph in Document(generated).paragraphs)
+        self.assertIn("№ Д-1 от 2026-09-26", text)
+        self.assertIn("Вуз / Иванов И. И.", text)
+        self.assertIn("Сумма: 1000.50", text)
+        self.assertNotIn("{{", text)
+        self.assertEqual(contract.files.count(), 1)
+        self.assertEqual(contract.files.get().uploaded_by, self.user)
         data = response.data["target"]["data"]
-        self.assertFalse(data["file_generated"])
+        self.assertTrue(data["file_generated"])
         self.assertEqual(data["document"]["contract_date"], "2026-09-26")
         self.assertEqual(data["document"]["amount"], "1000.50")
         self.assertEqual(data["document"]["signatory"]["full_name"], "Иванов И. И.")
         execution = ActionFeatureExecution.objects.get(pk=response.data["execution"]["id"])
         self.assertEqual(execution.result["document"]["counterparty"]["name"], "Вуз")
+
+    def test_execute_renders_selected_product_and_escapes_markup(self) -> None:
+        product = InteractionProductFactory(interaction=self.interaction)
+        response = self.client.post(
+            f"{self.base_url}/execute/",
+            self.payload(counterparty={"name": "ООО <Тест>"}, products=[{"id": str(product.pk)}]),
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        contract = Contract.objects.get(pk=response.data["target"]["id"])
+        with contract.file.open("rb") as generated:
+            text = "\n".join(paragraph.text for paragraph in Document(generated).paragraphs)
+        self.assertIn("ООО <Тест>", text)
+        self.assertIn(product.product.name, text)
+
+    def test_execute_renders_empty_optional_value_as_blank(self) -> None:
+        response = self.client.post(
+            f"{self.base_url}/execute/", self.payload(amount=None), format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        contract = Contract.objects.get(pk=response.data["target"]["id"])
+        with contract.file.open("rb") as generated:
+            text = "\n".join(paragraph.text for paragraph in Document(generated).paragraphs)
+        self.assertIn("Сумма: ", text)
+        self.assertNotIn("None", text)
+
+    def test_execute_rejects_template_without_file(self) -> None:
+        self.template.file.delete(save=True)
+        initial = self.client.get(f"{self.base_url}/initial/")
+        self.assertEqual(initial.data["templates"], [])
+        response = self.client.post(f"{self.base_url}/execute/", self.payload(), format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("template", response.data)
+        self.assertFalse(Contract.objects.exists())
+
+    def test_execute_rejects_corrupt_docx(self) -> None:
+        self.template.file.save("broken.docx", ContentFile(b"not a docx"), save=True)
+        response = self.client.post(f"{self.base_url}/execute/", self.payload(), format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("template", response.data)
+        self.assertFalse(Contract.objects.exists())
+
+    def test_execute_rejects_unfilled_template_variable(self) -> None:
+        self._set_template("{{ nonexistent_field }}")
+        response = self.client.post(f"{self.base_url}/execute/", self.payload(), format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("template", response.data)
+        self.assertFalse(Contract.objects.exists())
 
     def test_execute_requires_counterparty_name(self) -> None:
         response = self.client.post(
