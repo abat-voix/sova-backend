@@ -4,6 +4,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
 from sova.catalog.tests.factories import B2CClientFactory
 from sova.core.tests.base import BaseApiTestMixin
 from sova.core.tests.factories import UserFactory
@@ -31,6 +32,11 @@ class WorkflowInstanceApiTestCase(BaseApiTestMixin, APITestCase):
     model = WorkflowInstance
     allow_update = False
     allow_delete = False
+
+    def setUp(self) -> None:
+        """Администратор платформы: процессы видны только по видимым взаимодействиям."""
+        super().setUp()
+        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
 
     def create_instance(self, **kwargs) -> WorkflowInstance:
         """Создаёт процесс workflow."""

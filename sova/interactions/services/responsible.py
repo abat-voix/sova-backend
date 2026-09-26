@@ -5,6 +5,8 @@ from django.contrib.auth.models import AbstractBaseUser
 from django.db import transaction
 from django.utils import timezone
 
+from accounts.models import SystemRole
+from accounts.services import account_service, get_system_role
 from sova.interactions.exceptions import AmbiguousManagerError, ManagerNotFoundError, NoActiveResponsibleError
 from sova.interactions.models import Contract, Interaction, Responsible
 from sova.notifications.enum import NotifyType
@@ -29,9 +31,11 @@ class ResponsibleService:
     завершённые исполнения остаются в истории. Новый КАМ получает уведомление «Назначение КАМа»
     по настройкам этого типа.
 
+    Права (кого можно назначить и снять) проверяются снаружи — `responsible_policy`; `assign` / `unassign` —
+    низкоуровневые, ими пользуются и служебные пути (демо-данные, импорт).
+
     Менеджеров из реестра договоров назначает импорт: они становятся ответственными договора
-    (`sync_contract_responsibles`) и переходят на взаимодействие при его создании из договора
-    (`transfer_from_contract`).
+    (`sync_contract_responsibles`) и на взаимодействие сами не переходят — это подсказка для назначения.
     """
 
     @transaction.atomic
@@ -61,6 +65,23 @@ class ResponsibleService:
         return responsible, True
 
     @transaction.atomic
+    def assign_by(
+        self,
+        interaction: Interaction,
+        manager: AbstractBaseUser,
+        actor: AbstractBaseUser,
+    ) -> tuple[Responsible, bool]:
+        """
+        Назначение от имени пользователя: руководитель, назначающий свободного КАМа, забирает его в команду.
+
+        Права (кого можно назначить) проверяет вызывающий через `assignable_managers`. Если КАМа забрал другой
+        руководитель после проверки, `KamHasHeadError` откатывает и назначение.
+        """
+        if get_system_role(actor) == SystemRole.HEAD and manager.pk != actor.pk:
+            account_service.claim(kam=manager, head=actor, actor=actor)
+        return self.assign(interaction=interaction, manager=manager, assigned_by=actor)
+
+    @transaction.atomic
     def unassign(self, interaction: Interaction, manager: AbstractBaseUser) -> Responsible:
         """Снимает менеджера с взаимодействия; его открытые действия уходят в пул."""
         Interaction.objects.select_for_update().get(pk=interaction.pk)
@@ -70,6 +91,24 @@ class ResponsibleService:
         self._close(responsible=current)
         self._release_open_action_instances(interaction=interaction, manager_id=current.manager_id)
         return current
+
+    @transaction.atomic
+    def unassign_everywhere(self, manager: AbstractBaseUser) -> list[Responsible]:
+        """
+        Снимает менеджера со всех взаимодействий и договоров реестра — при деактивации учётной записи.
+
+        Каждое снятие со взаимодействия — как `unassign`: запись закрывается, открытые задачи менеджера уходят в пул.
+        Взаимодействие, где он был единственным КАМом, становится ничьим и видно всем ролям. Назначения из реестра
+        на договоры (без взаимодействия) просто закрываются: задач у них нет.
+        """
+        current = Responsible.objects.filter(manager=manager, unassigned_at__isnull=True)
+        released = list(current.select_for_update().filter(interaction__isnull=True))
+        for responsible in released:
+            self._close(responsible=responsible)
+        on_interactions = current.select_related("interaction").filter(interaction__isnull=False)
+        return released + [
+            self.unassign(interaction=responsible.interaction, manager=manager) for responsible in on_interactions
+        ]
 
     @transaction.atomic
     def sync_contract_responsibles(
@@ -99,34 +138,6 @@ class ResponsibleService:
         for manager_id, manager in wanted.items():
             if manager_id not in kept:
                 Responsible.objects.create(contract=contract, manager=manager, assigned_by=assigned_by)
-
-    @transaction.atomic
-    def transfer_from_contract(
-        self,
-        contract: Contract,
-        interaction: Interaction,
-        assigned_by: AbstractBaseUser | None,
-    ) -> None:
-        """
-        Переводит действующих ответственных договора на взаимодействие, созданное из него.
-
-        Это те же записи (`UPDATE`): `contract` остаётся, а дата и автор назначения — момент привязки и тот,
-        кто привязал. Каждый перешедший КАМ получает «Назначение КАМа».
-        """
-        transferred = list(
-            Responsible.objects.select_for_update(of=("self",)).filter(
-                contract=contract,
-                interaction__isnull=True,
-                unassigned_at__isnull=True,
-            ).select_related("manager")
-        )
-        Responsible.objects.filter(pk__in=[responsible.pk for responsible in transferred]).update(
-            interaction=interaction,
-            assigned_at=timezone.now(),
-            assigned_by=assigned_by,
-        )
-        for responsible in transferred:
-            self._notify_assigned(interaction=interaction, manager=responsible.manager, assigned_by=assigned_by)
 
     def _get_active(self, interaction: Interaction, manager_id: int) -> Responsible | None:
         """Возвращает действующее назначение менеджера на взаимодействие."""

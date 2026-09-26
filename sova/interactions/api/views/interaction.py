@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from django.db import transaction
 from django.db.models import Count, IntegerField, OuterRef, Prefetch, QuerySet, Subquery
 from django.db.models.functions import Coalesce
 from django.utils.translation import gettext_lazy as _
@@ -10,6 +11,9 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 from rest_framework.fields import UUIDField
 from rest_framework.response import Response
 
+from accounts.exceptions import KamHasHeadError
+from accounts.models import SystemRole
+from accounts.services import get_system_role
 from sova.core.api.exceptions import ConflictError
 from sova.core.api.views import SovaBaseViewSet
 from sova.catalog.models import ContactPerson
@@ -23,7 +27,12 @@ from sova.interactions.models import (
     InteractionProgram,
     Responsible,
 )
-from sova.interactions.services import contact_link_service, responsible_service, visible_interactions
+from sova.interactions.services import (
+    assignment_candidates,
+    contact_link_service,
+    responsible_service,
+    visible_interactions,
+)
 from sova.messaging.api.serializers import ConversationSerializer
 from sova.messaging.models import Conversation, ConversationParticipant
 from sova.messaging.services import conversation_service
@@ -52,8 +61,10 @@ class InteractionViewSet(SovaBaseViewSet):
     Взаимодействия с вузами и B2C-клиентами. Доступны CRUD операции.
 
     Состав выборки зависит от роли запрашивающего: КАМ видит взаимодействия, где он
-    действующий ответственный, руководитель — свои и КАМов, администратор платформы — все.
+    действующий ответственный, руководитель — свои, КАМов своей команды и КАМов без руководителя, администратор
+    платформы — все.
     Взаимодействия без действующего ответственного видны всем ролям.
+    КАМ, создавший взаимодействие, сразу становится его ответственным.
 
     Ответственного менеджера назначают и снимают действиями
     `assign-responsible` / `unassign-responsible`: он хранится с историей,
@@ -98,10 +109,32 @@ class InteractionViewSet(SovaBaseViewSet):
         )
 
     def perform_create(self, serializer: serializers.WriteInteractionSerializer) -> None:
-        """Пересоздание инстанса через аннотированный queryset для read-ответа."""
-        super().perform_create(serializer)
+        """Создаёт взаимодействие; КАМ-автор сразу становится ответственным. Ответ — из аннотированного queryset."""
+        with transaction.atomic():
+            super().perform_create(serializer)
+            if get_system_role(self.request.user) == SystemRole.KAM:
+                responsible_service.assign(
+                    interaction=serializer.instance,
+                    manager=self.request.user,
+                    assigned_by=self.request.user,
+                )
         # Выборка без роли: созданное взаимодействие нужно вернуть автору в любом случае
         serializer.instance = self._with_details(Interaction.objects.all()).get(pk=serializer.instance.pk)
+
+    @extend_schema(request=None, responses={200: serializers.ManagerCandidateSerializer(many=True)})
+    @action(methods=["GET"], detail=True, url_path="assignable-managers")
+    def assignable_managers(self, request, pk=None) -> Response:
+        """
+        Кандидаты для окна назначения ответственного: кого пользователь может назначить и КАМы из реестра.
+
+        Руководителю и администратору КАМы из реестра договоров взаимодействия идут первыми с `from_registry=true`;
+        тот, кого пользователь назначить не вправе (например, КАМ чужой команды), показывается с `assignable=false`.
+        КАМ получает только себя, без подсказки реестра. Назначение — `assign-responsible`.
+        """
+        candidates = assignment_candidates(interaction=self.get_object(), actor=request.user)
+        return Response(
+            data=serializers.ManagerCandidateSerializer(candidates, many=True, context=self.get_serializer_context()).data,
+        )
 
     @extend_schema(
         request=serializers.AssignResponsibleSerializer,
@@ -121,17 +154,22 @@ class InteractionViewSet(SovaBaseViewSet):
         Добавляет ответственного менеджера.
 
         Действующие ответственные остаются: у взаимодействия может быть несколько КАМов.
+        Администратор назначает активных КАМов и руководителей, руководитель — себя, КАМов своей команды и свободных
+        (свободный вступает в его команду), КАМ — только себя.
         Повторное назначение того же менеджера ничего не меняет и возвращает 200.
         """
         interaction = self.get_object()
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        responsible, created = responsible_service.assign(
-            interaction=interaction,
-            manager=serializer.validated_data["manager"],
-            assigned_by=request.user,
-        )
+        try:
+            responsible, created = responsible_service.assign_by(
+                interaction=interaction,
+                manager=serializer.validated_data["manager"],
+                actor=request.user,
+            )
+        except KamHasHeadError:
+            raise ConflictError(detail=_("У КАМа уже есть другой руководитель."), code="kam_has_head")
 
         return Response(
             data=serializers.ResponsibleSerializer(
@@ -152,7 +190,16 @@ class InteractionViewSet(SovaBaseViewSet):
         serializer_class=serializers.UnassignResponsibleSerializer,
     )
     def unassign_responsible(self, request, pk=None) -> Response:
-        """Снимает указанного ответственного; запись остаётся в истории, остальные КАМы не меняются."""
+        """
+        Снимает указанного ответственного; запись остаётся в истории, остальные КАМы не меняются.
+
+        Администратор снимает любого, руководитель — себя и КАМов своей команды, КАМ — никого (403).
+        """
+        if get_system_role(request.user) == SystemRole.KAM:
+            raise PermissionDenied(
+                detail=_("Снимать ответственных может только руководитель или администратор."),
+                code="responsible_change_forbidden",
+            )
         interaction = self.get_object()
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)

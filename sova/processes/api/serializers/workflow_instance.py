@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from sova.core.api.serializers import UserShortSerializer
 from sova.interactions.api.serializers import InteractionShortSerializer
+from sova.interactions.services import visible_interactions
 from sova.processes.models import WorkflowInstance
 from sova.workflows.api.serializers import WorkflowShortSerializer
 
@@ -56,3 +57,10 @@ class WriteWorkflowInstanceSerializer(serializers.ModelSerializer):
         )
         # Уникальность пары «workflow + взаимодействие» проверяет движок и отвечает 409 already_started
         validators = []
+
+    def validate_interaction(self, interaction):
+        """Процесс можно запустить только для видимого пользователю взаимодействия."""
+        request = self.context["request"]
+        if not visible_interactions(request.user).filter(pk=interaction.pk).exists():
+            raise serializers.ValidationError(_("Взаимодействие не найдено."), code="not_found")
+        return interaction

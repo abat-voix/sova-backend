@@ -1,6 +1,8 @@
 from django.contrib.auth.models import AbstractBaseUser
 from django.db import transaction
 
+from accounts.models import SystemRole
+from accounts.services import get_system_role
 from sova.interactions.exceptions import ContractAlreadyAttachedError
 from sova.interactions.models import (
     Contract,
@@ -24,18 +26,14 @@ class ContractAttachmentService:
     """
 
     @transaction.atomic
-    def attach_to_new_interaction(
-        self,
-        contract: Contract,
-        assigned_by: AbstractBaseUser | None,
-        manager: AbstractBaseUser | None = None,
-    ) -> Interaction:
+    def attach_to_new_interaction(self, contract: Contract, author: AbstractBaseUser | None) -> Interaction:
         """
         Создаёт новый Interaction из headless-договора и переносит на него все его записи.
 
-        Действующие ответственные договора (назначенные импортом реестра) становятся ответственными
-        взаимодействия от имени `assigned_by`. `manager`, если передан, добавляется к ним; уже перешедший
-        с договора менеджер не дублируется.
+        Ответственные — как при обычном создании взаимодействия: автор-КАМ становится ответственным, у руководителя
+        и администратора взаимодействие остаётся ничьим до назначения через `assign-responsible`. КАМы договора из
+        реестра на взаимодействие не переходят: они остаются на договоре подсказкой для назначения
+        (`assignment_candidates`).
         """
         self._check_headless(contract=contract)
         interaction = Interaction.objects.create(
@@ -44,10 +42,9 @@ class ContractAttachmentService:
             comment=contract.draft_comment,
         )
         self._attach(contract=contract, interaction=interaction)
-        responsible_service.transfer_from_contract(contract=contract, interaction=interaction, assigned_by=assigned_by)
 
-        if manager is not None:
-            responsible_service.assign(interaction=interaction, manager=manager, assigned_by=assigned_by)
+        if author is not None and get_system_role(author) == SystemRole.KAM:
+            responsible_service.assign(interaction=interaction, manager=author, assigned_by=author)
 
         return interaction
 

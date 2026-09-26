@@ -33,6 +33,8 @@ class NotifyType(TextChoices):
     STAGE_DEADLINE = "stage_deadline", "Сроки этапа"
     WORKFLOW_DEADLINE = "workflow_deadline", "Сроки процесса"
     KAM_ASSIGNED = "kam_assigned", "Назначение КАМа"
+    HEAD_ASSIGNED = "head_assigned", "Назначение руководителя"
+    HEAD_UNASSIGNED = "head_unassigned", "Снятие руководителя"
 
 
 # Типы, которые обрабатывает задача notify_deadlines; только они пишутся в журнал DeadlineDelivery
@@ -44,6 +46,8 @@ NOTIFY_TYPE_GROUPS: dict[str, str] = {
     NotifyType.STAGE_DEADLINE: NotificationKind.DEADLINE,
     NotifyType.WORKFLOW_DEADLINE: NotificationKind.DEADLINE,
     NotifyType.KAM_ASSIGNED: NotificationKind.ASSIGNMENT,
+    NotifyType.HEAD_ASSIGNED: NotificationKind.ASSIGNMENT,
+    NotifyType.HEAD_UNASSIGNED: NotificationKind.ASSIGNMENT,
 }
 
 
@@ -59,6 +63,7 @@ class HeadMode(TextChoices):
 
     ASSIGNED_BY = "assigned_by", "Назначивший руководитель"
     ALL_HEADS = "all_heads", "Все руководители"
+    SUPERVISOR = "supervisor", "Руководитель КАМа"
 
 
 class DeliveryMode(TextChoices):

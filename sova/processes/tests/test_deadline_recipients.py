@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from accounts.models import SystemRole, UserRole
+from accounts.models import Supervision, SystemRole, UserRole
 from sova.core.tests.factories import UserFactory
 from sova.interactions.tests.factories import InteractionFactory, ResponsibleFactory
 from sova.notifications.enum import HeadMode, NotifyEvent
@@ -164,3 +164,69 @@ class DeadlineRecipientResolverTest(TestCase):
 
         # Проверяем, что предупреждение уходит только руководителю
         self.assertEqual(self.recipients(rule, responsibles=[self.kam], event=NotifyEvent.REMINDER), [self.head])
+
+
+class SupervisorHeadModeTest(TestCase):
+    """head_mode=supervisor — руководители действующих КАМов взаимодействия."""
+
+    def setUp(self) -> None:
+        """Взаимодействие с двумя КАМами разных руководителей и руководитель без команды."""
+        self.head = make_user(SystemRole.HEAD)
+        self.second_head = make_user(SystemRole.HEAD)
+        self.free_head = make_user(SystemRole.HEAD)
+        self.kam = make_user(SystemRole.KAM)
+        self.second_kam = make_user(SystemRole.KAM)
+        Supervision.objects.create(kam=self.kam, head=self.head)
+        Supervision.objects.create(kam=self.second_kam, head=self.second_head)
+        self.interaction = InteractionFactory()
+        ResponsibleFactory(interaction=self.interaction, manager=self.kam, assigned_by=self.free_head)
+        self.rule = NotifySettings(
+            is_notify_responsible=False,
+            is_notify_head=True,
+            is_fallback_to_head=True,
+            head_mode=HeadMode.SUPERVISOR,
+        )
+
+    def heads(self, interaction=None) -> list:
+        """Руководители-получатели для взаимодействия."""
+        interaction = interaction or self.interaction
+        resolver = DeadlineRecipientResolver(interaction_ids=[interaction.pk])
+        return resolver.recipients(
+            rule=self.rule,
+            event=NotifyEvent.OVERDUE,
+            interaction_id=interaction.pk,
+            responsibles=[],
+        )
+
+    def test_supervisor_of_kam(self) -> None:
+        """Уведомляется руководитель КАМа, а не назначивший его."""
+        self.assertEqual(self.heads(), [self.head])
+
+    def test_supervisors_of_every_kam(self) -> None:
+        """КАМы с разными руководителями — уведомляются оба руководителя."""
+        ResponsibleFactory(interaction=self.interaction, manager=self.second_kam)
+
+        self.assertEqual(sorted(self.heads(), key=lambda user: user.pk), [self.head, self.second_head])
+
+    def test_kam_without_supervisor_falls_back_to_all_heads(self) -> None:
+        """У КАМа нет руководителя — все активные руководители."""
+        Supervision.objects.filter(kam=self.kam).delete()
+
+        self.assertEqual(self.heads(), [self.head, self.second_head, self.free_head])
+
+    def test_inactive_supervisor_falls_back_to_all_heads(self) -> None:
+        """Руководитель КАМа неактивен — все активные руководители."""
+        self.head.is_active = False
+        self.head.save()
+
+        self.assertEqual(self.heads(), [self.second_head, self.free_head])
+
+    def test_supervisor_without_head_role_is_ignored(self) -> None:
+        """Связь устарела (руководитель сменил роль в обход сервиса) — все активные руководители."""
+        UserRole.objects.filter(user=self.head).update(role=SystemRole.KAM)
+
+        self.assertEqual(self.heads(), [self.second_head, self.free_head])
+
+    def test_interaction_without_kams_falls_back_to_all_heads(self) -> None:
+        """У взаимодействия нет КАМов — все активные руководители."""
+        self.assertEqual(self.heads(interaction=InteractionFactory()), [self.head, self.second_head, self.free_head])

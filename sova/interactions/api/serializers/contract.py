@@ -1,4 +1,3 @@
-from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
@@ -31,8 +30,8 @@ class ContractSerializer(serializers.ModelSerializer):
     current_responsibles = serializers.SerializerMethodField(
         label=_("Действующие ответственные"),
         help_text=_(
-            "КАМы headless-договора, назначенные импортом реестра; при создании взаимодействия переходят на "
-            "него. У привязанного договора — пустой список, ответственные — в карточке взаимодействия"
+            "КАМы договора, назначенные импортом реестра. На взаимодействие не переходят, остаются на договоре "
+            "подсказкой для назначения; ответственные взаимодействия — в его карточке"
         ),
     )
     files_count = serializers.IntegerField(
@@ -65,7 +64,7 @@ class ContractSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(ResponsibleShortSerializer(many=True))
     def get_current_responsibles(self, instance: Contract) -> list[dict]:
-        """Действующие КАМы договора без взаимодействия; ViewSet подгружает их через Prefetch."""
+        """Действующие КАМы договора из реестра; ViewSet подгружает их через Prefetch."""
         current = getattr(instance, "current_responsibles", None)
         if current is None:
             current = list(
@@ -112,7 +111,7 @@ class WriteContractSerializer(serializers.ModelSerializer):
         Договор можно создать только для видимого пользователю взаимодействия; сменить его нельзя.
 
         Headless-договор привязывается только через `attach-to-new-interaction`: там переносятся его направления,
-        программы, продукты и КАМы и проверяется контрагент.
+        программы и продукты и проверяется контрагент.
         """
         if self.instance is not None and self.instance.interaction_id != interaction.pk:
             raise serializers.ValidationError(
@@ -152,19 +151,3 @@ class WriteContractSerializer(serializers.ModelSerializer):
                     {name: _("Дата не может быть раньше предыдущего шага договора.")},
                 )
         return attrs
-
-
-
-class AttachToNewInteractionSerializer(serializers.Serializer):
-    """Создание взаимодействия из договора — дополнительный ответственный, если нужен."""
-
-    manager = serializers.PrimaryKeyRelatedField(
-        queryset=get_user_model().objects.filter(is_active=True),
-        required=False,
-        allow_null=True,
-        label=_("Ответственный менеджер"),
-        help_text=_(
-            "Id активного пользователя; добавляется к КАМам, перешедшим с договора. Не указан — ответственные "
-            "только с договора"
-        ),
-    )

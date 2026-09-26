@@ -1,8 +1,7 @@
-from unittest.mock import patch
-
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
+from accounts.models import SystemRole, UserRole
 from sova.catalog.tests.factories import UniversityFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.exceptions import AmbiguousManagerError, ManagerNotFoundError
@@ -10,7 +9,6 @@ from sova.interactions.models import InteractionProduct, Responsible
 from sova.interactions.services import responsible_service
 from sova.interactions.services.contract_attachment import contract_attachment_service
 from sova.interactions.tests.factories import ContractFactory, InteractionFactory, InteractionProductFactory
-from sova.notifications.enum import NotificationChannel
 
 
 class AttachToNewInteractionTestCase(TestCase):
@@ -18,18 +16,34 @@ class AttachToNewInteractionTestCase(TestCase):
 
     def setUp(self) -> None:
         self.university = UniversityFactory()
-        self.manager = UserFactory(first_name="Иван", last_name="Иванов")
+        self.kam = self._user(SystemRole.KAM)
+        self.registry_kam = self._user(SystemRole.KAM)
         self.contract = ContractFactory(
             interaction=None,
             university=self.university,
             draft_comment="Первичный контакт",
         )
         InteractionProductFactory(contract=self.contract, interaction=None)
+        responsible_service.sync_contract_responsibles(
+            contract=self.contract, managers=[self.registry_kam], assigned_by=None
+        )
+
+    @staticmethod
+    def _user(role: str):
+        user = UserFactory()
+        UserRole.objects.create(user=user, role=role)
+        return user
+
+    @staticmethod
+    def _current(interaction) -> set[int]:
+        return set(
+            Responsible.objects.filter(interaction=interaction, unassigned_at__isnull=True).values_list(
+                "manager_id", flat=True
+            )
+        )
 
     def test_creates_interaction_and_attaches_headless_records(self) -> None:
-        interaction = contract_attachment_service.attach_to_new_interaction(
-            contract=self.contract, assigned_by=self.manager, manager=self.manager
-        )
+        interaction = contract_attachment_service.attach_to_new_interaction(contract=self.contract, author=self.kam)
 
         self.contract.refresh_from_db()
         self.assertEqual(self.contract.interaction_id, interaction.id)
@@ -39,56 +53,26 @@ class AttachToNewInteractionTestCase(TestCase):
         item = InteractionProduct.objects.get(contract=self.contract)
         self.assertEqual(item.interaction_id, interaction.id)
 
-        responsible = Responsible.objects.get(interaction=interaction, unassigned_at__isnull=True)
-        self.assertEqual(responsible.manager_id, self.manager.id)
+    def test_kam_author_becomes_the_only_responsible(self) -> None:
+        interaction = contract_attachment_service.attach_to_new_interaction(contract=self.contract, author=self.kam)
 
-    def test_contract_responsibles_move_to_interaction(self) -> None:
-        kam = UserFactory()
-        responsible_service.sync_contract_responsibles(contract=self.contract, managers=[kam], assigned_by=None)
+        # Проверяем: ответственный — только автор-КАМ, КАМ из реестра не перешёл
+        self.assertEqual(self._current(interaction), {self.kam.pk})
 
+    def test_head_author_leaves_interaction_unassigned(self) -> None:
         interaction = contract_attachment_service.attach_to_new_interaction(
-            contract=self.contract, assigned_by=self.manager
+            contract=self.contract, author=self._user(SystemRole.HEAD)
         )
 
-        # Проверяем: КАМ договора — действующий ответственный взаимодействия, назначил привязавший
-        current = Responsible.objects.get(interaction=interaction, unassigned_at__isnull=True)
-        self.assertEqual((current.manager_id, current.assigned_by_id), (kam.pk, self.manager.pk))
+        # Проверяем: как при обычном создании — взаимодействие ничьё
+        self.assertEqual(self._current(interaction), set())
 
-    @patch("sova.notifications.services.event_notification.send_event_notification")
-    def test_explicit_manager_equal_to_contract_kam_is_not_duplicated(self, task) -> None:
-        responsible_service.sync_contract_responsibles(
-            contract=self.contract, managers=[self.manager], assigned_by=None
-        )
-        head = UserFactory()
+    def test_registry_kams_stay_on_contract(self) -> None:
+        contract_attachment_service.attach_to_new_interaction(contract=self.contract, author=self.kam)
 
-        with self.captureOnCommitCallbacks(execute=True):
-            interaction = contract_attachment_service.attach_to_new_interaction(
-                contract=self.contract, assigned_by=head, manager=self.manager
-            )
-
-        # Проверяем: одна запись и одно уведомление
-        self.assertEqual(Responsible.objects.filter(interaction=interaction).count(), 1)
-        system_calls = [
-            item for item in task.delay.call_args_list if item.kwargs["channels"] == [NotificationChannel.SYSTEM]
-        ]
-        self.assertEqual(len(system_calls), 1)
-
-    def test_explicit_manager_is_added_to_contract_kams(self) -> None:
-        kam = UserFactory()
-        responsible_service.sync_contract_responsibles(contract=self.contract, managers=[kam], assigned_by=None)
-        chosen = UserFactory(first_name="Пётр", last_name="Петров")
-
-        interaction = contract_attachment_service.attach_to_new_interaction(
-            contract=self.contract, assigned_by=self.manager, manager=chosen
-        )
-
-        # Проверяем: у взаимодействия оба КАМа — с договора и выбранный явно
-        current = set(
-            Responsible.objects.filter(interaction=interaction, unassigned_at__isnull=True).values_list(
-                "manager_id", flat=True
-            )
-        )
-        self.assertEqual(current, {kam.pk, chosen.pk})
+        # Проверяем: назначение из реестра осталось на договоре действующим, без взаимодействия
+        registry = Responsible.objects.get(contract=self.contract, manager=self.registry_kam)
+        self.assertEqual((registry.interaction_id, registry.unassigned_at), (None, None))
 
 
 class FindManagerTestCase(TestCase):
