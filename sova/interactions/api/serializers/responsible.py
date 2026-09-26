@@ -97,3 +97,24 @@ class UnassignResponsibleSerializer(serializers.Serializer):
         ),
         error_messages={"does_not_exist": _("Этого менеджера нельзя снять.")},
     )
+
+
+class ManagerCandidateSerializer(serializers.Serializer):
+    """Кандидат в ответственные взаимодействия — строка окна назначения (`assignment_candidates`)."""
+
+    manager = UserShortSerializer(read_only=True, label=_("Менеджер"))
+    from_registry = serializers.BooleanField(
+        read_only=True,
+        label=_("Из реестра"),
+        help_text=_("КАМ договора взаимодействия, назначенный импортом реестра; выделяется в окне назначения"),
+    )
+    assignable = serializers.BooleanField(
+        read_only=True,
+        label=_("Можно назначить"),
+        help_text=_("Пользователь запроса вправе назначить менеджера; КАМ из реестра бывает недоступен (чужая команда)"),
+    )
+    is_responsible = serializers.BooleanField(
+        read_only=True,
+        label=_("Уже ответственный"),
+        help_text=_("Менеджер — действующий ответственный взаимодействия"),
+    )

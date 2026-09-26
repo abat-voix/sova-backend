@@ -4,10 +4,11 @@ from django.test import TestCase
 
 from accounts.models import SystemRole, UserRole
 from accounts.services import account_service
+from sova.catalog.tests.factories import UniversityFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.models import Responsible
 from sova.interactions.services import responsible_service
-from sova.interactions.tests.factories import InteractionFactory
+from sova.interactions.tests.factories import ContractFactory, InteractionFactory
 from sova.processes.enum import ActionInstanceStatus
 from sova.processes.tests.factories import ActionInstanceFactory
 
@@ -58,6 +59,16 @@ class DeactivationReleasesResponsibilitiesTestCase(TestCase):
         # Проверяем пул и историю
         self.assertIsNone(open_action.responsible_id)
         self.assertEqual(done_action.responsible_id, self.kam.pk)
+
+    def test_deactivation_closes_headless_contract_assignments(self, task) -> None:
+        """Назначение на headless-договор из реестра закрывается вместе с назначениями на взаимодействия."""
+        contract = ContractFactory(interaction=None, university=UniversityFactory())
+        responsible_service.sync_contract_responsibles(contract=contract, managers=[self.kam], assigned_by=None)
+
+        account_service.deactivate(user=self.kam, actor=None)
+
+        self.assertFalse(Responsible.objects.filter(manager=self.kam, unassigned_at__isnull=True).exists())
+        self.assertTrue(Responsible.objects.filter(manager=self.kam, contract=contract).exists())
 
     def test_history_is_kept(self, task) -> None:
         """Назначения закрываются, а не удаляются."""

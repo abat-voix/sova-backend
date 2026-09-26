@@ -12,6 +12,7 @@ from sova.catalog.services import contract_registry_import_service
 from sova.catalog.tests.factories import DirectionFactory, ProductFactory, ProgramFactory, UniversityFactory, VendorFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.models import Contract, InteractionProduct, License, Responsible
+from sova.interactions.services.contract_attachment import contract_attachment_service
 
 
 class ImportContractRegistryTestCase(TestCase):
@@ -92,6 +93,28 @@ class ImportContractRegistryTestCase(TestCase):
         self.assertEqual((created, updated), (0, 1))
         contract = Contract.objects.get(contract_number="Д-1")
         self.assertEqual(contract.draft_status, "Передано")
+
+    def test_attached_contract_rows_are_skipped_with_warning(self) -> None:
+        """Реестр — только для создания взаимодействий: привязанный договор не меняется и не дублируется."""
+        contract_registry_import_service.import_rows(iter([(2, self._row())]))
+        contract = Contract.objects.get(contract_number="Д-1")
+        contract_attachment_service.attach_to_new_interaction(contract=contract, author=None)
+        warnings: list = []
+
+        created, updated = contract_registry_import_service.import_rows(
+            iter([(2, self._row(contract_number="д-1", draft_status="Передано", product="Неизвестный продукт"))]),
+            warnings=warnings,
+        )
+
+        # Проверяем: строки пропущены без ошибок, договор один и не изменён, есть предупреждение
+        self.assertEqual((created, updated), (0, 0))
+        self.assertEqual(Contract.objects.filter(contract_number__iexact="Д-1").count(), 1)
+        contract.refresh_from_db()
+        self.assertEqual(contract.draft_status, "В работе")
+        self.assertEqual(
+            [str(warning) for warning in warnings],
+            ["Строка 2: договор д-1 уже привязан к взаимодействию, его строки не загружены"],
+        )
 
     def test_contract_number_and_contacts_are_matched_in_other_case(self) -> None:
         contract_registry_import_service.import_rows(iter([(2, self._row(contract_number="Д-15/2026"))]))
@@ -426,7 +449,9 @@ class ContractRegistryManagersTestCase(TestCase):
         lookups = [
             query["sql"]
             for query in context.captured_queries
-            if 'FROM "interactions_contract"' in query["sql"] and "UPPER" in query["sql"]
+            if 'FROM "interactions_contract"' in query["sql"]
+            and "UPPER" in query["sql"]
+            and '"interactions_contract"."interaction_id" IS NULL' in query["sql"]
         ]
         self.assertTrue(lookups)
         self.assertTrue(all("FOR UPDATE" in sql for sql in lookups))

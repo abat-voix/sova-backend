@@ -72,21 +72,21 @@ class HeadlessContractVisibilityApiTestCase(APITestCase):
         # Проверяем журнал файлов: только файл своего договора
         self.assertEqual(self.visible_ids(kam, url=self.files_url), {str(own_file.pk)})
 
-    def test_attach_with_manager_who_hides_contract_returns_200(self) -> None:
-        """Привязка с КАМом, после которой договор не виден привязавшему, всё равно отдаёт договор."""
+    def test_kam_attach_assigns_the_kam(self) -> None:
+        """КАМ создаёт взаимодействие из своего договора реестра — ответственный только он, коллега из реестра — нет."""
         kam = self.create_user(SystemRole.KAM)
-        contract = self.create_contract()
+        colleague = self.create_user(SystemRole.KAM)
+        contract = self.create_contract(kam, colleague)
         self.client.force_authenticate(user=kam)
 
-        response = self.client.post(
-            reverse("interactions:contract-attach-to-new-interaction", args=[contract.pk]),
-            data={"manager": self.create_user(SystemRole.KAM).pk},
-            format="json",
-        )
+        response = self.client.post(reverse("interactions:contract-attach-to-new-interaction", args=[contract.pk]))
 
-        # Проверяем ответ с привязанным договором, хотя теперь он чужой
+        # Проверяем ответ и ответственных нового взаимодействия
         self.assertEqual(response.status_code, 200)
-        self.assertIsNotNone(response.data["interaction"])
+        current = Responsible.objects.filter(
+            interaction_id=response.data["interaction"]["id"], unassigned_at__isnull=True
+        ).values_list("manager_id", flat=True)
+        self.assertEqual(list(current), [kam.pk])
 
     def test_patch_cannot_attach_headless_contract(self) -> None:
         """Привязка headless-договора только через attach-to-new-interaction: PATCH interaction отклоняется."""

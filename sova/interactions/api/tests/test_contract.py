@@ -281,10 +281,10 @@ class ContractCurrentResponsiblesApiTestCase(APITestCase):
         # Проверяем, что снятый КАМ не показывается
         self.assertEqual(self._get(contract)["current_responsibles"], [])
 
-    def test_attached_contract_shows_no_kams(self) -> None:
+    def test_attached_contract_keeps_registry_kams(self) -> None:
         contract = ContractFactory(interaction=None, university=self.university)
         Responsible.objects.create(contract=contract, manager=self.kam)
-        contract_attachment_service.attach_to_new_interaction(contract=contract, assigned_by=None)
+        contract_attachment_service.attach_to_new_interaction(contract=contract, author=None)
 
-        # Проверяем: КАМы перешли на взаимодействие, у договора текущих нет
-        self.assertEqual(self._get(contract)["current_responsibles"], [])
+        # Проверяем: КАМы из реестра не перешли на взаимодействие и остались на договоре
+        self.assertEqual([item["manager"]["id"] for item in self._get(contract)["current_responsibles"]], [self.kam.pk])

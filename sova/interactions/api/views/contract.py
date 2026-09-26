@@ -46,7 +46,8 @@ class ContractViewSet(SovaBaseViewSet):
 
     Договор, созданный импортом реестра, существует без взаимодействия («безголовый»); его КАМы из реестра —
     `current_responsibles`. Действие `attach-to-new-interaction` создаёт из него взаимодействие: вместе с договором
-    туда переходят его направления, программы, продукты и КАМы; `manager` в запросе добавляет ещё одного.
+    туда переходят его направления, программы и продукты. Ответственные — как при обычном создании; КАМы из реестра
+    остаются на договоре подсказкой (`/interactions/{id}/assignable-managers/`).
     Ошибка привязки: 409 — договор уже привязан (`contract_already_attached`).
     """
 
@@ -60,32 +61,20 @@ class ContractViewSet(SovaBaseViewSet):
     search_fields = ("contract_number",)
     filterset_class = filters.ContractFilter
 
-    @extend_schema(
-        request=serializers.AttachToNewInteractionSerializer,
-        responses={200: serializers.ContractSerializer},
-    )
-    @action(
-        methods=["POST"],
-        detail=True,
-        url_path="attach-to-new-interaction",
-        serializer_class=serializers.AttachToNewInteractionSerializer,
-    )
+    @extend_schema(request=None, responses={200: serializers.ContractSerializer})
+    @action(methods=["POST"], detail=True, url_path="attach-to-new-interaction")
     def attach_to_new_interaction(self, request, pk=None) -> Response:
         """
         Создаёт взаимодействие из договора и привязывает к нему договор.
 
-        Контрагент и комментарий берутся из договора. Ответственные — КАМы договора и `manager` из запроса,
-        если передан. Процесс workflow не запускается — это отдельный запуск процесса.
+        Контрагент и комментарий берутся из договора. Ответственные — как при обычном создании: КАМ становится
+        ответственным сам, у руководителя и администратора взаимодействие остаётся ничьим до `assign-responsible`.
+        КАМы из реестра не назначаются — их подсказывает `assignable-managers` взаимодействия. Процесс workflow не
+        запускается — это отдельный запуск процесса.
         """
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
         with transaction.atomic(), translate_attachment_errors():
             contract = self._lock_contract()
-            contract_attachment_service.attach_to_new_interaction(
-                contract=contract,
-                assigned_by=request.user,
-                manager=serializer.validated_data.get("manager"),
-            )
+            contract_attachment_service.attach_to_new_interaction(contract=contract, author=request.user)
 
         return self._contract_response()
 
@@ -98,8 +87,7 @@ class ContractViewSet(SovaBaseViewSet):
         """
         Read-представление договора после привязки.
 
-        Без фильтра видимости: с новым КАМом договор может стать чужим для привязавшего, но ответ о
-        выполненной привязке он получить должен.
+        Без фильтра видимости: ответ о выполненной привязке привязавший получает в любом случае.
         """
         contract = self._with_responsibles(super().get_queryset()).get(pk=self.kwargs["pk"])
         return Response(
@@ -113,7 +101,7 @@ class ContractViewSet(SovaBaseViewSet):
 
     @staticmethod
     def _with_responsibles(queryset: QuerySet) -> QuerySet:
-        """Подгружает действующих КАМов headless-договора для `current_responsibles`."""
+        """Подгружает действующих КАМов договора из реестра для `current_responsibles`."""
         return queryset.prefetch_related(
             Prefetch(
                 "responsibles",

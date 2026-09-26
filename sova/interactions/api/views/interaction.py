@@ -27,7 +27,12 @@ from sova.interactions.models import (
     InteractionProgram,
     Responsible,
 )
-from sova.interactions.services import contact_link_service, responsible_service, visible_interactions
+from sova.interactions.services import (
+    assignment_candidates,
+    contact_link_service,
+    responsible_service,
+    visible_interactions,
+)
 from sova.messaging.api.serializers import ConversationSerializer
 from sova.messaging.models import Conversation, ConversationParticipant
 from sova.messaging.services import conversation_service
@@ -115,6 +120,21 @@ class InteractionViewSet(SovaBaseViewSet):
                 )
         # Выборка без роли: созданное взаимодействие нужно вернуть автору в любом случае
         serializer.instance = self._with_details(Interaction.objects.all()).get(pk=serializer.instance.pk)
+
+    @extend_schema(request=None, responses={200: serializers.ManagerCandidateSerializer(many=True)})
+    @action(methods=["GET"], detail=True, url_path="assignable-managers")
+    def assignable_managers(self, request, pk=None) -> Response:
+        """
+        Кандидаты для окна назначения ответственного: кого пользователь может назначить и КАМы из реестра.
+
+        Руководителю и администратору КАМы из реестра договоров взаимодействия идут первыми с `from_registry=true`;
+        тот, кого пользователь назначить не вправе (например, КАМ чужой команды), показывается с `assignable=false`.
+        КАМ получает только себя, без подсказки реестра. Назначение — `assign-responsible`.
+        """
+        candidates = assignment_candidates(interaction=self.get_object(), actor=request.user)
+        return Response(
+            data=serializers.ManagerCandidateSerializer(candidates, many=True, context=self.get_serializer_context()).data,
+        )
 
     @extend_schema(
         request=serializers.AssignResponsibleSerializer,

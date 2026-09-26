@@ -105,7 +105,7 @@ class ContractAttachmentApiTestCase(EngineApiTestCase):
         self.assertEqual(InteractionProduct.objects.get(pk=self.item.pk).interaction_id, interaction.pk)
 
     def test_attach_contract_without_kams_creates_interaction_without_responsible(self) -> None:
-        """Договор без КАМов и manager не передан — взаимодействие без ответственного."""
+        """Договор без КАМов, создаёт администратор — взаимодействие без ответственного."""
         response = self.client.post(path=self.attach_new_url(self.contract))
 
         # Проверяем, что договор привязан, а ответственного нет
@@ -113,32 +113,15 @@ class ContractAttachmentApiTestCase(EngineApiTestCase):
         interaction = Interaction.objects.get(pk=response.data["interaction"]["id"])
         self.assertFalse(interaction.responsibles.exists())
 
-    def test_attach_to_new_interaction_with_explicit_manager(self) -> None:
-        """Явно переданный manager назначается ответственным нового взаимодействия."""
-
-        response = self.client.post(path=self.attach_new_url(self.contract), data={"manager": self.user.pk}, format="json")
-
-        # Проверяем, что ответственный — переданный пользователь
-        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
-        interaction = Interaction.objects.get(pk=response.data["interaction"]["id"])
-        self.assertEqual(interaction.responsibles.get(unassigned_at__isnull=True).manager_id, self.user.pk)
-
-    def test_attach_to_new_interaction_moves_contract_kams(self) -> None:
-        """КАМы договора становятся ответственными нового взаимодействия."""
+    def test_attach_to_new_interaction_does_not_assign_contract_kams(self) -> None:
+        """КАМы договора из реестра не назначаются: у администратора взаимодействие остаётся ничьим."""
         kam = UserFactory()
         responsible_service.sync_contract_responsibles(contract=self.contract, managers=[kam], assigned_by=None)
 
         response = self.client.post(path=self.attach_new_url(self.contract))
 
-        # Проверяем, что КАМ договора — ответственный взаимодействия
+        # Проверяем, что ответственных у взаимодействия нет, а КАМ остался на договоре
         self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
         interaction = Interaction.objects.get(pk=response.data["interaction"]["id"])
-        self.assertEqual(interaction.responsibles.get(unassigned_at__isnull=True).manager_id, kam.pk)
-
-    def test_attach_to_new_interaction_with_unknown_manager_id_returns_400(self) -> None:
-        """Несуществующий id менеджера — 400 по полю manager."""
-        response = self.client.post(path=self.attach_new_url(self.contract), data={"manager": 999999}, format="json")
-
-        # Проверяем ошибку валидации
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("manager", response.data)
+        self.assertFalse(interaction.responsibles.exists())
+        self.assertEqual([item["manager"]["id"] for item in response.data["current_responsibles"]], [kam.pk])

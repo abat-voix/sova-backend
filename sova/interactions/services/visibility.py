@@ -29,7 +29,7 @@ def visible_contracts(user) -> QuerySet[Contract]:
     Договоры, которые видит `user`: договоры видимых ему взаимодействий и headless-договоры импорта реестра.
 
     Headless-договор виден по его ответственным тем же правилом, что взаимодействие: КАМу — свой, руководителю —
-    свои и КАМов, администратору — все; договор без действующих ответственных ничей и виден всем ролям.
+    свои, КАМов своей команды и КАМов без руководителя, администратору — все; договор без действующих ответственных ничей и виден всем ролям.
     Пользователь без прикладной роли не видит ничего.
     """
     role = get_system_role(user)
@@ -56,5 +56,4 @@ def _owned_or_unassigned(user, role: str, owner: str) -> Q:
         own |= Q(manager__system_role__role=SystemRole.KAM) & (
             Q(manager__supervision__head=user) | Q(manager__supervision__isnull=True)
         )
-
-    return Interaction.objects.filter(Exists(assigned.filter(own)) | ~Exists(assigned))
+    return Q(Exists(assigned.filter(own))) | Q(~Exists(assigned))
