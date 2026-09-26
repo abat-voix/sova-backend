@@ -37,7 +37,13 @@ class ResponsibleNotificationTest(TestCase):
         self.assign(manager=self.kam, assigned_by=self.head)
 
         # Проверяем текст без строки о задачах
-        self.assertEqual(self.system_texts(task), [f"Вас назначили КАМом — {self.interaction.university.name}"])
+        self.assertEqual(
+            self.system_texts(task),
+            [
+                f"{self.kam.get_full_name()}({self.kam.email}), Вас назначили КАМом — "
+                f"{self.interaction.university.name}"
+            ],
+        )
         # Проверяем получателя и ссылку
         kwargs = task.delay.call_args_list[0].kwargs
         self.assertEqual(kwargs["user_ids"], [self.kam.pk])
@@ -56,7 +62,13 @@ class ResponsibleNotificationTest(TestCase):
         # Проверяем, что задача осталась в пуле
         self.assertIsNone(instance.responsible_id)
         # Проверяем текст без строки о задачах
-        self.assertEqual(self.system_texts(task), [f"Вас назначили КАМом — {self.interaction.university.name}"])
+        self.assertEqual(
+            self.system_texts(task),
+            [
+                f"{self.kam.get_full_name()}({self.kam.email}), Вас назначили КАМом — "
+                f"{self.interaction.university.name}"
+            ],
+        )
 
     def test_second_kam_is_notified(self, task) -> None:
         """Второй КАМ взаимодействия тоже получает уведомление о назначении."""

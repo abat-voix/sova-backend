@@ -168,7 +168,10 @@ class ResponsibleService:
         assigned_by: AbstractBaseUser | None,
     ) -> None:
         """Уведомляет нового КАМа; назначившему самого себя не отправляется — его отсекает actor."""
-        text = f"Вас назначили КАМом — {interaction.university or interaction.b2c_client}"
+        text = (
+            f"{manager.get_full_name()}({manager.email}), Вас назначили КАМом — "
+            f"{interaction.university or interaction.b2c_client}"
+        )
         event_notification_service.notify(
             notify_type=NotifyType.KAM_ASSIGNED,
             message=Message(text=text, link=interaction_link(interaction_id=interaction.pk)),

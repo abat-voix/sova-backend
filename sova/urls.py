@@ -25,4 +25,5 @@ urlpatterns = [
     path("api/notifications/", include("sova.notifications.api.routers")),
     path("api/messaging/", include("sova.messaging.api.routers")),
     path("api/reports/", include("sova.reports.api.routers")),
+    path("api/integrations/", include("sova.integrations.api.routers")),
 ]

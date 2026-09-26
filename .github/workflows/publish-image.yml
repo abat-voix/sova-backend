@@ -114,4 +114,4 @@ jobs:
           SSH_USER: ${{ secrets.DEV_SSH_USER }}
         run: |
           ssh "$SSH_USER@$SSH_HOST" \
-            'cd /opt/dev.sova.1uup.ru && ./scripts/deploy.sh'
+            'cd /opt/dev.sova.1uup.ru && git pull --ff-only origin develop && ./scripts/deploy.sh'

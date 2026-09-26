@@ -44,7 +44,7 @@ class EmailChannelSenderTest(TestCase):
         self.assertFalse(result)
 
 
-@override_settings(TELEGRAM_BOT_TOKEN="test-token", NOTIFICATION_HTTP_TIMEOUT=5)
+@override_settings(TELEGRAM_BOT_TOKEN="test-token", TELEGRAM_PROXY="", NOTIFICATION_HTTP_TIMEOUT=5)
 class TelegramChannelSenderTest(SimpleTestCase):
     """Тесты TelegramChannelSender.send()."""
 
@@ -64,6 +64,26 @@ class TelegramChannelSenderTest(SimpleTestCase):
         self.assertEqual(post.call_args.kwargs["data"], {"chat_id": "123456", "text": "Текст уведомления"})
         # Проверяем таймаут запроса
         self.assertEqual(post.call_args.kwargs["timeout"], 5)
+        # Без TELEGRAM_PROXY запрос не получает proxy-настройки
+        self.assertNotIn("proxies", post.call_args.kwargs)
+
+    @override_settings(TELEGRAM_PROXY="socks5h://proxy-user:proxy-pass@127.0.0.1:1080")
+    @patch("sova.notifications.services.channels.telegram.requests.post")
+    def test_send_uses_configured_proxy(self, post: Mock) -> None:
+        """TELEGRAM_PROXY применяется к HTTP- и HTTPS-запросам Telegram sender."""
+        post.return_value = Mock(status_code=200)
+        sender = TelegramChannelSender()
+
+        result = sender.send(target="123456", message=Message(text="Текст уведомления"))
+
+        self.assertTrue(result)
+        self.assertEqual(
+            post.call_args.kwargs["proxies"],
+            {
+                "http": "socks5h://proxy-user:proxy-pass@127.0.0.1:1080",
+                "https": "socks5h://proxy-user:proxy-pass@127.0.0.1:1080",
+            },
+        )
 
     @patch("sova.notifications.services.channels.telegram.requests.post")
     def test_send_returns_false_on_request_exception(self, post: Mock) -> None:

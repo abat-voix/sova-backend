@@ -41,7 +41,7 @@ class ConversationSerializer(serializers.ModelSerializer):
 
     def get_last_message(self, instance: Conversation) -> dict | None:
         """Последнее сообщение беседы для превью в списке."""
-        message = instance.messages.select_related("sender").order_by("-created_at").first()
+        message = instance.messages.select_related("sender").prefetch_related("attachments").order_by("-created_at").first()
         return MessageSerializer(message).data if message else None
 
     def get_unread_count(self, instance: Conversation) -> int:
