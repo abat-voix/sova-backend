@@ -229,6 +229,31 @@ class UserListApiTestCase(APITestCase):
         # Проверяем, что объект не найден
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_roles_dictionary(self) -> None:
+        """Справочник ролей доступен руководителю и администратору платформы."""
+        expected = [
+            {"value": "kam", "label": "КАМ"},
+            {"value": "head", "label": "Руководитель"},
+            {"value": "platform_admin", "label": "Администратор платформы"},
+        ]
+        for role in (SystemRole.HEAD, SystemRole.PLATFORM_ADMIN):
+            self.client.force_authenticate(user=self.create_user(role))
+            with self.subTest(role=role):
+                response = self.client.get(path=reverse("users:user-roles"))
+
+                # Проверяем состав справочника
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertEqual(response.data, expected)
+
+    def test_roles_dictionary_is_forbidden_to_kam(self) -> None:
+        """КАМу справочник ролей недоступен, как и список пользователей."""
+        self.client.force_authenticate(user=self.create_user(SystemRole.KAM))
+
+        response = self.client.get(path=reverse("users:user-roles"))
+
+        # Проверяем, что доступ запрещён
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
 
 @patch("sova.notifications.services.event_notification.send_event_notification")
 class UserManagementApiTestCase(APITestCase):
@@ -266,11 +291,37 @@ class UserManagementApiTestCase(APITestCase):
         self.assertIsNone(response.data["user"]["role"])
         self.assertFalse(UserRole.objects.filter(user=self.kam).exists())
 
+    def test_assign_role_to_user_without_role(self, task) -> None:
+        """Пользователю без роли назначается роль."""
+        roleless = UserListApiTestCase.create_user()
+
+        response = self.client.put(self.url("role", roleless), {"role": SystemRole.HEAD}, format="json")
+
+        # Проверяем ответ и назначенную роль
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["user"]["role"], SystemRole.HEAD)
+        self.assertEqual(response.data["orphaned_kams"], [])
+        self.assertEqual(UserRole.objects.get(user=roleless).role, SystemRole.HEAD)
+
     def test_invalid_role(self, task) -> None:
         """Неизвестная роль — 400."""
         response = self.client.put(self.url("role", self.kam), {"role": "owner"}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_role_is_required(self, task) -> None:
+        """Без поля `role` роль не меняется — 400."""
+        response = self.client.put(self.url("role", self.kam), {}, format="json")
+
+        # Проверяем ошибку и неизменную роль
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(UserRole.objects.get(user=self.kam).role, SystemRole.KAM)
+
+    def test_unknown_user_returns_404(self, task) -> None:
+        """Несуществующий пользователь — 404."""
+        response = self.client.put(reverse("users:user-role", args=[999999]), {"role": SystemRole.HEAD}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_admin_cannot_drop_own_admin_role(self, task) -> None:
         """Администратор не может снять с себя роль администратора."""

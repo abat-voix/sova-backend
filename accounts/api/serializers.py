@@ -47,6 +47,13 @@ class UserSerializer(UserShortSerializer):
         return assignment.get_role_display() if assignment else None
 
 
+class RoleChoiceSerializer(serializers.Serializer):
+    """Роль СОВА в справочнике ролей."""
+
+    value = serializers.CharField(label=_("Код роли"), help_text=_("Значение для `role` в запросах"))
+    label = serializers.CharField(label=_("Название роли"), help_text=_("Человекочитаемое название роли"))
+
+
 class ChangeRoleSerializer(serializers.Serializer):
     """Назначение, смена или снятие роли пользователя."""
 

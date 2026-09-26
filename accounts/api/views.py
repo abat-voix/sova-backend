@@ -12,6 +12,7 @@ from accounts.api.permissions import CanListUsers, IsHead, IsPlatformAdmin
 from accounts.api.serializers import (
     AccountChangeResultSerializer,
     ChangeRoleSerializer,
+    RoleChoiceSerializer,
     SetHeadSerializer,
     UserSerializer,
 )
@@ -29,7 +30,7 @@ class UserViewSet(SovaReadOnlyViewSet):
     Состав списка зависит от роли запрашивающего: руководитель видит активных КАМов своей команды и свободных,
     администратор платформы — всех пользователей. Список по умолчанию содержит только активных, неактивных отдаёт
     фильтр `is_active=false`. Фильтры `team` (`mine`/`free`), `role` (несколько значений) и `head` сужают список.
-    Остальным ролям эндпоинт недоступен.
+    Остальным ролям эндпоинт недоступен. Экшен `roles` — справочник ролей для тех же ролей.
 
     Экшены `role`, `head`, `deactivate`, `activate` — только для администратора платформы. Смена роли и деактивация
     удаляют связи пользователя с руководителем и командой; КАМы, оставшиеся без руководителя, возвращаются в
@@ -52,6 +53,19 @@ class UserViewSet(SovaReadOnlyViewSet):
         if self.action == "list" and "is_active" not in self.request.query_params:
             queryset = queryset.filter(is_active=True)
         return queryset.select_related("system_role", "supervision__head").order_by("last_name", "first_name", "pk")
+
+    @extend_schema(request=None, responses={200: RoleChoiceSerializer(many=True)})
+    @action(
+        methods=["GET"],
+        detail=False,
+        url_path="roles",
+        serializer_class=RoleChoiceSerializer,
+        pagination_class=None,
+    )
+    def roles(self, request: Request) -> Response:
+        """Справочник ролей СОВА: код для `role` в запросах и название."""
+        choices = [{"value": value, "label": label} for value, label in SystemRole.choices]
+        return Response(data=self.get_serializer(choices, many=True).data, status=status.HTTP_200_OK)
 
     @extend_schema(request=ChangeRoleSerializer, responses={200: AccountChangeResultSerializer})
     @action(
