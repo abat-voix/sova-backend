@@ -43,7 +43,7 @@ class UserListApiTestCase(APITestCase):
         self.assertNotIn(roleless.pk, self.response_ids(response))
 
     def test_platform_admin_sees_everyone_except_platform_admins(self) -> None:
-        """Администратор платформы видит всех, кроме администраторов платформы."""
+        """Администратор платформы видит всех активных пользователей, кроме себя."""
         admin = self.create_user(SystemRole.PLATFORM_ADMIN)
         another_admin = self.create_user(SystemRole.PLATFORM_ADMIN)
         kam = self.create_user(SystemRole.KAM)
@@ -55,10 +55,105 @@ class UserListApiTestCase(APITestCase):
 
         # Проверяем успешный ответ
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # Проверяем, что видны все, кроме администраторов платформы
-        self.assertEqual(self.response_ids(response), {kam.pk, head.pk, roleless.pk})
+        # Проверяем, что видны все, кроме самого администратора
+        self.assertEqual(
+            self.response_ids(response), {another_admin.pk, kam.pk, head.pk, roleless.pk}
+        )
         self.assertNotIn(admin.pk, self.response_ids(response))
-        self.assertNotIn(another_admin.pk, self.response_ids(response))
+
+    def test_roles_dictionary_is_available_to_platform_admin(self) -> None:
+        admin = self.create_user(SystemRole.PLATFORM_ADMIN)
+        self.client.force_authenticate(user=admin)
+
+        response = self.client.get(f"{self.list_url}roles/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data,
+            [
+                {"value": "kam", "label": "КАМ"},
+                {"value": "head", "label": "Руководитель"},
+                {"value": "platform_admin", "label": "Администратор платформы"},
+            ],
+        )
+
+    def test_platform_admin_can_assign_update_and_remove_role(self) -> None:
+        admin = self.create_user(SystemRole.PLATFORM_ADMIN)
+        target = self.create_user()
+        self.client.force_authenticate(user=admin)
+        url = reverse("users:user-role", args=[target.pk])
+
+        response = self.client.patch(url, {"role": SystemRole.HEAD}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["role"], SystemRole.HEAD)
+        self.assertEqual(UserRole.objects.get(user=target).role, SystemRole.HEAD)
+
+        response = self.client.patch(url, {"role": SystemRole.KAM}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(UserRole.objects.get(user=target).role, SystemRole.KAM)
+
+        response = self.client.patch(url, {"role": None}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data["role"])
+        self.assertFalse(UserRole.objects.filter(user=target).exists())
+
+    def test_role_command_rejects_self_inactive_and_unknown_users(self) -> None:
+        admin = self.create_user(SystemRole.PLATFORM_ADMIN)
+        inactive = self.create_user(is_active=False)
+        self.client.force_authenticate(user=admin)
+
+        self.assertEqual(
+            self.client.patch(
+                reverse("users:user-role", args=[admin.pk]),
+                {"role": SystemRole.HEAD},
+                format="json",
+            ).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        self.assertEqual(
+            self.client.patch(
+                reverse("users:user-role", args=[inactive.pk]),
+                {"role": SystemRole.HEAD},
+                format="json",
+            ).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        self.assertEqual(
+            self.client.patch(
+                reverse("users:user-role", args=[999999]),
+                {"role": SystemRole.HEAD},
+                format="json",
+            ).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_only_platform_admin_can_change_roles(self) -> None:
+        head = self.create_user(SystemRole.HEAD)
+        target = self.create_user()
+        self.client.force_authenticate(user=head)
+
+        response = self.client.patch(
+            reverse("users:user-role", args=[target.pk]),
+            {"role": SystemRole.KAM},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(UserRole.objects.filter(user=target).exists())
+
+    def test_invalid_role_is_rejected(self) -> None:
+        admin = self.create_user(SystemRole.PLATFORM_ADMIN)
+        target = self.create_user()
+        self.client.force_authenticate(user=admin)
+
+        response = self.client.patch(
+            reverse("users:user-role", args=[target.pk]),
+            {"role": "unknown"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(UserRole.objects.filter(user=target).exists())
 
     def test_inactive_users_are_hidden(self) -> None:
         """Отключённые учётные записи в списке не показываются."""

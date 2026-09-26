@@ -17,3 +17,14 @@ class CanListUsers(IsAuthenticated):
         if not super().has_permission(request, view):
             return False
         return get_system_role(request.user) in self.allowed_roles
+
+
+class IsPlatformAdmin(IsAuthenticated):
+    """Разрешает изменение ролей только администратору платформы."""
+
+    message = "Изменять роли может только администратор платформы."
+
+    def has_permission(self, request, view) -> bool:
+        if not super().has_permission(request, view):
+            return False
+        return get_system_role(request.user) == SystemRole.PLATFORM_ADMIN
