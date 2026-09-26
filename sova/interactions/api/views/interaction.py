@@ -28,6 +28,9 @@ from sova.interactions.models import (
     Responsible,
 )
 from sova.interactions.services import contact_link_service, responsible_service, visible_interactions
+from sova.messaging.api.serializers import ConversationSerializer
+from sova.messaging.models import Conversation, ConversationParticipant
+from sova.messaging.services import conversation_service
 
 
 def _active_count(model: type) -> Coalesce:
@@ -304,3 +307,98 @@ class InteractionViewSet(SovaBaseViewSet):
             actor=request.user,
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    def _chat_queryset(self) -> QuerySet:
+        """Чаты Взаимодействий с предзагруженными участниками (для сериализации)."""
+        return Conversation.objects.prefetch_related(
+            Prefetch(
+                "participants",
+                queryset=ConversationParticipant.objects.select_related("user"),
+            ),
+        ).select_related("interaction__university", "interaction__b2c_client")
+
+    @extend_schema(
+        methods=["GET"],
+        request=None,
+        responses={200: ConversationSerializer, 404: None},
+    )
+    @extend_schema(
+        methods=["POST"],
+        request=serializers.CreateInteractionChatSerializer,
+        responses={200: ConversationSerializer, 201: ConversationSerializer},
+    )
+    @action(
+        methods=["GET", "POST"],
+        detail=True,
+        url_path="chat",
+        serializer_class=serializers.CreateInteractionChatSerializer,
+    )
+    def chat(self, request, pk=None) -> Response:
+        """
+        Чат Взаимодействия: получение и создание.
+
+        GET отдаёт чат, только если он уже создан и запрашивающий — его участник;
+        иначе — 404, в том числе если чат существует, но пользователь не приглашён.
+        """
+        interaction = self.get_object()
+
+        if request.method == "GET":
+            conversation = self._chat_queryset().filter(
+                interaction=interaction,
+                participants__user=request.user,
+            ).first()
+            if conversation is None:
+                raise NotFound(detail="Чат Взаимодействия не найден.", code="chat_not_found")
+            return Response(
+                data=ConversationSerializer(conversation, context=self.get_serializer_context()).data,
+            )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        conversation, created = conversation_service.get_or_create_interaction(
+            interaction=interaction,
+            actor=request.user,
+            users=serializer.validated_data["participant_ids"],
+        )
+        if not created and not ConversationParticipant.objects.filter(
+            conversation=conversation,
+            user=request.user,
+        ).exists():
+            raise ConflictError(
+                detail=_("Чат Взаимодействия уже создан, но вы не его участник."),
+                code="chat_exists_not_participant",
+            )
+
+        conversation = self._chat_queryset().get(pk=conversation.pk)
+        return Response(
+            data=ConversationSerializer(conversation, context=self.get_serializer_context()).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        request=serializers.AddChatParticipantsSerializer,
+        responses={200: ConversationSerializer},
+    )
+    @action(
+        methods=["POST"],
+        detail=True,
+        url_path="chat/participants",
+        serializer_class=serializers.AddChatParticipantsSerializer,
+    )
+    def chat_participants(self, request, pk=None) -> Response:
+        """Добавляет участников в уже созданный чат Взаимодействия."""
+        interaction = self.get_object()
+        conversation = Conversation.objects.filter(interaction=interaction).first()
+        if conversation is None:
+            raise NotFound(detail="Чат Взаимодействия не найден.", code="chat_not_found")
+        if not conversation_service.can_add_participants(conversation, request.user):
+            raise PermissionDenied(detail=_("Недостаточно прав для изменения состава чата."))
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        conversation_service.add_participants(conversation, serializer.validated_data["participant_ids"])
+
+        conversation = self._chat_queryset().get(pk=conversation.pk)
+        return Response(
+            data=ConversationSerializer(conversation, context=self.get_serializer_context()).data,
+        )

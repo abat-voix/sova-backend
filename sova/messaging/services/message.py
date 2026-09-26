@@ -6,13 +6,21 @@ from sova.messaging.enum import ConversationKind
 from sova.messaging.exceptions import NotConversationParticipantError, SystemConversationIsReadOnlyError
 from sova.messaging.models import Conversation, ConversationParticipant, Message
 from sova.messaging.realtime import publish_conversation_read, publish_message_created
+from sova.messaging.services.message_attachment import message_attachment_service
 
 
 class MessageService:
     """Отправка сообщений и учёт прочтения в личных беседах."""
 
     @transaction.atomic
-    def send(self, conversation: Conversation, sender: AbstractBaseUser, text: str, link: str = "") -> Message:
+    def send(
+        self,
+        conversation: Conversation,
+        sender: AbstractBaseUser,
+        text: str = "",
+        link: str = "",
+        attachment_ids=(),
+    ) -> Message:
         """
         Отправляет сообщение от участника беседы.
 
@@ -31,8 +39,12 @@ class MessageService:
             raise NotConversationParticipantError
 
         message = Message.objects.create(conversation=conversation, sender=sender, text=text, link=link)
+        message_attachment_service.claim(sender, message, attachment_ids)
         conversation.last_message_at = message.created_at
         conversation.save(update_fields=["last_message_at"])
+        # claim() заполняет локальные объекты, но prefetch здесь гарантирует то же
+        # представление для REST и realtime без дополнительного запроса на файл.
+        message = Message.objects.prefetch_related("attachments").get(pk=message.pk)
         publish_message_created(message)
         return message
 

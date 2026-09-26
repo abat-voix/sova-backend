@@ -1,3 +1,6 @@
+from collections.abc import Iterable
+
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractBaseUser
 from django.db import transaction
 from django.utils import timezone
@@ -6,6 +9,8 @@ from accounts.models import SystemRole
 from accounts.services import account_service, get_system_role
 from sova.interactions.exceptions import NoActiveResponsibleError
 from sova.interactions.models import Interaction, Responsible
+from sova.interactions.exceptions import AmbiguousManagerError, ManagerNotFoundError, NoActiveResponsibleError
+from sova.interactions.models import Contract, Interaction, Responsible
 from sova.notifications.enum import NotifyType
 from sova.notifications.services.event_notification import event_notification_service
 from sova.notifications.services.links import interaction_link
@@ -30,6 +35,10 @@ class ResponsibleService:
 
     Права (кого можно назначить и снять) проверяются снаружи — `responsible_policy`; `assign` / `unassign` —
     низкоуровневые, ими пользуются и служебные пути (демо-данные, импорт).
+
+    Менеджеров из реестра договоров назначает импорт: они становятся ответственными договора
+    (`sync_contract_responsibles`) и переходят на взаимодействие при его создании из договора
+    (`transfer_from_contract`).
     """
 
     @transaction.atomic
@@ -97,6 +106,63 @@ class ResponsibleService:
         current = Responsible.objects.select_related("interaction").filter(manager=manager, unassigned_at__isnull=True)
         return [self.unassign(interaction=responsible.interaction, manager=manager) for responsible in current]
 
+    @transaction.atomic
+    def sync_contract_responsibles(
+        self,
+        contract: Contract,
+        managers: Iterable[AbstractBaseUser],
+        assigned_by: AbstractBaseUser | None,
+    ) -> None:
+        """
+        Приводит действующих ответственных headless-договора к `managers` (реестр — источник правды).
+
+        Недостающие назначаются от имени `assigned_by`, отсутствующие в `managers` снимаются и остаются в
+        истории. Уведомлений нет: у headless-договора нет карточки, на которую вела бы ссылка.
+        """
+        wanted = {manager.pk: manager for manager in managers}
+        current = Responsible.objects.select_for_update().filter(
+            contract=contract,
+            interaction__isnull=True,
+            unassigned_at__isnull=True,
+        )
+        kept: set[int] = set()
+        for responsible in current:
+            if responsible.manager_id in wanted:
+                kept.add(responsible.manager_id)
+            else:
+                self._close(responsible=responsible)
+        for manager_id, manager in wanted.items():
+            if manager_id not in kept:
+                Responsible.objects.create(contract=contract, manager=manager, assigned_by=assigned_by)
+
+    @transaction.atomic
+    def transfer_from_contract(
+        self,
+        contract: Contract,
+        interaction: Interaction,
+        assigned_by: AbstractBaseUser | None,
+    ) -> None:
+        """
+        Переводит действующих ответственных договора на взаимодействие, созданное из него.
+
+        Это те же записи (`UPDATE`): `contract` остаётся, а дата и автор назначения — момент привязки и тот,
+        кто привязал. Каждый перешедший КАМ получает «Назначение КАМа».
+        """
+        transferred = list(
+            Responsible.objects.select_for_update(of=("self",)).filter(
+                contract=contract,
+                interaction__isnull=True,
+                unassigned_at__isnull=True,
+            ).select_related("manager")
+        )
+        Responsible.objects.filter(pk__in=[responsible.pk for responsible in transferred]).update(
+            interaction=interaction,
+            assigned_at=timezone.now(),
+            assigned_by=assigned_by,
+        )
+        for responsible in transferred:
+            self._notify_assigned(interaction=interaction, manager=responsible.manager, assigned_by=assigned_by)
+
     def _get_active(self, interaction: Interaction, manager_id: int) -> Responsible | None:
         """Возвращает действующее назначение менеджера на взаимодействие."""
         return Responsible.objects.filter(
@@ -104,6 +170,26 @@ class ResponsibleService:
             manager_id=manager_id,
             unassigned_at__isnull=True,
         ).first()
+
+    def find_manager(self, full_name: str, users: Iterable[AbstractBaseUser] | None = None) -> AbstractBaseUser:
+        """
+        Активный пользователь по ФИО из файла: сравнение с first_name/last_name в обоих порядках слов.
+
+        ФИО в файле обычно пишут «Фамилия Имя», а `User.get_full_name()` в Django — «Имя Фамилия».
+        Точное сравнение с `get_full_name()` не сработало бы почти никогда — сравниваем с обоими
+        порядками, без учёта регистра и лишних пробелов. Отчества в `User` нет, поэтому ФИО с
+        отчеством в файле не найдётся. Не найден — `ManagerNotFoundError`, несколько — `AmbiguousManagerError`.
+        `users` — уже выбранные активные пользователи, чтобы не запрашивать их на каждое ФИО (списки).
+        """
+        if users is None:
+            users = get_user_model().objects.filter(is_active=True)
+        normalized = self._normalize(full_name)
+        candidates = [user for user in users if normalized in self._name_variants(user)]
+        if not candidates:
+            raise ManagerNotFoundError(f"Менеджер не найден: {full_name}")
+        if len(candidates) > 1:
+            raise AmbiguousManagerError(f"Менеджер неоднозначен: {full_name}")
+        return candidates[0]
 
     def _close(self, responsible: Responsible) -> None:
         """Закрывает назначение текущим моментом."""
@@ -117,7 +203,10 @@ class ResponsibleService:
         assigned_by: AbstractBaseUser | None,
     ) -> None:
         """Уведомляет нового КАМа; назначившему самого себя не отправляется — его отсекает actor."""
-        text = f"Вас назначили КАМом — {interaction.university or interaction.b2c_client}"
+        text = (
+            f"{manager.get_full_name()}({manager.email}), Вас назначили КАМом — "
+            f"{interaction.university or interaction.b2c_client}"
+        )
         event_notification_service.notify(
             notify_type=NotifyType.KAM_ASSIGNED,
             message=Message(text=text, link=interaction_link(interaction_id=interaction.pk)),
@@ -138,6 +227,15 @@ class ResponsibleService:
             status__in=(ActionInstanceStatus.PENDING, ActionInstanceStatus.IN_PROGRESS),
             responsible_id=manager_id,
         ).update(responsible=None)
+
+    @staticmethod
+    def _normalize(value: str) -> str:
+        return " ".join(value.split()).casefold()
+
+    @classmethod
+    def _name_variants(cls, user: AbstractBaseUser) -> set[str]:
+        first, last = user.first_name, user.last_name
+        return {cls._normalize(f"{first} {last}"), cls._normalize(f"{last} {first}")}
 
 
 responsible_service = ResponsibleService()

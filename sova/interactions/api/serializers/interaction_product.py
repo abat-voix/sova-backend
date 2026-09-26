@@ -1,9 +1,10 @@
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
+from rest_framework.validators import UniqueTogetherValidator
 
 from sova.catalog.api.serializers import ProductShortSerializer
 from sova.core.api.validators import validate_model_clean
-from sova.interactions.models import InteractionProduct
+from sova.interactions.models import Interaction, InteractionProduct
 
 
 class InteractionProductShortSerializer(serializers.ModelSerializer):
@@ -44,6 +45,14 @@ class InteractionProductSerializer(serializers.ModelSerializer):
 class WriteInteractionProductSerializer(serializers.ModelSerializer):
     """Продукт взаимодействия — валидация входных данных (create/update)."""
 
+    # В модели interaction nullable ради headless-записей импорта договоров; через API
+    # запись всегда создаётся в рамках взаимодействия. Условный unique-constraint модели DRF
+    # не умеет проверять по FK в condition, поэтому уникальность задана явно в Meta.validators.
+    interaction = serializers.PrimaryKeyRelatedField(
+        queryset=Interaction.objects.all(),
+        label=_("Взаимодействие"),
+    )
+
     class Meta:
         model = InteractionProduct
         fields = (
@@ -53,6 +62,12 @@ class WriteInteractionProductSerializer(serializers.ModelSerializer):
             "product",
             "is_active",
         )
+        validators = [
+            UniqueTogetherValidator(
+                queryset=InteractionProduct.objects.all(),
+                fields=("interaction", "product"),
+            ),
+        ]
 
     def validate(self, attrs: dict) -> dict:
         """Проверка принадлежности программы взаимодействию и состава её каталога."""

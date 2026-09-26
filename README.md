@@ -148,6 +148,26 @@ Frontend подключается к `/ws/events/`. События достав�
 повторно сверяет messaging queries. `CHANNEL_REDIS_URL` должен указывать на
 логическую Redis DB, отличную от `REDIS_URL` и `CELERY_BROKER_URL`.
 
+## External integrations
+
+Входящие события принимаются на `POST /api/integrations/v1/<system>/events/`. Системы `lms` и
+`cms` используют Bearer-токены из `INTEGRATION_*_INBOUND_TOKEN`; исходящие запросы идут на
+`INTEGRATION_*_URL` с `INTEGRATION_*_OUTBOUND_TOKEN`. Тело запроса — произвольный JSON-объект.
+Дополнительные поля сохраняются без изменений в Django Admin.
+
+Для дедупликации передавайте `X-Event-Id` (или `eventId` в JSON). Повтор с тем же идентификатором
+возвращает `200` и `duplicate=true`; новый принятый запрос возвращает `202`. Тип события задаётся
+через `X-Event-Type` или `eventType`. Неизвестные типы сохраняются со статусом `ignored` и могут
+быть повторены из Admin. Ошибки внешней системы получают статус `retry` и повторяются с backoff,
+после исчерпания попыток — `failed`.
+
+Для production используется RabbitMQ и отдельная очередь `integrations`:
+
+```bash
+celery -A sova worker -Q integrations --loglevel=INFO --concurrency=2
+celery -A sova beat --loglevel=INFO
+```
+
 Файл читается через `source`, поэтому значения должны быть shell-safe: без
 пробелов, `$` и `#` вне кавычек.
 

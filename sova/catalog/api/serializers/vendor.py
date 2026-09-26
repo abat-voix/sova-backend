@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from sova.catalog.models import Vendor
+from sova.core.api.validators import validate_model_constraints
 
 
 class VendorShortSerializer(serializers.ModelSerializer):
@@ -37,3 +38,8 @@ class WriteVendorSerializer(serializers.ModelSerializer):
             "external_code",
             "is_active",
         )
+
+    def validate(self, attrs: dict) -> dict:
+        """Уникальность названия и кода без учёта регистра — 400 вместо ошибки БД."""
+        validate_model_constraints(model=Vendor, attrs=attrs, instance=self.instance)
+        return attrs

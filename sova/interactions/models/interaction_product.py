@@ -1,12 +1,13 @@
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 
 from sova.core.models import UUIDModel
 
 
 class InteractionProduct(UUIDModel):
     """
-    Продукт в рамках конкретного взаимодействия.
+    Продукт в рамках конкретного взаимодействия либо, до появления Interaction, договора.
 
     `interaction_program` пуст, если продукт добавлен вне привязки к программе: в каталоге
     Product.programs может быть пустым, а состав продуктов договора расширяется со временем.
@@ -25,7 +26,17 @@ class InteractionProduct(UUIDModel):
         to="interactions.Interaction",
         on_delete=models.CASCADE,
         related_name="interaction_products",
+        null=True,
+        blank=True,
         verbose_name="Взаимодействие",
+    )
+    contract = models.ForeignKey(
+        to="interactions.Contract",
+        on_delete=models.CASCADE,
+        related_name="interaction_products",
+        null=True,
+        blank=True,
+        verbose_name="Договор",
     )
     interaction_program = models.ForeignKey(
         to="interactions.InteractionProgram",
@@ -48,9 +59,19 @@ class InteractionProduct(UUIDModel):
         verbose_name_plural = "Продукты взаимодействия"
         ordering = ["interaction", "added_at"]
         constraints = [
+            models.CheckConstraint(
+                check=Q(interaction__isnull=False) | Q(contract__isnull=False),
+                name="interaction_product_has_owner",
+            ),
             models.UniqueConstraint(
                 fields=["interaction", "product"],
+                condition=Q(interaction__isnull=False),
                 name="unique_product_per_interaction",
+            ),
+            models.UniqueConstraint(
+                fields=["contract", "product"],
+                condition=Q(contract__isnull=False),
+                name="unique_product_per_contract",
             ),
         ]
 
@@ -58,9 +79,9 @@ class InteractionProduct(UUIDModel):
         program = self.interaction_program
         if program is None:
             return
-        if program.interaction_id != self.interaction_id:
+        if program.interaction_id != self.interaction_id or program.contract_id != self.contract_id:
             raise ValidationError(
-                {"interaction_program": "Программа принадлежит другому взаимодействию."}
+                {"interaction_program": "Программа принадлежит другому взаимодействию или договору."}
             )
         if not program.program.products.filter(pk=self.product_id).exists():
             raise ValidationError(
@@ -68,4 +89,4 @@ class InteractionProduct(UUIDModel):
             )
 
     def __str__(self):
-        return f"{self.interaction} — {self.product}"
+        return f"{self.interaction or self.contract} — {self.product}"

@@ -27,7 +27,12 @@ class ResponsibleSerializer(serializers.ModelSerializer):
     interaction = serializers.PrimaryKeyRelatedField(
         read_only=True,
         label=_("Взаимодействие"),
-        help_text=_("Id взаимодействия, за которое назначен ответственный"),
+        help_text=_("Id взаимодействия, за которое назначен ответственный; пусто у КАМа headless-договора"),
+    )
+    contract = serializers.PrimaryKeyRelatedField(
+        read_only=True,
+        label=_("Договор"),
+        help_text=_("Id договора, если назначение пришло из реестра договоров"),
     )
     manager = UserShortSerializer(
         read_only=True,
@@ -45,6 +50,7 @@ class ResponsibleSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "interaction",
+            "contract",
             "manager",
             "assigned_by",
             "assigned_at",

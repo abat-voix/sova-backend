@@ -26,7 +26,21 @@ jobs:
     env:
       ENVIRONMENT: testing
       DJANGO_SECRET_KEY: ci-only-not-a-production-secret
-      DATABASE_URL: sqlite:///ci.sqlite3
+      DATABASE_URL: postgresql://sova:sova@localhost:5432/sova
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: sova
+          POSTGRES_PASSWORD: sova
+          POSTGRES_DB: sova
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sova"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Check out repository

@@ -9,9 +9,12 @@ class ClientKind(TextChoices):
 
 
 class CatalogType(TextChoices):
-    """Тип каталога для настраиваемого маппинга полей при импорте xls/xlsx."""
+    """Тип каталога/реестра для настраиваемого маппинга полей при импорте xls/xlsx."""
 
     UNIVERSITY = "university", "Вузы"
-    PRODUCT = "product", "Продукты"
+    VENDOR = "vendor", "Вендоры"
     DIRECTION = "direction", "Направления"
-    RESPONSIBLE = "responsible", "Ответственные"
+    PROGRAM = "program", "Программы"
+    PRODUCT = "product", "Продукты"
+    CONTACT_PERSON = "contact_person", "Ответственные от вуза"
+    CONTRACT_REGISTRY = "contract_registry", "Реестр договоров"
