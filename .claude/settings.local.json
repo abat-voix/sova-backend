@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/bin/python manage.py test accounts)",
+      "Bash(.venv/bin/python manage.py test accounts.api -v 2)",
+      "Bash(.venv/bin/python manage.py spectacular --file /dev/null)",
+      "Bash(.venv/bin/python manage.py test)",
+      "Bash(.venv/bin/python manage.py test accounts -v 2)",
+      "Bash(.venv/bin/python manage.py check)",
+      "Bash(.venv/bin/python manage.py test sova.catalog.tests.test_loaddata -v 1)",
+      "Bash(docker compose *)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-test.sqlite3 .venv/bin/python manage.py test sova.catalog.tests.test_loaddata -v 2)",
+      "Bash(export DATABASE_URL=\"sqlite:////private/tmp/claude-501/-Users-igor-develop-sova-sova-backend/2326636d-34da-4893-b669-120a49ac7793/scratchpad/ref.sqlite3\")",
+      "Bash(.venv/bin/python manage.py migrate --no-input)",
+      "Bash(.venv/bin/python manage.py loaddata --reference-data)",
+      "Bash(.venv/bin/python -c ' *)",
+      "Bash(.venv/bin/python manage.py loaddata --help)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-test2.sqlite3 .venv/bin/python manage.py test sova.catalog)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-ci.sqlite3 .venv/bin/python manage.py test sova.processes.tests.test_planner -v 1)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-ci.sqlite3 .venv/bin/python manage.py test sova.processes.tests.test_planner)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-ci.sqlite3 .venv/bin/python manage.py test sova.processes)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-uni.sqlite3 .venv/bin/python manage.py test sova.catalog.tests.test_university_api -v 2)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-uni.sqlite3 .venv/bin/python manage.py test sova.catalog)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-vis.sqlite3 .venv/bin/python manage.py test sova.interactions.tests.test_interaction_visibility sova.catalog.tests.test_university_api -v 2)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-vis.sqlite3 .venv/bin/python manage.py test sova.interactions sova.processes accounts)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-vis.sqlite3 .venv/bin/python manage.py test sova.interactions sova.processes accounts sova.catalog)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-seed.sqlite3 .venv/bin/python manage.py test sova.catalog.tests.test_loaddata -v 2)",
+      "Bash(.venv/bin/python manage.py loaddata --interactions)",
+      "Bash(.venv/bin/python manage.py loaddata --interactions 12)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-seed2.sqlite3 .venv/bin/python manage.py test sova.catalog sova.interactions)",
+      "Bash(.venv/bin/python -)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-prov.sqlite3 .venv/bin/python manage.py test sova.catalog sova.interactions)",
+      "Bash(.venv/bin/python manage.py provision --interactions 15)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-tasks.sqlite3 .venv/bin/python manage.py test sova.processes.api.tests.test_action_instance)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-tasks.sqlite3 .venv/bin/python manage.py test sova.processes.api.tests.test_my_tasks -v 2)",
+      "Bash(DATABASE_URL=sqlite:///__TRACKED_VAR__/sova-tasks.sqlite3 .venv/bin/python manage.py test sova accounts)",
+      "Bash(.venv/bin/python manage.py spectacular --file /private/tmp/claude-501/-Users-igor-develop-sova-sova-backend/2326636d-34da-4893-b669-120a49ac7793/scratchpad/schema.yaml)",
+      "Bash(.venv/bin/python -c \"import drf_spectacular; print\\(drf_spectacular.__version__ if hasattr\\(drf_spectacular,'__version__'\\) else 'n/a'\\)\")"
+    ]
+  }
+}
