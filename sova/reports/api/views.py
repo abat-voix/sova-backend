@@ -17,7 +17,7 @@ from sova.reports.models import ReportJob
 from sova.reports.services import jobs
 from sova.reports.services.dataset import ReportDataset
 from sova.reports.services.exporters import CONTENT_TYPES
-from sova.reports.services.summary import build_summary
+from sova.reports.services.presentation import build_report_presentation
 
 TAGS = ["reports"]
 
@@ -73,10 +73,23 @@ class InteractionReportSummaryView(APIView):
         responses={200: serializers.ReportSummarySerializer},
     )
     def post(self, request):
-        serializer = serializers.ReportSpecSerializer(data=request.data)
+        serializer = serializers.ReportSummaryRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         dataset = ReportDataset(user=request.user, spec=serializer.to_spec())
-        return Response({**build_summary(dataset.iter_rows()), "meta": dataset.metadata()})
+        return Response(
+            {
+                **build_report_presentation(
+                    dataset.iter_rows(),
+                    date_from=serializer.validated_data.get("date_from"),
+                    date_to=serializer.validated_data.get("date_to"),
+                    locale=serializer.validated_data.get("locale", "ru"),
+                ),
+                "meta": {
+                    **dataset.metadata(),
+                    "locale": serializer.validated_data.get("locale", "ru"),
+                },
+            }
+        )
 
 
 class InteractionReportExportView(APIView):

@@ -1,5 +1,6 @@
 from sova.interactions.models.contract import Contract
 from sova.interactions.models.contract_file import ContractFile
+from sova.interactions.models.document_template import DocumentTemplate
 from sova.interactions.models.interaction import Interaction
 from sova.interactions.models.interaction_contact import InteractionContact
 from sova.interactions.models.interaction_direction import InteractionDirection
@@ -11,6 +12,7 @@ from sova.interactions.models.responsible import Responsible
 __all__ = [
     "Contract",
     "ContractFile",
+    "DocumentTemplate",
     "Interaction",
     "InteractionContact",
     "InteractionDirection",
