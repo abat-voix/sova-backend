@@ -37,3 +37,21 @@ def execute_action_feature(*, action_instance, feature_code: str, user, data: di
     )
     execution.target = result
     return execution
+
+
+def get_action_feature_initial(*, action_instance, feature_code: str, user) -> dict:
+    """Начальные данные формы feature: то, что backend знает о контексте действия."""
+    feature = ActionFeature.objects.filter(
+        action_id=action_instance.action_id, code=feature_code, is_active=True,
+    ).first()
+    if feature is None:
+        raise ActionFeatureError("feature_not_configured", "Feature не настроен для действия.", 404)
+    if action_instance.status != ActionInstanceStatus.IN_PROGRESS:
+        raise ActionFeatureError("invalid_action_state", "Feature доступен только для действия в работе.")
+    handler = FEATURE_HANDLERS.get(feature_code)
+    if handler is None or not hasattr(handler, "initial"):
+        raise ActionFeatureError("feature_initial_not_supported", "У feature нет начальных данных.", 404)
+    context = build_context(action_instance=action_instance, user=user)
+    if context is None:
+        raise ActionFeatureError("invalid_action_context")
+    return handler.initial(context=context, settings=feature.settings)

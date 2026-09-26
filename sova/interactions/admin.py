@@ -4,6 +4,7 @@ from sova.core.admin import AbstractBaseModelAdmin, AbstractHistoryModelAdmin
 from sova.interactions.models import (
     Contract,
     ContractFile,
+    DocumentTemplate,
     Interaction,
     InteractionContact,
     InteractionDirection,
@@ -34,6 +35,16 @@ class ContractFileAdmin(AbstractHistoryModelAdmin[ContractFile]):
     list_select_related = ("contract", "uploaded_by")
     search_fields = ("id", "original_name")
     autocomplete_fields = ("contract", "uploaded_by")
+
+
+@admin.register(DocumentTemplate)
+class DocumentTemplateAdmin(AbstractBaseModelAdmin[DocumentTemplate]):
+    """Шаблоны документов (docxtpl)."""
+
+    list_display = ("id", "name", "kind", "is_active", "created_at")
+    list_display_links = ("name",)
+    list_filter = ("kind", "is_active")
+    search_fields = ("id", "name")
 
 
 @admin.register(Interaction)
