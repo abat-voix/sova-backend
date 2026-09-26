@@ -12,7 +12,7 @@ from sova.processes.api import filters, serializers
 from sova.processes.api.errors import translate_engine_errors
 from sova.processes.models import ActionAttachment, ActionInstance
 from sova.processes.models import ActionFeatureExecution
-from sova.processes.action_features import execute_action_feature
+from sova.processes.action_features import execute_action_feature, get_action_feature_initial
 from sova.core.api.serializers import UserShortSerializer
 from sova.processes.services import workflow_engine_service
 from sova.workflows.models import ActionFeature, ActionOutcome
@@ -211,3 +211,11 @@ class ActionInstanceViewSet(SovaReadOnlyViewSet):
                 "data": execution.result,
             },
         }, status=status.HTTP_200_OK)
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    @action(methods=["GET"], detail=True, url_path=r"features/(?P<code>[^/]+)/initial")
+    def feature_initial(self, request, pk=None, code=None) -> Response:
+        """Начальные данные формы feature (например, реквизиты контрагента для договора)."""
+        instance = self.get_object()
+        data = get_action_feature_initial(action_instance=instance, feature_code=code, user=request.user)
+        return Response(data, status=status.HTTP_200_OK)
