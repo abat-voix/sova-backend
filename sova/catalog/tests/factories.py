@@ -1,8 +1,9 @@
 import factory
 
-from sova.catalog.enum import ClientKind
+from sova.catalog.enum import CatalogType, ClientKind
 from sova.catalog.models import (
     B2CClient,
+    CatalogImportMapping,
     ContactPerson,
     Direction,
     Product,
@@ -83,3 +84,15 @@ class ContactPersonFactory(factory.django.DjangoModelFactory):
 
     full_name = factory.Sequence(lambda n: f"Контакт {n}")
     university = factory.SubFactory(UniversityFactory)
+
+
+class CatalogImportMappingFactory(factory.django.DjangoModelFactory):
+    """Фабрика маппинга колонки файла импорта на каноническое поле."""
+
+    class Meta:
+        model = CatalogImportMapping
+
+    catalog_type = CatalogType.PRODUCT
+    source_column = factory.Sequence(lambda n: f"Колонка {n}")
+    # target_field уникален в рамках catalog_type — перебираем допустимые поля продукта.
+    target_field = factory.Iterator(["name", "external_code", "vendor", "is_active", "programs"])

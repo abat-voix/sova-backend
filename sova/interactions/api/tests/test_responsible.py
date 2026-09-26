@@ -2,10 +2,11 @@ from datetime import datetime, timezone
 
 from rest_framework.test import APITestCase
 
+from sova.catalog.tests.factories import UniversityFactory
 from sova.core.tests.base import BaseApiTestMixin
 from sova.core.tests.factories import UserFactory
 from sova.interactions.models import Responsible
-from sova.interactions.tests.factories import InteractionFactory, ResponsibleFactory
+from sova.interactions.tests.factories import ContractFactory, InteractionFactory, ResponsibleFactory
 
 
 class ResponsibleApiTestCase(BaseApiTestMixin, APITestCase):
@@ -26,6 +27,7 @@ class ResponsibleApiTestCase(BaseApiTestMixin, APITestCase):
         return {
             "id": str(instance.pk),
             "interaction": str(instance.interaction_id),
+            "contract": None,
             "manager": {
                 "id": instance.manager_id,
                 "email": instance.manager.email,
@@ -85,3 +87,16 @@ class ResponsibleApiTestCase(BaseApiTestMixin, APITestCase):
             [item["id"] for item in response.data["results"]],
             [str(current.pk)],
         )
+
+    def test_filter_by_contract_ids(self) -> None:
+        """Фильтр contract__ids возвращает назначения договора."""
+        contract = ContractFactory(interaction=None, university=UniversityFactory())
+        target = Responsible.objects.create(contract=contract, manager=UserFactory())
+        ResponsibleFactory()
+
+        response = self.client.get(path=self.list_url, data={"contract__ids": str(contract.pk)})
+
+        # Проверяем, что найдена только запись договора и в ней указан договор
+        results = response.json()["results"]
+        self.assertEqual([item["id"] for item in results], [str(target.pk)])
+        self.assertEqual(results[0]["contract"], str(contract.pk))

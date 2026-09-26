@@ -2,14 +2,17 @@ from datetime import date
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
+from sova.catalog.tests.factories import UniversityFactory
 from sova.core.tests.base import BaseApiTestMixin
 from sova.core.tests.factories import UserFactory
 from sova.core.tests.media import TemporaryMediaMixin
-from sova.interactions.models import Contract
+from sova.interactions.models import Contract, Responsible
+from sova.interactions.services.contract_attachment import contract_attachment_service
 from sova.interactions.tests.factories import ContractFactory, InteractionFactory, ResponsibleFactory
 
 
@@ -173,6 +176,18 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
         # Проверяем, что нарушение порядка шагов 4→6 отклонено
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_add_returns_400_without_interaction(self) -> None:
+        """Через API договор без взаимодействия не создаётся (headless — только импортом)."""
+        response = self.client.post(
+            path=self.list_url,
+            data={"contract_number": "Д-102"},
+            format="json",
+        )
+
+        # Проверяем, что interaction обязателен, хотя в модели он nullable
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("interaction", response.data)
+
     def test_change_returns_400_when_correction_after_signing(self) -> None:
         """PATCH с корректировкой позже подписания возвращает 400."""
         instance = ContractFactory(signed_at=date(2026, 3, 1))
@@ -231,3 +246,45 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
             [item["id"] for item in response.data["results"]],
             [str(inside.pk)],
         )
+
+
+class ContractCurrentResponsiblesApiTestCase(APITestCase):
+    """current_responsibles договора — действующие КАМы headless-договора из реестра."""
+
+    def setUp(self) -> None:
+        user = UserFactory()
+        UserRole.objects.create(user=user, role=SystemRole.PLATFORM_ADMIN)
+        self.client.force_authenticate(user=user)
+        self.kam = UserFactory(first_name="Максим", last_name="Менеджеров")
+        self.university = UniversityFactory()
+
+    def _get(self, contract: Contract) -> dict:
+        response = self.client.get(path=reverse("interactions:contract-detail", args=[contract.pk]))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response.data
+
+    def test_headless_contract_shows_its_kams(self) -> None:
+        contract = ContractFactory(interaction=None, university=self.university)
+        Responsible.objects.create(contract=contract, manager=self.kam)
+
+        data = self._get(contract)
+
+        # Проверяем КАМа договора и отсутствие старых полей подсказки
+        self.assertEqual([item["manager"]["id"] for item in data["current_responsibles"]], [self.kam.pk])
+        self.assertNotIn("suggested_manager", data)
+        self.assertNotIn("draft_manager_full_name", data)
+
+    def test_closed_kam_is_not_shown(self) -> None:
+        contract = ContractFactory(interaction=None, university=self.university)
+        Responsible.objects.create(contract=contract, manager=self.kam, unassigned_at=timezone.now())
+
+        # Проверяем, что снятый КАМ не показывается
+        self.assertEqual(self._get(contract)["current_responsibles"], [])
+
+    def test_attached_contract_shows_no_kams(self) -> None:
+        contract = ContractFactory(interaction=None, university=self.university)
+        Responsible.objects.create(contract=contract, manager=self.kam)
+        contract_attachment_service.attach_to_new_interaction(contract=contract, assigned_by=None)
+
+        # Проверяем: КАМы перешли на взаимодействие, у договора текущих нет
+        self.assertEqual(self._get(contract)["current_responsibles"], [])

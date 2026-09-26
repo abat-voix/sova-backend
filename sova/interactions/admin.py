@@ -104,9 +104,10 @@ class LicenseAdmin(AbstractBaseModelAdmin[License]):
 
 @admin.register(Responsible)
 class ResponsibleAdmin(AbstractBaseModelAdmin[Responsible]):
-    """Админка назначений ответственных на взаимодействие."""
+    """Админка назначений ответственных на взаимодействие или договор."""
 
-    list_display = ("id", "interaction", "manager", "assigned_by", "assigned_at")
-    list_select_related = ("interaction", "manager", "assigned_by")
+    list_display = ("id", "interaction", "contract", "manager", "assigned_by", "assigned_at")
+    list_select_related = ("interaction", "contract", "manager", "assigned_by")
+    list_filter = (("interaction", admin.EmptyFieldListFilter),)
     search_fields = ("id",)
-    autocomplete_fields = ("interaction", "manager", "assigned_by")
+    autocomplete_fields = ("interaction", "contract", "manager", "assigned_by")

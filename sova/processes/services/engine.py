@@ -315,6 +315,32 @@ class WorkflowEngineService:
         """Экземпляры этапов, на которые можно вернуться при отмене этапа: его предшественники."""
         return self._predecessor_instances(snapshot=snapshot, stage_instance=stage_instance)
 
+    @transaction.atomic
+    def sync_contexts(self, process: WorkflowInstance) -> None:
+        """
+        Досоздаёт этапы/действия для контекстов (направлений/программ/продуктов), привязанных к
+        процессу после его запуска, не дожидаясь следующего `complete_action`.
+
+        Деактивированный или удалённый контекст перестаёт быть значимым: процесс, у которого не
+        осталось незакрытых значимых этапов, завершается. Завершённый процесс не трогает.
+        """
+        process = self._lock_process(process_id=process.pk)
+        self._advance(process=process, now=timezone.now(), trace=_Trace(), actor=None)
+
+    def sync_interaction(self, interaction_id: object) -> None:
+        """
+        Синхронизирует с составом взаимодействия все его идущие процессы (см. `sync_contexts`).
+
+        Вызывается API после изменения состава взаимодействия: добавления, деактивации или удаления
+        направления/программы/продукта.
+        """
+        processes = WorkflowInstance.objects.filter(
+            interaction_id=interaction_id,
+            status=WorkflowInstanceStatus.RUNNING,
+        )
+        for process in processes:
+            self.sync_contexts(process=process)
+
     def _predecessor_instances(
         self,
         snapshot: ProcessSnapshot,

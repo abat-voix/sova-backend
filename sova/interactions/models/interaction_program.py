@@ -1,11 +1,12 @@
 from django.db import models
+from django.db.models import Q
 
 from sova.core.models import UUIDModel
 
 
 class InteractionProgram(UUIDModel):
     """
-    Программа в рамках конкретного взаимодействия.
+    Программа в рамках конкретного взаимодействия либо, до появления Interaction, договора.
 
     Направление программы не дублируется отдельным FK — оно выводится через
     `program.direction` (Program.direction обязателен в каталоге).
@@ -24,7 +25,17 @@ class InteractionProgram(UUIDModel):
         to="interactions.Interaction",
         on_delete=models.CASCADE,
         related_name="interaction_programs",
+        null=True,
+        blank=True,
         verbose_name="Взаимодействие",
+    )
+    contract = models.ForeignKey(
+        to="interactions.Contract",
+        on_delete=models.CASCADE,
+        related_name="interaction_programs",
+        null=True,
+        blank=True,
+        verbose_name="Договор",
     )
     program = models.ForeignKey(
         to="catalog.Program",
@@ -38,11 +49,21 @@ class InteractionProgram(UUIDModel):
         verbose_name_plural = "Программы взаимодействия"
         ordering = ["interaction", "added_at"]
         constraints = [
+            models.CheckConstraint(
+                check=Q(interaction__isnull=False) | Q(contract__isnull=False),
+                name="interaction_program_has_owner",
+            ),
             models.UniqueConstraint(
                 fields=["interaction", "program"],
+                condition=Q(interaction__isnull=False),
                 name="unique_program_per_interaction",
+            ),
+            models.UniqueConstraint(
+                fields=["contract", "program"],
+                condition=Q(contract__isnull=False),
+                name="unique_program_per_contract",
             ),
         ]
 
     def __str__(self):
-        return f"{self.interaction} — {self.program}"
+        return f"{self.interaction or self.contract} — {self.program}"

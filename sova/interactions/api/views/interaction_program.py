@@ -1,10 +1,15 @@
 from sova.core.api.views import SovaBaseViewSet
 from sova.interactions.api import filters, serializers
+from sova.interactions.api.views.mixins import SyncProcessesMixin
 from sova.interactions.models import InteractionProgram
 
 
-class InteractionProgramViewSet(SovaBaseViewSet):
-    """Программы во взаимодействиях. Доступны CRUD операции."""
+class InteractionProgramViewSet(SyncProcessesMixin, SovaBaseViewSet):
+    """
+    Программы во взаимодействиях. Доступны CRUD операции.
+
+    Изменение состава сразу досоздаёт этапы в идущих процессах взаимодействия.
+    """
 
     read_serializer_class = serializers.InteractionProgramSerializer
     serializer_class = serializers.WriteInteractionProgramSerializer

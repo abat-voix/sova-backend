@@ -2,6 +2,7 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 from sova.catalog.models import University
+from sova.core.api.validators import validate_model_constraints
 
 
 class UniversityShortSerializer(serializers.ModelSerializer):
@@ -68,3 +69,8 @@ class WriteUniversitySerializer(serializers.ModelSerializer):
             "phone",
             "is_active",
         )
+
+    def validate(self, attrs: dict) -> dict:
+        """Уникальность названия и кода без учёта регистра — 400 вместо ошибки БД."""
+        validate_model_constraints(model=University, attrs=attrs, instance=self.instance)
+        return attrs
