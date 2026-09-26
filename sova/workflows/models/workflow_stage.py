@@ -45,6 +45,30 @@ class WorkflowStage(TimeStampedModel):
         default=True,
         verbose_name="Активен",
     )
+    position_x = models.FloatField(
+        null=True,
+        blank=True,
+        verbose_name="Позиция X на графе",
+        help_text="Координата узла на холсте редактора workflow. Пусто — позиция ещё не задана вручную.",
+    )
+    position_y = models.FloatField(
+        null=True,
+        blank=True,
+        verbose_name="Позиция Y на графе",
+        help_text="Координата узла на холсте редактора workflow. Пусто — позиция ещё не задана вручную.",
+    )
+    width = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Ширина блока на графе",
+        help_text="Пусто — используется размер по умолчанию.",
+    )
+    height = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Высота блока на графе",
+        help_text="Пусто — используется размер по умолчанию.",
+    )
 
     workflow = models.ForeignKey(
         to="workflows.Workflow",
