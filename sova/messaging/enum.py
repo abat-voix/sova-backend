@@ -6,3 +6,4 @@ class ConversationKind(TextChoices):
 
     DIRECT = "direct", "Личная переписка"
     SYSTEM = "system", "Системные сообщения"
+    INTERACTION = "interaction", "Чат взаимодействия"

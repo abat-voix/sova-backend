@@ -55,15 +55,33 @@ def publish_message_created(message: Message) -> None:
     _publish_after_commit(event, recipient_ids)
 
 
-def publish_conversation_created(conversation: Conversation) -> None:
+def publish_conversation_created(conversation: Conversation, recipient_ids: Iterable[object] | None = None) -> None:
+    """Оповещает о появлении беседы. Без recipient_ids — всех текущих участников."""
+    if recipient_ids is None:
+        recipient_ids = list(
+            ConversationParticipant.objects.filter(conversation=conversation)
+            .order_by()
+            .values_list("user_id", flat=True)
+        )
+    event = build_event(
+        "messaging.conversation_created",
+        {"conversation_id": str(conversation.pk)},
+    )
+    _publish_after_commit(event, recipient_ids)
+
+
+def publish_participants_added(conversation: Conversation, new_user_ids: Iterable[object]) -> None:
+    """Оповещает уже бывших участников чата о новых людях в составе."""
+    new_user_ids = list(dict.fromkeys(str(user_id) for user_id in new_user_ids))
     recipient_ids = list(
         ConversationParticipant.objects.filter(conversation=conversation)
+        .exclude(user_id__in=new_user_ids)
         .order_by()
         .values_list("user_id", flat=True)
     )
     event = build_event(
-        "messaging.conversation_created",
-        {"conversation_id": str(conversation.pk)},
+        "messaging.participants_added",
+        {"conversation_id": str(conversation.pk), "user_ids": new_user_ids},
     )
     _publish_after_commit(event, recipient_ids)
 
