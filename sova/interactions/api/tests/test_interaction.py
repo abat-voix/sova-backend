@@ -611,14 +611,14 @@ class ResponsibleRulesApiTestCase(APITestCase):
         self.assertEqual(self.post(self.head, "unassign", self.mine).status_code, status.HTTP_200_OK)
 
     def test_kam_cannot_unassign_even_self(self, task) -> None:
-        """КАМ никого не снимает — 403 `responsible_change_forbidden`."""
+        """КАМ никого не снимает — 403 по политике ролей."""
         responsible_service.assign(interaction=self.interaction, manager=self.mine, assigned_by=None)
 
         response = self.post(self.mine, "unassign", self.mine)
 
         # Проверяем запрет и код
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data["code"], "responsible_change_forbidden")
+        self.assertEqual(response.data["code"], "permission_denied")
 
     def create_interaction(self, actor):
         """POST /interactions/ от имени `actor`."""

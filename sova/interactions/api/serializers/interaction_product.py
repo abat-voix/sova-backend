@@ -4,7 +4,8 @@ from rest_framework.validators import UniqueTogetherValidator
 
 from sova.catalog.api.serializers import ProductShortSerializer
 from sova.core.api.validators import validate_model_clean
-from sova.interactions.models import Interaction, InteractionProduct
+from sova.interactions.api.serializers.fields import VisibleInteractionField
+from sova.interactions.models import InteractionProduct
 
 
 class InteractionProductShortSerializer(serializers.ModelSerializer):
@@ -48,10 +49,7 @@ class WriteInteractionProductSerializer(serializers.ModelSerializer):
     # В модели interaction nullable ради headless-записей импорта договоров; через API
     # запись всегда создаётся в рамках взаимодействия. Условный unique-constraint модели DRF
     # не умеет проверять по FK в condition, поэтому уникальность задана явно в Meta.validators.
-    interaction = serializers.PrimaryKeyRelatedField(
-        queryset=Interaction.objects.all(),
-        label=_("Взаимодействие"),
-    )
+    interaction = VisibleInteractionField()
 
     class Meta:
         model = InteractionProduct

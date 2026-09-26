@@ -13,6 +13,7 @@ from rest_framework.response import Response
 
 from accounts.exceptions import KamHasHeadError
 from accounts.models import SystemRole
+from accounts.policy import Action
 from accounts.services import get_system_role
 from sova.core.api.exceptions import ConflictError
 from sova.core.api.views import SovaBaseViewSet
@@ -69,7 +70,25 @@ class InteractionViewSet(SovaBaseViewSet):
     Ответственного менеджера назначают и снимают действиями
     `assign-responsible` / `unassign-responsible`: он хранится с историей,
     поэтому напрямую в теле взаимодействия не редактируется.
+
+    Права на операции — `policy_actions` (`accounts.policy`): наблюдатель только читает взаимодействия и их контакты.
     """
+
+    policy_actions = {
+        "list": Action.INTERACTIONS_READ,
+        "retrieve": Action.INTERACTIONS_READ,
+        "create": Action.INTERACTIONS_CREATE,
+        "update": Action.INTERACTIONS_UPDATE,
+        "partial_update": Action.INTERACTIONS_UPDATE,
+        "destroy": Action.INTERACTIONS_DELETE,
+        "assignable_managers": Action.INTERACTIONS_RESPONSIBLES_ASSIGN,
+        "assign_responsible": Action.INTERACTIONS_RESPONSIBLES_ASSIGN,
+        "unassign_responsible": Action.INTERACTIONS_RESPONSIBLES_UNASSIGN,
+        "contacts": {"GET": Action.INTERACTIONS_READ, "POST": Action.INTERACTIONS_UPDATE},
+        "unlink_contact": Action.INTERACTIONS_UPDATE,
+        "chat": Action.INTERACTIONS_CHAT,
+        "chat_participants": Action.INTERACTIONS_CHAT,
+    }
 
     read_serializer_class = serializers.InteractionSerializer
     serializer_class = serializers.WriteInteractionSerializer
@@ -195,11 +214,6 @@ class InteractionViewSet(SovaBaseViewSet):
 
         Администратор снимает любого, руководитель — себя и КАМов своей команды, КАМ — никого (403).
         """
-        if get_system_role(request.user) == SystemRole.KAM:
-            raise PermissionDenied(
-                detail=_("Снимать ответственных может только руководитель или администратор."),
-                code="responsible_change_forbidden",
-            )
         interaction = self.get_object()
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)

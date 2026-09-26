@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from accounts.models import UserRole
+from accounts.policy import allowed_actions
 
 
 @extend_schema(
@@ -36,6 +37,10 @@ def session(request):
                 "role": role,
                 "roleDisplay": role_display,
                 "roles": [role] if role else [],
+                "isSuperuser": request.user.is_superuser,
+                # Разрешённые операции без учёта конкретной записи — для меню и кнопок; права на запись
+                # подтверждает backend при обращении к ней
+                "permissions": sorted(allowed_actions(request.user)),
             },
         }
     )

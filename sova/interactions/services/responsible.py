@@ -6,7 +6,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from accounts.models import SystemRole
-from accounts.services import account_service, get_system_role
+from accounts.policy import effective_role
+from accounts.services import account_service
 from sova.interactions.exceptions import AmbiguousManagerError, ManagerNotFoundError, NoActiveResponsibleError
 from sova.interactions.models import Contract, Interaction, Responsible
 from sova.notifications.enum import NotifyType
@@ -77,7 +78,7 @@ class ResponsibleService:
         Права (кого можно назначить) проверяет вызывающий через `assignable_managers`. Если КАМа забрал другой
         руководитель после проверки, `KamHasHeadError` откатывает и назначение.
         """
-        if get_system_role(actor) == SystemRole.HEAD and manager.pk != actor.pk:
+        if effective_role(actor) == SystemRole.HEAD and manager.pk != actor.pk:
             account_service.claim(kam=manager, head=actor, actor=actor)
         return self.assign(interaction=interaction, manager=manager, assigned_by=actor)
 

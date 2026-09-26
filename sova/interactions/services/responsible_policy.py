@@ -5,7 +5,7 @@ from django.contrib.auth.models import AbstractBaseUser
 from django.db.models import Q, QuerySet
 
 from accounts.models import SystemRole
-from accounts.services import get_system_role
+from accounts.policy import effective_role
 from sova.interactions.models import Interaction, Responsible
 
 
@@ -23,12 +23,12 @@ def assignable_managers(actor) -> QuerySet:
     """
     Кого `actor` может назначить ответственным.
 
-    Администратор — активных КАМов и руководителей; руководитель — себя, КАМов своей команды и свободных (свободный
+    Администратор (и superuser) — активных КАМов и руководителей; руководитель — себя, КАМов своей команды и свободных (свободный
     при назначении вступает в команду, см. `ResponsibleService.assign_by`); КАМ — только себя. Роль и активность
     проверяются по текущим данным: связь, устаревшая после изменений в обход сервиса, прав не даёт.
     """
     active = get_user_model().objects.filter(is_active=True)
-    role = get_system_role(actor)
+    role = effective_role(actor)
 
     if role == SystemRole.PLATFORM_ADMIN:
         return active.filter(system_role__role__in=(SystemRole.KAM, SystemRole.HEAD))
@@ -42,11 +42,11 @@ def assignable_managers(actor) -> QuerySet:
 
 def removable_managers(actor) -> QuerySet:
     """
-    Кого `actor` может снять с ответственных: администратор — любого, руководитель — себя, свою команду и неактивных
+    Кого `actor` может снять с ответственных: администратор (и superuser) — любого, руководитель — себя, свою команду и неактивных
     КАМов (деактивация удаляет связь с командой, и снять уволенного иначе мог бы только администратор).
     """
     users = get_user_model().objects.all()
-    role = get_system_role(actor)
+    role = effective_role(actor)
 
     if role == SystemRole.PLATFORM_ADMIN:
         return users
@@ -66,7 +66,7 @@ def assignment_candidates(interaction: Interaction, actor) -> list[ManagerCandid
     """
     active = Responsible.objects.filter(unassigned_at__isnull=True)
     registry_ids: set[int] = set()
-    if get_system_role(actor) in (SystemRole.HEAD, SystemRole.PLATFORM_ADMIN):
+    if effective_role(actor) in (SystemRole.HEAD, SystemRole.PLATFORM_ADMIN):
         registry_ids = set(
             active.filter(contract__interaction=interaction, interaction__isnull=True).values_list(
                 "manager_id", flat=True

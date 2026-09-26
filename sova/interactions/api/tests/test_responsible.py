@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole
 from sova.catalog.tests.factories import UniversityFactory
 from sova.core.tests.base import BaseApiTestMixin
 from sova.core.tests.factories import UserFactory
@@ -14,6 +15,7 @@ class ResponsibleApiTestCase(BaseApiTestMixin, APITestCase):
 
     url_basename = "interactions:responsible"
     model = Responsible
+    user_role = SystemRole.PLATFORM_ADMIN
     allow_create = False
     allow_update = False
     allow_delete = False

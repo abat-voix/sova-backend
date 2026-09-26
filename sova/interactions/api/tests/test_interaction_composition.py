@@ -1,6 +1,7 @@
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole
 from sova.catalog.tests.factories import (
     DirectionFactory,
     ProductFactory,
@@ -25,6 +26,7 @@ class InteractionDirectionApiTestCase(BaseApiTestMixin, APITestCase):
 
     url_basename = "interactions:interaction-direction"
     model = InteractionDirection
+    user_role = SystemRole.PLATFORM_ADMIN
 
     def create_instance(self, **kwargs) -> InteractionDirection:
         """Создаёт направление взаимодействия."""
@@ -91,6 +93,7 @@ class InteractionProgramApiTestCase(BaseApiTestMixin, APITestCase):
 
     url_basename = "interactions:interaction-program"
     model = InteractionProgram
+    user_role = SystemRole.PLATFORM_ADMIN
 
     def create_instance(self, **kwargs) -> InteractionProgram:
         """Создаёт программу взаимодействия."""
@@ -164,6 +167,7 @@ class InteractionProductApiTestCase(BaseApiTestMixin, APITestCase):
 
     url_basename = "interactions:interaction-product"
     model = InteractionProduct
+    user_role = SystemRole.PLATFORM_ADMIN
 
     def create_instance(self, **kwargs) -> InteractionProduct:
         """Создаёт продукт взаимодействия без программы."""

@@ -23,7 +23,8 @@ class BaseApiTestMixin:
     - `get_search_term` — строка поиска, находящая только `instance`.
 
     Флаги `allow_create`/`allow_update`/`allow_delete` отключают соответствующие
-    тесты и проверяют, что метод недоступен (405).
+    тесты и проверяют, что метод недоступен (405). `user_role` — прикладная роль
+    пользователя клиента для разделов, закрытых политикой ролей.
     """
 
     url_basename: str
@@ -31,6 +32,7 @@ class BaseApiTestMixin:
     allow_create: bool = True
     allow_update: bool = True
     allow_delete: bool = True
+    user_role: str | None = None
 
     def setUp(self) -> None:
         """Аутентифицирует клиента обычным пользователем."""
@@ -40,6 +42,8 @@ class BaseApiTestMixin:
         # setup; dedicated permission tests cover head/KAM ownership rules.
         if self.model.__module__.startswith("sova.workflows"):
             UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
+        elif self.user_role is not None:
+            UserRole.objects.create(user=self.user, role=self.user_role)
         self.client.force_authenticate(user=self.user)
 
     def create_instance(self, **kwargs) -> Model:

@@ -117,14 +117,14 @@ class InteractionVisibilityApiTestCase(APITestCase):
             {str(kam_interaction.pk), str(head_interaction.pk), str(unassigned.pk)},
         )
 
-    def test_user_without_role_sees_nothing(self) -> None:
-        """Пользователю без прикладной роли список не даёт ничего."""
+    def test_user_without_role_is_forbidden(self) -> None:
+        """Пользователю без прикладной роли раздел взаимодействий закрыт."""
         self.create_interaction()
         self.client.force_authenticate(user=self.create_user())
 
         response = self.client.get(path=self.list_url)
 
-        self.assertEqual(self.response_ids(response), set())
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_foreign_interaction_is_not_retrievable(self) -> None:
         """Чужое взаимодействие недоступно и по прямой ссылке, а не только скрыто из списка."""
