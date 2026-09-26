@@ -4,26 +4,9 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 from sova.core.api.serializers import UserShortSerializer
-from sova.core.files import guess_content_type, validate_file_size
+from sova.core.files import ALLOWED_ATTACHMENT_EXTENSIONS, guess_content_type, validate_file_size
 from sova.interactions.services import visible_interactions
 from sova.processes.models import ActionAttachment
-
-# Форматы вложений из ТЗ (п. «Возможность прикладывания файлов в статусы»)
-ALLOWED_ATTACHMENT_EXTENSIONS = (
-    "png",
-    "jpg",
-    "jpeg",
-    "pdf",
-    "zip",
-    "gz",
-    "gzip",
-    "rar",
-    "doc",
-    "docx",
-    "xls",
-    "xlsx",
-)
-
 
 class ActionAttachmentSerializer(serializers.ModelSerializer):
     """Вложение действия — представление для чтения (list/retrieve)."""

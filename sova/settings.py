@@ -212,6 +212,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "sova.reports.tasks.cleanup_report_jobs",
         "schedule": 60 * 60,
     },
+    "cleanup-staged-message-attachments": {
+        "task": "sova.messaging.tasks.cleanup_staged_message_attachments",
+        "schedule": 60 * 60,
+    },
     "notify-deadlines": {
         "task": "sova.processes.tasks.notify_deadlines",
         "schedule": crontab(hour=OVERDUE_NOTIFY_HOUR, minute=0),
@@ -267,6 +271,7 @@ STORAGE_BACKEND = "filesystem" if TESTING else os.getenv("STORAGE_BACKEND", "fil
 # чей endpoint виден браузеру).
 S3_DOWNLOAD_MODE = os.getenv("S3_DOWNLOAD_MODE", "proxy")
 FILE_UPLOAD_MAX_SIZE = int(os.getenv("FILE_UPLOAD_MAX_SIZE_MB", "25")) * 1024 * 1024
+MESSAGE_ATTACHMENT_STAGING_TTL_HOURS = int(os.getenv("MESSAGE_ATTACHMENT_STAGING_TTL_HOURS", "24"))
 
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},

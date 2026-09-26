@@ -18,6 +18,12 @@ from django.utils.translation import gettext_lazy as _
 from sova.core.api.exceptions import Gone
 
 
+# Единый согласованный список для пользовательских файлов (действия и сообщения).
+ALLOWED_ATTACHMENT_EXTENSIONS = (
+    "png", "jpg", "jpeg", "pdf", "zip", "gz", "gzip", "rar", "doc", "docx", "xls", "xlsx",
+)
+
+
 @deconstructible
 class uuid_upload_to:  # noqa: N801 — используется как `upload_to=uuid_upload_to("...")`, не как класс
     """

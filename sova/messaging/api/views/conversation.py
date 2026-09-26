@@ -4,7 +4,7 @@ from django.utils.translation import gettext_lazy as _
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, status
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
@@ -14,6 +14,7 @@ from sova.messaging.api import serializers
 from sova.messaging.exceptions import SystemConversationIsReadOnlyError
 from sova.messaging.models import Conversation, ConversationParticipant
 from sova.messaging.services import conversation_service, message_service
+from sova.messaging.services.message_attachment import AttachmentNotFoundError, DuplicateAttachmentError
 
 
 class ConversationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet):
@@ -103,7 +104,7 @@ class ConversationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Gene
         conversation = self.get_object()
 
         if request.method == "GET":
-            queryset = conversation.messages.select_related("sender").order_by("-created_at")
+            queryset = conversation.messages.select_related("sender").prefetch_related("attachments").order_by("-created_at")
             page = self.paginate_queryset(queryset)
             serializer = serializers.MessageSerializer(page, many=True)
             return self.get_paginated_response(serializer.data)
@@ -116,12 +117,18 @@ class ConversationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Gene
                 sender=request.user,
                 text=serializer.validated_data["text"],
                 link=serializer.validated_data["link"],
+                attachment_ids=serializer.validated_data["attachment_ids"],
             )
         except SystemConversationIsReadOnlyError:
             raise ConflictError(
                 detail=_("В системную беседу нельзя писать."),
                 code="system_conversation_read_only",
             )
+        except DuplicateAttachmentError as exc:
+            raise ValidationError({"attachment_ids": ["Идентификаторы вложений не должны повторяться."]}, code="duplicate_attachment_ids") from exc
+        except AttachmentNotFoundError as exc:
+            # Одинаковый ответ для отсутствующего, чужого и уже использованного файла.
+            raise NotFound(detail="Вложение не найдено.", code="attachment_not_found") from exc
 
         return Response(
             data=serializers.MessageSerializer(message).data,

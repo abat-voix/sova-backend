@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from sova.core.admin import AbstractBaseModelAdmin
-from sova.messaging.models import Conversation, ConversationParticipant, Message
+from sova.messaging.models import Conversation, ConversationParticipant, Message, MessageAttachment
 
 
 class ConversationParticipantInline(admin.TabularInline):
@@ -31,3 +31,11 @@ class MessageAdmin(AbstractBaseModelAdmin[Message]):
     list_select_related = ("conversation", "sender")
     search_fields = ("id", "text")
     autocomplete_fields = ("conversation", "sender")
+
+
+@admin.register(MessageAttachment)
+class MessageAttachmentAdmin(AbstractBaseModelAdmin[MessageAttachment]):
+    list_display = ("id", "original_name", "message", "uploaded_by", "size", "created_at")
+    list_select_related = ("message", "uploaded_by")
+    search_fields = ("id", "original_name")
+    autocomplete_fields = ("message", "uploaded_by")
