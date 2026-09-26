@@ -10,7 +10,7 @@ class IntegrationMetadataTest(SimpleTestCase):
         fields = {field["name"]: field for field in entities["workflow"]["fields"]}
         self.assertEqual(fields["id"]["type"], "uuid")
         self.assertTrue(fields["id"]["read_only"])
-        self.assertIn("status", fields)
+        self.assertIn("is_active", fields)
 
     def test_metadata_contains_mapping_relevant_properties(self):
         item = entity_metadata(
