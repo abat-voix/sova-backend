@@ -1,7 +1,15 @@
 from rest_framework import serializers
 
 from sova.interactions.enum import DocumentTemplateKind
-from sova.interactions.models import Contract, DocumentTemplate, InteractionContact, InteractionProduct
+from sova.interactions.models import (
+    Contract,
+    DocumentTemplate,
+    InteractionContact,
+    InteractionDirection,
+    InteractionProduct,
+    InteractionProgram,
+    License,
+)
 from sova.processes.action_features.base import ActionFeatureResult
 from sova.processes.action_features.errors import ActionFeatureError
 
@@ -29,9 +37,12 @@ class ContractDocumentSerializer(serializers.Serializer):
     city = serializers.CharField(max_length=255, allow_blank=True, default="")
     counterparty = ContractCounterpartySerializer()
     signatory = ContractSignatorySerializer(default=dict)
-    products = serializers.ListField(
-        child=serializers.CharField(max_length=500), allow_empty=True, default=list,
-    )
+    # Состав взаимодействия: фронтенд присылает выбранные элементы, бэкенд по `id`
+    # перезаполняет их из БД (см. `_resolve_scope`) — в шаблон попадают только данные взаимодействия.
+    directions = serializers.ListField(child=serializers.DictField(), default=list)
+    programs = serializers.ListField(child=serializers.DictField(), default=list)
+    products = serializers.ListField(child=serializers.DictField(), default=list)
+    licenses = serializers.ListField(child=serializers.DictField(), default=list)
     amount = serializers.DecimalField(max_digits=14, decimal_places=2, allow_null=True, default=None)
     comment = serializers.CharField(allow_blank=True, default="")
 
@@ -69,6 +80,86 @@ def _counterparty(context) -> dict:
     }
 
 
+def _scope_querysets(interaction) -> dict:
+    return {
+        "directions": (
+            InteractionDirection.objects
+            .filter(interaction=interaction, is_active=True)
+            .select_related("direction")
+            .order_by("added_at")
+        ),
+        "programs": (
+            InteractionProgram.objects
+            .filter(interaction=interaction, is_active=True)
+            .select_related("program__direction")
+            .order_by("added_at")
+        ),
+        "products": (
+            InteractionProduct.objects
+            .filter(interaction=interaction, is_active=True)
+            .select_related("product", "interaction_program__program")
+            .order_by("added_at")
+        ),
+        "licenses": (
+            License.objects
+            .filter(interaction_product__interaction=interaction, is_active=True)
+            .select_related("contract", "interaction_product__product")
+            .order_by("created_at")
+        ),
+    }
+
+
+_SCOPE_SERIALIZERS = {
+    "directions": lambda item: {"id": str(item.pk), "name": item.direction.name},
+    "programs": lambda item: {
+        "id": str(item.pk),
+        "name": item.program.name,
+        "direction": item.program.direction.name,
+    },
+    "products": lambda item: {
+        "id": str(item.pk),
+        "name": item.product.name,
+        "program": item.interaction_program.program.name if item.interaction_program else "",
+    },
+    "licenses": lambda item: {
+        "id": str(item.pk),
+        "product": item.interaction_product.product.name,
+        "contract_number": item.contract.contract_number,
+        "signed_at": item.signed_at.isoformat() if item.signed_at else None,
+        "valid_until_year": item.valid_until_year,
+        "is_signed": item.is_signed,
+    },
+}
+
+
+def _scope(interaction) -> dict:
+    """Направления, программы, продукты и лицензии взаимодействия в формате документа."""
+    return {
+        key: [_SCOPE_SERIALIZERS[key](item) for item in queryset]
+        for key, queryset in _scope_querysets(interaction).items()
+    }
+
+
+def _resolve_scope(interaction, document: dict) -> dict:
+    """Проверяет выбранные элементы по `id` и заменяет их актуальными данными взаимодействия."""
+    available = _scope(interaction)
+    errors = {}
+    resolved = {}
+    for key, items in available.items():
+        by_id = {item["id"]: item for item in items}
+        selected_ids = [str(item.get("id", "")) for item in document[key]]
+        unknown = [item_id for item_id in selected_ids if item_id not in by_id]
+        if unknown:
+            errors[key] = [f"Не относятся к взаимодействию: {', '.join(unknown)}."]
+            continue
+        selected = set(selected_ids)
+        # Порядок — как во взаимодействии, дубли схлопываются.
+        resolved[key] = [item for item in items if item["id"] in selected]
+    if errors:
+        raise serializers.ValidationError({"document": errors})
+    return resolved
+
+
 class CreateContractHandler:
     """
     Создаёт договор взаимодействия по данным из формы.
@@ -90,15 +181,6 @@ class CreateContractHandler:
             .select_related("contact_person")
             .order_by("linked_at")
         )
-        if context.interaction_product:
-            products = [context.interaction_product]
-        else:
-            products = (
-                InteractionProduct.objects
-                .filter(interaction=context.interaction, is_active=True)
-                .select_related("product")
-                .order_by("added_at")
-            )
         return {
             "templates": [{"id": item.pk, "name": item.name} for item in _contract_templates()],
             "contacts": [
@@ -115,7 +197,8 @@ class CreateContractHandler:
                 "city": getattr(context.university, "city", "") or "",
                 "counterparty": _counterparty(context),
                 "signatory": {"full_name": "", "position": "", "basis": ""},
-                "products": [item.product.name for item in products],
+                # По умолчанию в договор идёт весь состав взаимодействия.
+                **_scope(context.interaction),
                 "amount": None,
                 "comment": "",
             },
@@ -128,6 +211,7 @@ class CreateContractHandler:
         serializer.is_valid(raise_exception=True)
         template = serializer.validated_data["template"]
         document = ContractDocumentSerializer(serializer.validated_data["document"]).data
+        document.update(_resolve_scope(context.interaction, document))
         contract = Contract.objects.create(
             interaction=context.interaction,
             contract_number=document["contract_number"],
