@@ -1,7 +1,13 @@
 from django.contrib import admin
 
 from sova.core.admin import AbstractBaseModelAdmin, AbstractHistoryModelAdmin
-from sova.notifications.models import DeadlineDelivery, Notification, NotificationProfile, NotifySettings
+from sova.notifications.models import (
+    DeadlineDelivery,
+    Notification,
+    NotificationProfile,
+    NotifySettings,
+    TelegramLinkToken,
+)
 
 
 @admin.register(Notification)
@@ -61,6 +67,19 @@ class NotifySettingsAdmin(AbstractBaseModelAdmin[NotifySettings]):
         return False
 
     def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(TelegramLinkToken)
+class TelegramLinkTokenAdmin(AbstractBaseModelAdmin[TelegramLinkToken]):
+    """Админка одноразовых токенов привязки Telegram. Заводятся только через API, вручную не создаются."""
+
+    list_display = ("id", "user", "created_at", "expires_at", "used_at")
+    list_select_related = ("user",)
+    search_fields = ("id", "user__email", "user__first_name", "user__last_name")
+    autocomplete_fields = ("user",)
+
+    def has_add_permission(self, request):
         return False
 
 
