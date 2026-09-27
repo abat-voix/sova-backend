@@ -21,6 +21,7 @@ class WorkflowPermissionTests(APITestCase):
         UserRole.objects.create(user=self.admin, role=SystemRole.PLATFORM_ADMIN)
         self.owned = WorkflowFactory(created_by=self.head)
         self.foreign = WorkflowFactory(created_by=self.other_head)
+        self.inactive = WorkflowFactory(created_by=self.head, is_active=False)
 
     def url(self, workflow: Workflow) -> str:
         return f"/api/workflows/workflows/{workflow.pk}/"
@@ -30,7 +31,7 @@ class WorkflowPermissionTests(APITestCase):
         response = self.client.get("/api/workflows/workflows/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(response.data["count"], 3)
 
     def test_head_can_edit_only_owned_workflow(self) -> None:
         self.client.force_authenticate(self.head)
@@ -44,9 +45,31 @@ class WorkflowPermissionTests(APITestCase):
         self.assertEqual(own_response.status_code, status.HTTP_200_OK)
         self.assertEqual(foreign_response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_kam_cannot_access_workflow_api(self) -> None:
+    def test_kam_can_list_only_active_workflows(self) -> None:
         self.client.force_authenticate(self.kam)
         response = self.client.get("/api/workflows/workflows/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {item["id"] for item in response.data["results"]},
+            {str(self.owned.pk), str(self.foreign.pk)},
+        )
+
+    def test_kam_can_open_active_but_not_inactive_workflow(self) -> None:
+        self.client.force_authenticate(self.kam)
+
+        active_response = self.client.get(self.url(self.owned))
+        inactive_response = self.client.get(self.url(self.inactive))
+
+        self.assertEqual(active_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(inactive_response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_kam_cannot_change_workflow(self) -> None:
+        self.client.force_authenticate(self.kam)
+
+        response = self.client.patch(
+            self.url(self.owned), {"name": "Нельзя"}, format="json"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 

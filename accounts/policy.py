@@ -63,6 +63,7 @@ class Action:
     CATALOG_IMPORT = "catalog.import"
     CATALOG_MAPPINGS_MANAGE = "catalog.mappings.manage"
 
+    WORKFLOWS_READ = "workflows.read"
     WORKFLOWS_MANAGE = "workflows.manage"
     USERS_READ = "users.read"
     USERS_MANAGE = "users.manage"
@@ -133,7 +134,15 @@ _OBSERVER_READ = frozenset(
         Action.CATALOG_READ,
     }
 )
-_BASE_WORK = _INTERACTIONS_WORK | _CONTRACTS_WORK | _LICENSES_WORK | _PROCESSES_WORK | _REPORTS_WORK | _CATALOG_WORK
+_BASE_WORK = (
+    _INTERACTIONS_WORK
+    | _CONTRACTS_WORK
+    | _LICENSES_WORK
+    | _PROCESSES_WORK
+    | _REPORTS_WORK
+    | _CATALOG_WORK
+    | {Action.WORKFLOWS_READ}
+)
 
 # Какие операции разрешены роли. Кого именно можно назначить или снять ответственным — `responsible_policy`
 ROLE_ACTIONS: dict[str, frozenset[str]] = {

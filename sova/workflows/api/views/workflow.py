@@ -6,8 +6,10 @@ from rest_framework import serializers as drf_serializers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.policy import Action, can
 from sova.core.api.views import SovaBaseViewSet
 from sova.workflows.api import filters, serializers
+from sova.workflows.api.permissions import CanReadOrManageWorkflows, can_edit_workflow
 from sova.workflows.api.views.audit import WorkflowAuditMixin
 from sova.workflows.enum import WorkflowChangeType
 from sova.workflows.models import (
@@ -20,7 +22,6 @@ from sova.workflows.models import (
     WorkflowAction,
     WorkflowStage,
 )
-from sova.workflows.api.permissions import CanManageWorkflows, can_edit_workflow
 from sova.workflows.services import workflow_audit_service
 
 
@@ -33,17 +34,20 @@ class WorkflowViewSet(WorkflowAuditMixin, SovaBaseViewSet):
     ordering_fields = "__all__"
     search_fields = ("name", "code", "description")
     filterset_class = filters.WorkflowFilter
-    permission_classes = (CanManageWorkflows,)
+    permission_classes = (CanReadOrManageWorkflows,)
 
     def get_queryset(self) -> QuerySet:
         """Queryset со счётчиком этапов."""
-        return (
+        queryset = (
             super()
             .get_queryset()
             .select_related("created_by")
             .annotate(stages_count=Count("workflow_stages", distinct=True))
             .order_by("name")  # annotate() со GROUP BY сбрасывает Meta.ordering
         )
+        if not can(self.request.user, Action.WORKFLOWS_MANAGE):
+            queryset = queryset.filter(is_active=True)
+        return queryset
 
     def _definition(self, workflow: Workflow) -> dict:
         """Return the complete graph in one response for the editor."""
