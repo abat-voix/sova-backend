@@ -25,13 +25,17 @@ class InteractionShortSerializer(serializers.ModelSerializer):
         help_text=_("Показывается развёрнуто; пусто у взаимодействий с вузом"),
     )
 
+    number = serializers.CharField(source="display_number", read_only=True)
+
     class Meta:
         model = Interaction
-        fields = ("id", "university", "b2c_client")
+        fields = ("id", "number", "university", "b2c_client")
 
 
 class InteractionSerializer(serializers.ModelSerializer):
     """Взаимодействие — представление для чтения (list/retrieve)."""
+
+    number = serializers.CharField(source="display_number", read_only=True, label=_("Номер"))
 
     university = UniversityShortSerializer(
         read_only=True,
@@ -67,6 +71,7 @@ class InteractionSerializer(serializers.ModelSerializer):
         model = Interaction
         fields = (
             "id",
+            "number",
             "comment",
             "is_active",
             "university",

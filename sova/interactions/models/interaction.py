@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 
 from sova.core.models import TimeStampedModel
@@ -36,6 +36,12 @@ class Interaction(TimeStampedModel):
         blank=True,
         verbose_name="B2C-клиент",
     )
+    sequence_number = models.PositiveBigIntegerField(
+        unique=True,
+        editable=False,
+        verbose_name="Порядковый номер",
+    )
+
 
     class Meta:
         verbose_name = "Взаимодействие"
@@ -52,4 +58,16 @@ class Interaction(TimeStampedModel):
         ]
 
     def __str__(self):
-        return f"Взаимодействие #{self.id} — {self.university or self.b2c_client}"
+        return f"Взаимодействие №{self.display_number} — {self.university or self.b2c_client}"
+
+    @property
+    def display_number(self) -> str:
+        return f"{self.sequence_number}-{self.created_at:%d%m%y}"
+
+    def save(self, *args, **kwargs):
+        if self.sequence_number:
+            return super().save(*args, **kwargs)
+        with transaction.atomic():
+            last = type(self).objects.select_for_update().order_by("-sequence_number").first()
+            self.sequence_number = (last.sequence_number if last else 0) + 1
+            return super().save(*args, **kwargs)
