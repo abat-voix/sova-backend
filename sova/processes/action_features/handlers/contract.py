@@ -10,6 +10,11 @@ from sova.interactions.models import (
     InteractionProgram,
     License,
 )
+from sova.interactions.services.contract_files import record_contract_file
+from sova.interactions.services.document_templates import (
+    DocumentTemplateRenderError,
+    render_contract_template,
+)
 from sova.processes.action_features.base import ActionFeatureResult
 from sova.processes.action_features.errors import ActionFeatureError
 
@@ -55,7 +60,11 @@ class CreateContractPayloadSerializer(serializers.Serializer):
 
 
 def _contract_templates():
-    return DocumentTemplate.objects.filter(kind=DocumentTemplateKind.CONTRACT, is_active=True)
+    return (
+        DocumentTemplate.objects.filter(kind=DocumentTemplateKind.CONTRACT, is_active=True)
+        .exclude(file="")
+        .exclude(file__isnull=True)
+    )
 
 
 def _counterparty(context) -> dict:
@@ -165,8 +174,7 @@ class CreateContractHandler:
     Создаёт договор взаимодействия по данным из формы.
 
     Фронтенд присылает готовый JSON (`document`) — контекст рендера шаблона `template`.
-    Рендер через docxtpl пока не подключён: договор создаётся без файла, JSON сохраняется
-    в результате исполнения feature, чтобы по нему можно было сформировать файл позже.
+    Выбранный DOCX заполняется JSON и сохраняется как текущий файл договора.
     """
 
     code = "contract.create"
@@ -212,11 +220,17 @@ class CreateContractHandler:
         template = serializer.validated_data["template"]
         document = ContractDocumentSerializer(serializer.validated_data["document"]).data
         document.update(_resolve_scope(context.interaction, document))
+        try:
+            rendered_file = render_contract_template(template, document)
+        except DocumentTemplateRenderError as error:
+            raise serializers.ValidationError({"template": [str(error)]}) from error
         contract = Contract.objects.create(
             interaction=context.interaction,
             contract_number=document["contract_number"],
+            file=rendered_file,
+            file_name=rendered_file.name,
         )
-        # TODO: рендер `template.file` через docxtpl с контекстом `document` → Contract.file.
+        record_contract_file(contract, context.user)
         return ActionFeatureResult(
             "contract",
             contract.pk,
@@ -224,6 +238,6 @@ class CreateContractHandler:
                 "contract_number": contract.contract_number,
                 "template": {"id": str(template.pk), "name": template.name},
                 "document": document,
-                "file_generated": False,
+                "file_generated": True,
             },
         )
