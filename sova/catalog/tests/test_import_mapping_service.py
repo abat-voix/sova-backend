@@ -79,6 +79,16 @@ class CatalogImportMappingServiceTestCase(TestCase):
         # Проверяем, что ошибка на втором поле
         self.assertEqual(set(context.exception.errors), {"external_code"})
 
+    def test_replace_rejects_duplicate_columns_differing_by_line_break(self) -> None:
+        """Колонка с переносом строки и та же колонка в одну строку — дубль, как при сопоставлении файла."""
+        with self.assertRaises(CatalogImportMappingError) as context:
+            catalog_import_mapping_service.replace_for_type(
+                catalog_type=CatalogType.DIRECTION, mappings={"name": "Название\nнаправления", "external_code": "Название направления"}
+            )
+
+        # Проверяем, что ошибка на втором поле
+        self.assertEqual(set(context.exception.errors), {"external_code"})
+
     def test_replace_rejects_missing_required_fields(self) -> None:
         """Незаполненное обязательное поле — ошибка, старый маппинг не меняется."""
         CatalogImportMappingFactory(catalog_type=CatalogType.DIRECTION, target_field="name", source_column="Название")

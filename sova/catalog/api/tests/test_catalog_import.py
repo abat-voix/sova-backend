@@ -197,3 +197,46 @@ class ContractRegistryImportWarningsApiTestCase(APITestCase):
         responsible = Responsible.objects.get(contract__contract_number="Д-1")
         self.assertEqual((responsible.manager_id, responsible.assigned_by_id), (kam.pk, self.user.pk))
         self.assertEqual(response.data["warnings"], [])
+
+
+class CatalogImportHeadersApiTestCase(APITestCase):
+    """Тесты POST /api/catalog/imports/headers/."""
+
+    def setUp(self) -> None:
+        """Аутентифицирует администратора платформы."""
+        user = UserFactory()
+        UserRole.objects.create(user=user, role=SystemRole.PLATFORM_ADMIN)
+        self.client.force_authenticate(user=user)
+        self.url = reverse("catalog:catalog-import-headers")
+
+    def test_returns_headers_without_mapping(self) -> None:
+        """Заголовки читаются без настроенного маппинга и ничего не импортируют."""
+        file = _xlsx("vendors.xlsx", ("Вендор", "Код"), ("JetBrains", "jb"))
+
+        response = self.client.post(path=self.url, data={"file": file}, format="multipart")
+
+        # Проверяем заголовки и что вендор не создан
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        self.assertEqual(response.data, {"headers": ["Вендор", "Код"]})
+        self.assertFalse(Vendor.objects.exists())
+
+    def test_unreadable_file_returns_import_error(self) -> None:
+        """Текст под видом xlsx — 400 import_error с понятным сообщением."""
+        file = SimpleUploadedFile("vendors.xlsx", "Вендор;Код\nJetBrains;jb".encode())
+
+        response = self.client.post(path=self.url, data={"file": file}, format="multipart")
+
+        # Проверяем код и наличие причины
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "import_error")
+        self.assertIn("vendors.xlsx", response.data["detail"])
+
+    def test_rejects_other_extensions(self) -> None:
+        """Расширение не xlsx/xls — ошибка валидации поля file."""
+        file = SimpleUploadedFile("vendors.csv", b"a;b")
+
+        response = self.client.post(path=self.url, data={"file": file}, format="multipart")
+
+        # Проверяем ошибку поля
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("file", response.data)

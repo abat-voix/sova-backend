@@ -5,6 +5,8 @@ from sova.catalog.api.serializers.b2c_client import (
 )
 from sova.catalog.api.serializers.catalog_import import (
     CatalogImportErrorSerializer,
+    CatalogImportHeadersResultSerializer,
+    CatalogImportHeadersSerializer,
     CatalogImportResultSerializer,
     CatalogImportRowErrorSerializer,
     CatalogImportRowWarningSerializer,
@@ -64,6 +66,8 @@ __all__ = [
     "B2CClientSerializer",
     "B2CClientShortSerializer",
     "CatalogImportErrorSerializer",
+    "CatalogImportHeadersResultSerializer",
+    "CatalogImportHeadersSerializer",
     "CatalogImportFieldSerializer",
     "CatalogImportFieldsQuerySerializer",
     "CatalogImportMappingSerializer",
