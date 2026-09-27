@@ -208,6 +208,7 @@ class InteractionPermissionsTestCase(APITestCase):
                     "processes.read",
                     "reports.export",
                     "reports.read",
+                    "training.read",
                 }
             ),
         )

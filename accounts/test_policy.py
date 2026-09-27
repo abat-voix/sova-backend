@@ -44,6 +44,7 @@ class PolicyTableTestCase(TestCase):
                 Action.REPORTS_READ,
                 Action.REPORTS_EXPORT,
                 Action.CATALOG_READ,
+                Action.TRAINING_READ,
             },
         )
 

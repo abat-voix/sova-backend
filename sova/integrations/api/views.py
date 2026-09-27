@@ -17,15 +17,18 @@ from rest_framework.decorators import action
 from sova.integrations.api.permissions import CanManageIntegrations
 from sova.integrations.api.serializers import (
     IntegrationMappingPreviewSerializer,
+    IntegrationMappingProcessResultSerializer,
+    IntegrationMappingProcessSerializer,
     IntegrationMappingSerializer,
     IntegrationEntityMetadataSerializer,
     IntegrationMessageResponseSerializer,
     IntegrationSystemSerializer,
 )
+from sova.integrations.enum import IntegrationDirection
 from sova.integrations.mapping import preview_mapping
 from sova.integrations.models import IntegrationMapping
-from sova.integrations.registry import ENTITIES
-from sova.integrations.services import receive_message
+from sova.integrations.registry import ENTITIES, incoming_fields
+from sova.integrations.services import process_with_mapping, receive_message
 
 
 def _error(code, message, http_status):
@@ -129,6 +132,18 @@ def _field_metadata(name, field):
     }
 
 
+def _entity_fields(entity):
+    """Поля чтения (для исходящих) + поля создания; read_only = нельзя заполнить из входящего сообщения."""
+    writable = incoming_fields(entity.code)
+    fields = [
+        {**_field_metadata(name, field), "read_only": name not in writable}
+        for name, field in entity.serializer().fields.items()
+    ]
+    known = {field["name"] for field in fields}
+    fields += [_field_metadata(name, field) for name, field in writable.items() if name not in known]
+    return fields
+
+
 class IntegrationEntityMetadataView(APIView):
     permission_classes = (CanManageIntegrations,)
 
@@ -139,7 +154,7 @@ class IntegrationEntityMetadataView(APIView):
                 "code": entity.code,
                 "label": entity.label,
                 "serializer": f"{entity.serializer.__module__}.{entity.serializer.__name__}",
-                "fields": [_field_metadata(name, field) for name, field in entity.serializer().fields.items()],
+                "fields": _entity_fields(entity),
             }
             for entity in ENTITIES.values()
         ])
@@ -169,3 +184,29 @@ class IntegrationMappingViewSet(ModelViewSet):
         serializer = IntegrationMappingPreviewSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return Response(preview_mapping(**serializer.validated_data))
+
+    @extend_schema(
+        tags=["integrations"],
+        request=IntegrationMappingProcessSerializer,
+        responses={200: IntegrationMappingProcessResultSerializer},
+    )
+    @action(detail=True, methods=("post",), url_path="process")
+    def process(self, request, pk=None):
+        """Ручная загрузка JSON (объект или массив) во входящий маппинг: разбор и создание сущностей CRM сразу."""
+        mapping = self.get_object()
+        if mapping.direction != IntegrationDirection.INCOMING:
+            return _error(
+                "mapping_not_incoming", "Загрузить JSON можно только во входящий маппинг", status.HTTP_400_BAD_REQUEST
+            )
+        serializer = IntegrationMappingProcessSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        message = process_with_mapping(mapping=mapping, payload=serializer.validated_data["payload"])
+        result = message.result
+        errors = result.get("errors") or ([message.last_error] if message.last_error else [])
+        return Response(IntegrationMappingProcessResultSerializer({
+            "id": message.pk,
+            "status": message.status,
+            "created": result.get("created", []),
+            "errors": errors,
+            "warnings": result.get("warnings", []),
+        }).data)

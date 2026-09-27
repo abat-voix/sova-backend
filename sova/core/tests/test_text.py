@@ -1,9 +1,11 @@
 from django.test import SimpleTestCase
 
 from sova.core.text import (
+    email_key,
     normalize_quotes,
     normalize_telegram,
     phone_key,
+    snils_key,
     quote_insensitive_key,
     split_quoted_list,
     strip_outer_quotes,
@@ -105,6 +107,22 @@ class PhoneKeyTestCase(SimpleTestCase):
 
     def test_other_numbers_keep_digits(self) -> None:
         self.assertEqual(phone_key("+375 29 123-45-67"), "375291234567")
+
+
+class EmailKeyTestCase(SimpleTestCase):
+    """Email сравнивается без пробелов по краям и без учёта регистра."""
+
+    def test_key(self) -> None:
+        self.assertEqual(email_key(" Cherepanona.S@Test.ru "), "cherepanona.s@test.ru")
+        self.assertEqual(email_key(""), "")
+
+
+class SnilsKeyTestCase(SimpleTestCase):
+    """СНИЛС сравнивается по цифрам."""
+
+    def test_key(self) -> None:
+        self.assertEqual(snils_key("123-456-789 45"), "12345678945")
+        self.assertEqual(snils_key(""), "")
 
 
 class NormalizeTelegramTestCase(SimpleTestCase):

@@ -7,9 +7,9 @@ from datetime import timedelta
 from sova.integrations import adapter
 from sova.integrations.enum import IntegrationDirection, IntegrationStatus
 from sova.integrations.handlers import (
-    HANDLERS,
     PermanentIntegrationHandlerError,
     TemporaryIntegrationHandlerError,
+    resolve_handler,
 )
 from sova.integrations.models import IntegrationMessage
 
@@ -59,7 +59,7 @@ def process_incoming_message(self, message_id: str) -> None:
     message = _start(message_id, IntegrationDirection.INCOMING)
     if message is None:
         return
-    handler = HANDLERS.get(message.event_type)
+    handler = resolve_handler(message)
     if handler is None:
         _success(message.pk, IntegrationStatus.IGNORED, f"No handler for event type: {message.event_type}")
         return

@@ -25,6 +25,7 @@ from sova.processes.action_features.handlers.responsible import (
     AssignResponsibleHandler,
     UnassignResponsibleHandler,
 )
+from sova.processes.action_features.handlers.training import CreateTrainingStreamHandler
 
 FEATURE_HANDLERS = {
     "contact_person.create": CreateContactPersonHandler(),
@@ -46,4 +47,5 @@ FEATURE_HANDLERS = {
     "contract.file.upload": UploadContractFileHandler(),
     "contract.mark_sent": MarkContractSentHandler(),
     "contract.mark_corrected": MarkContractCorrectedHandler(),
+    "training.create": CreateTrainingStreamHandler(),
 }

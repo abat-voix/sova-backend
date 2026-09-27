@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     "sova.realtime",
     "sova.reports",
     "sova.integrations",
+    "sova.training",
 ]
 
 MIDDLEWARE = [
@@ -353,6 +354,17 @@ else:
 if CHANNEL_REDIS_URL_MISSING and ENVIRONMENT not in {"development", "test", "testing"}:
     raise ImproperlyConfigured("CHANNEL_REDIS_URL must be set outside development.")
 
+# Шифрование персональных данных (152-ФЗ, приказ ФСТЭК № 117): ключи Fernet через запятую, первый — текущий,
+# остальные — только для чтения (ротация, `manage.py rotate_pd_keys`); PD_HASH_KEY — ключ HMAC-индексов для поиска
+PD_ENCRYPTION_KEYS = env_list("PD_ENCRYPTION_KEYS")
+PD_HASH_KEY = os.getenv("PD_HASH_KEY", "")
+if not PD_ENCRYPTION_KEYS or not PD_HASH_KEY:
+    if ENVIRONMENT not in {"development", "test", "testing"}:
+        raise ImproperlyConfigured("PD_ENCRYPTION_KEYS and PD_HASH_KEY must be set outside development.")
+    # Фиксированные ключи разработки: данные локальной БД читаются между перезапусками
+    PD_ENCRYPTION_KEYS = PD_ENCRYPTION_KEYS or ["ZGV2ZWxvcG1lbnQtb25seS1wZC1rZXktZG8tbm90LXU="]
+    PD_HASH_KEY = PD_HASH_KEY or "development-only-pd-hash-key"
+
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "")
 TELEGRAM_PROXY = os.getenv("TELEGRAM_PROXY", "")
@@ -460,7 +472,12 @@ SPECTACULAR_SETTINGS = {
         "ActionInstanceStatusEnum": "sova.processes.enum.ActionInstanceStatus",
         "StageInstanceContextTypeEnum": "sova.processes.enum.StageInstanceContextType",
         "KindEnum": "sova.catalog.enum.ClientKind",
+        "CatalogTypeEnum": "sova.catalog.enum.CatalogType",
+        "CatalogImportTypeEnum": "sova.catalog.api.serializers.catalog_import.CATALOG_IMPORT_CHOICES",
         "NotificationKindEnum": "sova.notifications.enum.NotificationKind",
+        "TrainingStreamStatusEnum": "sova.training.enum.TrainingStreamStatus",
+        "TrainingApplicationStatusEnum": "sova.training.enum.TrainingApplicationStatus",
+        "QualificationKindEnum": "sova.training.enum.QualificationKind",
     },
 }
 
