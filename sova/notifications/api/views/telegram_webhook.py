@@ -5,6 +5,7 @@ import secrets
 from django.conf import settings
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -27,6 +28,7 @@ class TelegramWebhookView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
+    @extend_schema(exclude=True)
     def post(self, request):
         expected = settings.TELEGRAM_WEBHOOK_SECRET
         received = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")

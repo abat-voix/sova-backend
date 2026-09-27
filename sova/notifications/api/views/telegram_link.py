@@ -11,6 +11,7 @@ class TelegramLinkView(APIView):
     """Привязка Telegram текущего пользователя: статус/ссылка (GET) и отключение (DELETE)."""
 
     policy_action = Action.NOTIFICATIONS_USE
+    serializer_class = TelegramLinkStatusSerializer
 
     def get(self, request):
         """Статус привязки; если Telegram не подключён — одноразовая ссылка на бота."""

@@ -2,6 +2,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
 from sova.core.tests.factories import UserFactory
 from sova.notifications.models import TelegramLinkToken
 from sova.notifications.tests.factories import NotificationProfileFactory
@@ -12,6 +13,7 @@ class TelegramLinkApiTestCase(APITestCase):
 
     def setUp(self) -> None:
         self.user = UserFactory()
+        UserRole.objects.create(user=self.user, role=SystemRole.KAM)
         self.client.force_authenticate(user=self.user)
         self.url = reverse("notifications:telegram-link")
 
