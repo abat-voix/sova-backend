@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.policy import Action
 from sova.core.api.views import SovaReadOnlyViewSet
 from sova.processes.api import filters, serializers
 from sova.processes.api.views.mixins import VisibleInteractionMixin
@@ -25,6 +26,11 @@ class StageInstanceViewSet(VisibleInteractionMixin, SovaReadOnlyViewSet):
     ordering_fields = "__all__"
     search_fields = ("status", "stage__name")
     filterset_class = filters.StageInstanceFilter
+    policy_actions = {
+        "list": Action.PROCESSES_READ,
+        "retrieve": Action.PROCESSES_READ,
+        "cancel": Action.PROCESSES_EXECUTE,
+    }
 
     @extend_schema(
         request=serializers.CancelStageSerializer,

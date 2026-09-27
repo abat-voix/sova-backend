@@ -275,7 +275,8 @@ class InteractionReportVisibilityTestCase(ReportTestMixin, APITestCase):
         InteractionFactory()
         self.client.force_authenticate(user=self.create_user())
 
-        self.assertEqual(self.preview()["count"], 0)
+        response = self.client.post(self.preview_url, data={"page_size": 200}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_anonymous_rejected(self) -> None:
         self.client.force_authenticate(user=None)

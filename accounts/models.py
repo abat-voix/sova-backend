@@ -4,8 +4,9 @@ from django.db import models
 
 
 class SystemRole(models.TextChoices):
-    """Прикладные роли пользователя в СОВА."""
+    """Прикладные роли пользователя в СОВА. Права ролей — `accounts.policy`."""
 
+    OBSERVER = "observer", "Наблюдатель"
     KAM = "kam", "КАМ"
     HEAD = "head", "Руководитель"
     PLATFORM_ADMIN = "platform_admin", "Администратор платформы"

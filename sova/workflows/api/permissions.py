@@ -3,13 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import BasePermission, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 
 from accounts.models import SystemRole
-from accounts.services import get_system_role
-
-
-EDITABLE_ROLES = frozenset({SystemRole.HEAD, SystemRole.PLATFORM_ADMIN})
+from accounts.policy import Action, can, effective_role
 
 
 def can_manage_workflows(user) -> bool:
@@ -17,13 +14,13 @@ def can_manage_workflows(user) -> bool:
     return bool(
         user
         and user.is_authenticated
-        and get_system_role(user) in EDITABLE_ROLES
+        and can(user, Action.WORKFLOWS_MANAGE)
     )
 
 
 def can_edit_workflow(user, workflow) -> bool:
     """Whether the user may mutate a particular workflow and its children."""
-    role = get_system_role(user)
+    role = effective_role(user)
     return role == SystemRole.PLATFORM_ADMIN or (
         role == SystemRole.HEAD and workflow.created_by_id == user.pk
     )

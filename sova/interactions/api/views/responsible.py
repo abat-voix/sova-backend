@@ -1,11 +1,12 @@
 from sova.core.api.views import SovaReadOnlyViewSet
 from sova.interactions.api import filters, serializers
+from sova.interactions.api.views.mixins import InteractionPartMixin
 from sova.interactions.models import Responsible
 
 
-class ResponsibleViewSet(SovaReadOnlyViewSet):
+class ResponsibleViewSet(InteractionPartMixin, SovaReadOnlyViewSet):
     """
-    История назначений ответственных — только чтение.
+    История назначений ответственных — только чтение; видна вместе со взаимодействием или договором реестра.
 
     Назначение и снятие выполняются действиями взаимодействия
     `assign-responsible` / `unassign-responsible`.

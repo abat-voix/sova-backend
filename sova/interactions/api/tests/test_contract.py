@@ -25,7 +25,7 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
     def setUp(self) -> None:
         """Администратор платформы видит все взаимодействия — видимость не сужает выборку."""
         super().setUp()
-        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
+        UserRole.objects.update_or_create(user=self.user, defaults={"role": SystemRole.PLATFORM_ADMIN})
 
     def create_instance(self, **kwargs) -> Contract:
         """Создаёт договор."""
@@ -142,7 +142,7 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
     def test_foreign_contract_is_not_visible(self) -> None:
         """Договор чужого КАМа не виден в списке, детально и на скачивании (404)."""
         UserRole.objects.filter(user=self.user).delete()
-        UserRole.objects.create(user=self.user, role=SystemRole.KAM)
+        UserRole.objects.update_or_create(user=self.user, defaults={"role": SystemRole.KAM})
 
         foreign_kam = UserFactory()
         UserRole.objects.create(user=foreign_kam, role=SystemRole.KAM)

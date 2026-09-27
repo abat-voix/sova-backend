@@ -1,4 +1,5 @@
 from drf_spectacular.utils import extend_schema
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
@@ -24,6 +25,8 @@ class ApiRootView(APIView):
     У каждого раздела свой `DefaultRouter` со своим корнем, поэтому общий
     `/api/` собирает их вместе.
     """
+
+    permission_classes = (IsAuthenticated,)
 
     def get(self, request: Request, format: str | None = None) -> Response:
         """Возвращает ссылки на корни разделов API."""

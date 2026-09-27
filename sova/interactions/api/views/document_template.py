@@ -3,6 +3,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.policy import Action
 from sova.interactions.api.serializers.document_template import DocumentTemplateFieldsSerializer
 from sova.interactions.enum import DocumentTemplateKind
 from sova.interactions.services.document_template_fields import contract_template_fields
@@ -10,6 +11,8 @@ from sova.interactions.services.document_template_fields import contract_templat
 
 class DocumentTemplateFieldsView(APIView):
     """Все поля, которые можно использовать в DOCX-шаблоне выбранного типа."""
+
+    policy_action = Action.PROCESSES_EXECUTE
 
     @extend_schema(
         parameters=[OpenApiParameter("kind", str, description="Тип шаблона. Пока поддерживается только contract.")],

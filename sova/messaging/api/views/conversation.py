@@ -8,6 +8,7 @@ from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
+from accounts.policy import Action
 from sova.core.api.exceptions import ConflictError
 from sova.core.api.pagination import StandardPagination
 from sova.messaging.api import serializers
@@ -29,6 +30,7 @@ class ConversationViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Gene
 
     serializer_class = serializers.ConversationSerializer
     pagination_class = None
+    policy_action = Action.MESSAGING_USE
 
     def get_queryset(self) -> QuerySet:
         """Беседы пользователя с предзагруженными участниками (для other_participant)."""

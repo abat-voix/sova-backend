@@ -232,6 +232,7 @@ class UserListApiTestCase(APITestCase):
     def test_roles_dictionary(self) -> None:
         """Справочник ролей доступен руководителю и администратору платформы."""
         expected = [
+            {"value": "observer", "label": "Наблюдатель"},
             {"value": "kam", "label": "КАМ"},
             {"value": "head", "label": "Руководитель"},
             {"value": "platform_admin", "label": "Администратор платформы"},

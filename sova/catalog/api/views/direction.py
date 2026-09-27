@@ -1,9 +1,10 @@
 from sova.catalog.api import filters, serializers
 from sova.catalog.models import Direction
 from sova.core.api.views import SovaBaseViewSet
+from sova.catalog.api.views.mixins import CatalogPolicyMixin
 
 
-class DirectionViewSet(SovaBaseViewSet):
+class DirectionViewSet(CatalogPolicyMixin, SovaBaseViewSet):
     """Направления обучения. Доступны CRUD операции."""
 
     read_serializer_class = serializers.DirectionSerializer

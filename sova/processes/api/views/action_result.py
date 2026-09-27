@@ -1,3 +1,4 @@
+from accounts.policy import Action
 from sova.core.api.views import SovaReadOnlyViewSet
 from sova.processes.api import filters, serializers
 from sova.processes.api.views.mixins import VisibleInteractionMixin
@@ -18,3 +19,4 @@ class ActionResultViewSet(VisibleInteractionMixin, SovaReadOnlyViewSet):
     ordering_fields = "__all__"
     search_fields = ("outcome_name_snapshot", "comment")
     filterset_class = filters.ActionResultFilter
+    policy_actions = {"list": Action.PROCESSES_READ, "retrieve": Action.PROCESSES_READ}

@@ -2,13 +2,15 @@ from django.db.models import Exists, OuterRef, QuerySet
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.policy import Action
 from sova.catalog.api import filters, serializers
+from sova.catalog.api.views.mixins import CatalogPolicyMixin
 from sova.catalog.models import University
 from sova.core.api.views import SovaBaseViewSet
 from sova.interactions.models import Interaction
 
 
-class UniversityViewSet(SovaBaseViewSet):
+class UniversityViewSet(CatalogPolicyMixin, SovaBaseViewSet):
     """Вузы. Доступны CRUD операции."""
 
     read_serializer_class = serializers.UniversitySerializer
@@ -17,6 +19,7 @@ class UniversityViewSet(SovaBaseViewSet):
     ordering_fields = "__all__"
     search_fields = ("short_name", "name", "inn", "external_code", "email")
     filterset_class = filters.UniversityFilter
+    policy_actions = {**CatalogPolicyMixin.policy_actions, "map_points": Action.CATALOG_READ}
 
     def get_queryset(self) -> QuerySet[University]:
         """Добавляет флаг наличия взаимодействий одним подзапросом, а не запросом на каждый вуз."""

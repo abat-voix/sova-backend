@@ -3,9 +3,11 @@ import json
 import logging
 import uuid
 
+from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.conf import settings
 
+from accounts.policy import Action, can
 from sova.realtime.groups import user_group_name
 
 
@@ -23,6 +25,12 @@ class EventsConsumer(AsyncWebsocketConsumer):
             await self.accept()
             await self.close(code=4401)
             logger.info("Realtime connection rejected: unauthenticated")
+            return
+
+        if not await database_sync_to_async(can)(user, Action.REALTIME_CONNECT):
+            await self.accept()
+            await self.close(code=4403)
+            logger.info("Realtime connection rejected: permission denied user_id=%s", user.pk)
             return
 
         self.group_name = user_group_name(user.pk)

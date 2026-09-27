@@ -1,6 +1,35 @@
 from django.db import transaction
+from django.db.models import Q, QuerySet
 
+from accounts.policy import Action
+from sova.interactions.services import visible_contracts, visible_interactions
 from sova.processes.services import workflow_engine_service
+
+
+class InteractionPartMixin:
+    """
+    Записи, принадлежащие взаимодействию (состав, история ответственных): видны вместе с ним, а изменять их — значит
+    изменять взаимодействие (`interactions.update`).
+
+    Headless-записи импорта реестра (без взаимодействия) видны вместе со своим договором.
+    """
+
+    policy_actions = {
+        "list": Action.INTERACTIONS_READ,
+        "retrieve": Action.INTERACTIONS_READ,
+        "create": Action.INTERACTIONS_UPDATE,
+        "update": Action.INTERACTIONS_UPDATE,
+        "partial_update": Action.INTERACTIONS_UPDATE,
+        "destroy": Action.INTERACTIONS_UPDATE,
+    }
+
+    def get_queryset(self) -> QuerySet:
+        """Записи видимых пользователю взаимодействий и headless-записи видимых договоров."""
+        user = self.request.user
+        return super().get_queryset().filter(
+            Q(interaction__in=visible_interactions(user))
+            | Q(interaction__isnull=True, contract__in=visible_contracts(user)),
+        )
 
 
 class SyncProcessesMixin:

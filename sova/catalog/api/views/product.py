@@ -1,9 +1,10 @@
 from sova.catalog.api import filters, serializers
 from sova.catalog.models import Product
 from sova.core.api.views import SovaBaseViewSet
+from sova.catalog.api.views.mixins import CatalogPolicyMixin
 
 
-class ProductViewSet(SovaBaseViewSet):
+class ProductViewSet(CatalogPolicyMixin, SovaBaseViewSet):
     """Продукты. Доступны CRUD операции; программы продукта передаются списком id."""
 
     read_serializer_class = serializers.ProductSerializer

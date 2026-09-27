@@ -6,6 +6,7 @@ from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
+from accounts.policy import Action
 from sova.core.files import file_response
 from sova.messaging.api import serializers
 from sova.messaging.models import MessageAttachment
@@ -17,6 +18,7 @@ class MessageAttachmentViewSet(mixins.CreateModelMixin, mixins.DestroyModelMixin
 
     serializer_class = serializers.MessageAttachmentUploadSerializer
     queryset = MessageAttachment.objects.all()
+    policy_action = Action.MESSAGING_USE
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

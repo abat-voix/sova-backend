@@ -58,9 +58,10 @@ class HeadlessContractVisibilityApiTestCase(APITestCase):
 
     def test_user_without_role_sees_nothing(self) -> None:
         self.create_contract()
+        self.client.force_authenticate(user=self.create_user())
 
-        # Проверяем пустую выборку без роли
-        self.assertEqual(self.visible_ids(self.create_user()), set())
+        # Пользователь без прикладной роли не входит в бизнес-разделы.
+        self.assertEqual(self.client.get(self.list_url).status_code, 403)
 
     def test_files_of_foreign_contract_are_hidden(self) -> None:
         kam = self.create_user(SystemRole.KAM)

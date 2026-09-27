@@ -39,7 +39,7 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
     def setUp(self) -> None:
         """Даёт пользователю роль администратора платформы: выборка зависит от роли в СОВА."""
         super().setUp()
-        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
+        UserRole.objects.update_or_create(user=self.user, defaults={"role": SystemRole.PLATFORM_ADMIN})
 
     def create_instance(self, **kwargs) -> Interaction:
         """Создаёт взаимодействие с вузом."""
@@ -305,7 +305,7 @@ class InteractionResponsibleActionsTestCase(APITestCase):
     def setUp(self) -> None:
         """Аутентифицирует клиента администратором платформы и создаёт взаимодействие."""
         self.user = UserFactory()
-        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
+        UserRole.objects.update_or_create(user=self.user, defaults={"role": SystemRole.PLATFORM_ADMIN})
         self.client.force_authenticate(user=self.user)
         self.interaction = InteractionFactory()
         self.assign_url = reverse(
@@ -611,14 +611,14 @@ class ResponsibleRulesApiTestCase(APITestCase):
         self.assertEqual(self.post(self.head, "unassign", self.mine).status_code, status.HTTP_200_OK)
 
     def test_kam_cannot_unassign_even_self(self, task) -> None:
-        """КАМ никого не снимает — 403 `responsible_change_forbidden`."""
+        """КАМ никого не снимает — 403 по политике ролей."""
         responsible_service.assign(interaction=self.interaction, manager=self.mine, assigned_by=None)
 
         response = self.post(self.mine, "unassign", self.mine)
 
         # Проверяем запрет и код
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data["code"], "responsible_change_forbidden")
+        self.assertEqual(response.data["code"], "permission_denied")
 
     def create_interaction(self, actor):
         """POST /interactions/ от имени `actor`."""

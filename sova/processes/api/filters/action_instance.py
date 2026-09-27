@@ -3,6 +3,8 @@ from django.http import QueryDict
 from django.utils.translation import gettext_lazy as _
 from django_filters import rest_framework as filters
 
+from accounts.models import SystemRole
+from accounts.policy import effective_role
 from sova.core.api.filters import NumberInFilter, SearchFilterMixin, UUIDInFilter
 from sova.interactions.models import Responsible
 from sova.processes.enum import TaskScope
@@ -77,7 +79,13 @@ class ActionInstanceFilter(SearchFilterMixin):
     def __init__(self, data=None, *args, **kwargs) -> None:
         """Подставляет `scope=mine`, если охват не задан: экран «Мои задачи» открывается своими."""
         data = data.copy() if data is not None else QueryDict(mutable=True)
-        data.setdefault("scope", TaskScope.MINE)
+        request = kwargs.get("request")
+        default_scope = (
+            TaskScope.ALL
+            if request is not None and effective_role(request.user) == SystemRole.OBSERVER
+            else TaskScope.MINE
+        )
+        data.setdefault("scope", default_scope)
         super().__init__(data, *args, **kwargs)
 
     def filter_scope(self, queryset: QuerySet, name: str, value: str) -> QuerySet:

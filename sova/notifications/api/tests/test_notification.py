@@ -1,6 +1,7 @@
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
 from sova.core.tests.factories import UserFactory
 from sova.notifications.enum import NotificationKind
 from sova.notifications.models import Notification
@@ -13,6 +14,7 @@ class NotificationInboxApiTestCase(APITestCase):
     def setUp(self) -> None:
         """Пользователь с двумя уведомлениями и чужое уведомление."""
         self.user = UserFactory()
+        UserRole.objects.create(user=self.user, role=SystemRole.KAM)
         self.client.force_authenticate(user=self.user)
         self.read = NotificationFactory(recipient=self.user, is_read=True)
         self.unread = NotificationFactory(recipient=self.user)
