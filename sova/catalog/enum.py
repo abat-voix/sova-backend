@@ -26,4 +26,3 @@ class ContactChannel(TextChoices):
     EMAIL = "email", "Почта"
     TELEGRAM = "telegram", "Чат в Telegram"
     PHONE = "phone", "Телефон"
-    OTHER = "other", "Другое"

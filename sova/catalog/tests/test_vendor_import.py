@@ -181,6 +181,13 @@ class VendorRowsImportTestCase(TestCase):
 
         self.assertIn("неизвестный способ связи", context.exception.errors[0].message)
 
+    def test_other_channel_is_row_error(self) -> None:
+        """Способа связи «Другое» больше нет: в файле он — ошибка строки, как любой неизвестный."""
+        with self.assertRaises(CatalogImportRowsError) as context:
+            self._load(_row("ООО «Базис»", full_name="Иванов Иван", channels="Другое"))
+
+        self.assertIn("неизвестный способ связи", context.exception.errors[0].message)
+
     def test_contact_data_without_full_name_is_row_error(self) -> None:
         with self.assertRaises(CatalogImportRowsError):
             self._load(_row("ООО «Базис»", email="ivanov@example.ru"))

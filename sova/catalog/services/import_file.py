@@ -34,7 +34,6 @@ _CONTACT_CHANNEL_SYNONYMS = {
         ("чат в тг", "тг", "telegram", "телеграм", "телеграмм", "чат в telegram"), ContactChannel.TELEGRAM.value
     ),
     **dict.fromkeys(("телефон", "звонок", "phone"), ContactChannel.PHONE.value),
-    **dict.fromkeys(("другое", "other"), ContactChannel.OTHER.value),
 }
 _FALSE_VALUES = {"0", "false", "нет", "no"}
 _DATE_FORMATS = ("%d.%m.%Y", "%Y-%m-%d")
