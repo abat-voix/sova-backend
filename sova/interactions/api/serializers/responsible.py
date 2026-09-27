@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from sova.core.api.serializers import UserShortSerializer
 from sova.interactions.models import Responsible
+from sova.interactions.services.responsible_policy import assignable_managers, removable_managers
 
 
 class ResponsibleShortSerializer(serializers.ModelSerializer):
@@ -26,7 +27,12 @@ class ResponsibleSerializer(serializers.ModelSerializer):
     interaction = serializers.PrimaryKeyRelatedField(
         read_only=True,
         label=_("Взаимодействие"),
-        help_text=_("Id взаимодействия, за которое назначен ответственный"),
+        help_text=_("Id взаимодействия, за которое назначен ответственный; пусто у КАМа headless-договора"),
+    )
+    contract = serializers.PrimaryKeyRelatedField(
+        read_only=True,
+        label=_("Договор"),
+        help_text=_("Id договора, если назначение пришло из реестра договоров"),
     )
     manager = UserShortSerializer(
         read_only=True,
@@ -44,6 +50,7 @@ class ResponsibleSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "interaction",
+            "contract",
             "manager",
             "assigned_by",
             "assigned_at",
@@ -51,14 +58,63 @@ class ResponsibleSerializer(serializers.ModelSerializer):
         )
 
 
+class ActorManagerField(serializers.PrimaryKeyRelatedField):
+    """Менеджер из набора, допустимого для пользователя запроса (`responsible_policy`)."""
+
+    def __init__(self, managers, **kwargs) -> None:
+        self.managers = managers
+        # Полный queryset — для схемы API; проверка идёт по `get_queryset`
+        super().__init__(queryset=get_user_model().objects.all(), **kwargs)
+
+    def get_queryset(self):
+        """Допустимые менеджеры для пользователя запроса."""
+        return self.managers(self.context["request"].user)
+
+
 class AssignResponsibleSerializer(serializers.Serializer):
     """Назначение ответственного менеджера на взаимодействие."""
 
-    manager = serializers.PrimaryKeyRelatedField(
-        queryset=get_user_model().objects.filter(is_active=True),
+    manager = ActorManagerField(
+        managers=assignable_managers,
         label=_("Ответственный менеджер"),
         help_text=_(
-            "Id активного пользователя; действующий ответственный, "
-            "если он есть, будет заменён с сохранением истории",
+            "Id пользователя: администратор — активный КАМ или руководитель; руководитель — он сам, КАМ его "
+            "команды или свободный (вступит в команду); КАМ — только он сам. Уже назначенный не дублируется",
         ),
+        error_messages={"does_not_exist": _("Этого менеджера нельзя назначить ответственным.")},
+    )
+
+
+class UnassignResponsibleSerializer(serializers.Serializer):
+    """Снятие ответственного менеджера с взаимодействия."""
+
+    manager = ActorManagerField(
+        managers=removable_managers,
+        label=_("Ответственный менеджер"),
+        help_text=_(
+            "Id менеджера: администратор — любой; руководитель — он сам, КАМ его команды или неактивный КАМ. "
+            "Остальные ответственные остаются",
+        ),
+        error_messages={"does_not_exist": _("Этого менеджера нельзя снять.")},
+    )
+
+
+class ManagerCandidateSerializer(serializers.Serializer):
+    """Кандидат в ответственные взаимодействия — строка окна назначения (`assignment_candidates`)."""
+
+    manager = UserShortSerializer(read_only=True, label=_("Менеджер"))
+    from_registry = serializers.BooleanField(
+        read_only=True,
+        label=_("Из реестра"),
+        help_text=_("КАМ договора взаимодействия, назначенный импортом реестра; выделяется в окне назначения"),
+    )
+    assignable = serializers.BooleanField(
+        read_only=True,
+        label=_("Можно назначить"),
+        help_text=_("Пользователь запроса вправе назначить менеджера; КАМ из реестра бывает недоступен (чужая команда)"),
+    )
+    is_responsible = serializers.BooleanField(
+        read_only=True,
+        label=_("Уже ответственный"),
+        help_text=_("Менеджер — действующий ответственный взаимодействия"),
     )

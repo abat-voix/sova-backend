@@ -1,9 +1,12 @@
-from django.db.models import QuerySet
+from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.http import QueryDict
 from django.utils.translation import gettext_lazy as _
 from django_filters import rest_framework as filters
 
+from accounts.models import SystemRole
+from accounts.policy import effective_role
 from sova.core.api.filters import NumberInFilter, SearchFilterMixin, UUIDInFilter
+from sova.interactions.models import Responsible
 from sova.processes.enum import TaskScope
 from sova.processes.models import ActionInstance
 
@@ -13,7 +16,8 @@ class ActionInstanceFilter(SearchFilterMixin):
     Фильтр экземпляров действий.
 
     `scope` делит доступную пользователю выборку на «мои» и «все»: по умолчанию показываются действия,
-    где пользователь — ответственный. Границы доступного задаёт роль в СОВА (см. queryset вьюсета),
+    где пользователь — ответственный, и действия без ответственного (пул) во взаимодействиях, где он
+    действующий КАМ. Границы доступного задаёт роль в СОВА (см. queryset вьюсета),
     поэтому `scope=all` у КАМа не расширяет выдачу за пределы его взаимодействий, а не отвергается.
     """
 
@@ -62,7 +66,8 @@ class ActionInstanceFilter(SearchFilterMixin):
         method="filter_scope",
         label=_("Охват"),
         help_text=_(
-            "mine (по умолчанию) — действия, где пользователь ответственный; "
+            "mine (по умолчанию) — действия, где пользователь ответственный, и действия без ответственного "
+            "во взаимодействиях, где он действующий КАМ; "
             "all — все действия, доступные ему по роли в СОВА",
         ),
     )
@@ -74,11 +79,23 @@ class ActionInstanceFilter(SearchFilterMixin):
     def __init__(self, data=None, *args, **kwargs) -> None:
         """Подставляет `scope=mine`, если охват не задан: экран «Мои задачи» открывается своими."""
         data = data.copy() if data is not None else QueryDict(mutable=True)
-        data.setdefault("scope", TaskScope.MINE)
+        request = kwargs.get("request")
+        default_scope = (
+            TaskScope.ALL
+            if request is not None and effective_role(request.user) == SystemRole.OBSERVER
+            else TaskScope.MINE
+        )
+        data.setdefault("scope", default_scope)
         super().__init__(data, *args, **kwargs)
 
     def filter_scope(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
-        """Сужает выборку до действий пользователя; `all` оставляет всё, что разрешено его ролью."""
+        """Сужает выборку до действий пользователя и пула его взаимодействий; `all` оставляет всё по роли."""
         if value != TaskScope.MINE or self.request is None:
             return queryset
-        return queryset.filter(responsible=self.request.user)
+        user = self.request.user
+        assigned = Responsible.objects.filter(
+            interaction=OuterRef("stage_instance__workflow_instance__interaction"),
+            manager=user,
+            unassigned_at__isnull=True,
+        )
+        return queryset.filter(Q(responsible=user) | Q(responsible__isnull=True) & Exists(assigned))

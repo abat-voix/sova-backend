@@ -21,6 +21,22 @@ class RecipientForUserTest(TestCase):
         # Проверяем max_chat_id из профиля
         self.assertEqual(recipient.max_chat_id, "456")
 
+    def test_for_user_sets_user_id(self) -> None:
+        """for_user() сохраняет id пользователя — адрес системного канала."""
+        user = UserFactory()
+
+        recipient = Recipient.for_user(user)
+
+        # Проверяем id пользователя
+        self.assertEqual(recipient.user_id, user.pk)
+
+    def test_manual_recipient_has_no_user_id(self) -> None:
+        """Recipient, собранный вручную, без user_id — системный канал ему не шлётся."""
+        recipient = Recipient(email="user@example.com")
+
+        # Проверяем отсутствие id пользователя
+        self.assertIsNone(recipient.user_id)
+
     def test_for_user_without_profile_returns_only_email(self) -> None:
         """for_user() без NotificationProfile возвращает telegram_chat_id/max_chat_id равными None."""
         user = UserFactory()

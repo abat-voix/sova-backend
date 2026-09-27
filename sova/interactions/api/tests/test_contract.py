@@ -2,14 +2,17 @@ from datetime import date
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
+from sova.catalog.tests.factories import UniversityFactory
 from sova.core.tests.base import BaseApiTestMixin
 from sova.core.tests.factories import UserFactory
 from sova.core.tests.media import TemporaryMediaMixin
-from sova.interactions.models import Contract
+from sova.interactions.models import Contract, Responsible
+from sova.interactions.services.contract_attachment import contract_attachment_service
 from sova.interactions.tests.factories import ContractFactory, InteractionFactory, ResponsibleFactory
 
 
@@ -22,7 +25,7 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
     def setUp(self) -> None:
         """Администратор платформы видит все взаимодействия — видимость не сужает выборку."""
         super().setUp()
-        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
+        UserRole.objects.update_or_create(user=self.user, defaults={"role": SystemRole.PLATFORM_ADMIN})
 
     def create_instance(self, **kwargs) -> Contract:
         """Создаёт договор."""
@@ -38,6 +41,7 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
             "signed_at": instance.signed_at and instance.signed_at.isoformat(),
             "interaction": {
                 "id": str(instance.interaction_id),
+                "number": instance.interaction.display_number,
                 "university": {
                     "id": str(instance.interaction.university_id),
                     "name": instance.interaction.university.name,
@@ -138,7 +142,7 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
     def test_foreign_contract_is_not_visible(self) -> None:
         """Договор чужого КАМа не виден в списке, детально и на скачивании (404)."""
         UserRole.objects.filter(user=self.user).delete()
-        UserRole.objects.create(user=self.user, role=SystemRole.KAM)
+        UserRole.objects.update_or_create(user=self.user, defaults={"role": SystemRole.KAM})
 
         foreign_kam = UserFactory()
         UserRole.objects.create(user=foreign_kam, role=SystemRole.KAM)
@@ -172,6 +176,18 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
 
         # Проверяем, что нарушение порядка шагов 4→6 отклонено
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_add_returns_400_without_interaction(self) -> None:
+        """Через API договор без взаимодействия не создаётся (headless — только импортом)."""
+        response = self.client.post(
+            path=self.list_url,
+            data={"contract_number": "Д-102"},
+            format="json",
+        )
+
+        # Проверяем, что interaction обязателен, хотя в модели он nullable
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("interaction", response.data)
 
     def test_change_returns_400_when_correction_after_signing(self) -> None:
         """PATCH с корректировкой позже подписания возвращает 400."""
@@ -231,3 +247,45 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
             [item["id"] for item in response.data["results"]],
             [str(inside.pk)],
         )
+
+
+class ContractCurrentResponsiblesApiTestCase(APITestCase):
+    """current_responsibles договора — действующие КАМы headless-договора из реестра."""
+
+    def setUp(self) -> None:
+        user = UserFactory()
+        UserRole.objects.create(user=user, role=SystemRole.PLATFORM_ADMIN)
+        self.client.force_authenticate(user=user)
+        self.kam = UserFactory(first_name="Максим", last_name="Менеджеров")
+        self.university = UniversityFactory()
+
+    def _get(self, contract: Contract) -> dict:
+        response = self.client.get(path=reverse("interactions:contract-detail", args=[contract.pk]))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return response.data
+
+    def test_headless_contract_shows_its_kams(self) -> None:
+        contract = ContractFactory(interaction=None, university=self.university)
+        Responsible.objects.create(contract=contract, manager=self.kam)
+
+        data = self._get(contract)
+
+        # Проверяем КАМа договора и отсутствие старых полей подсказки
+        self.assertEqual([item["manager"]["id"] for item in data["current_responsibles"]], [self.kam.pk])
+        self.assertNotIn("suggested_manager", data)
+        self.assertNotIn("draft_manager_full_name", data)
+
+    def test_closed_kam_is_not_shown(self) -> None:
+        contract = ContractFactory(interaction=None, university=self.university)
+        Responsible.objects.create(contract=contract, manager=self.kam, unassigned_at=timezone.now())
+
+        # Проверяем, что снятый КАМ не показывается
+        self.assertEqual(self._get(contract)["current_responsibles"], [])
+
+    def test_attached_contract_keeps_registry_kams(self) -> None:
+        contract = ContractFactory(interaction=None, university=self.university)
+        Responsible.objects.create(contract=contract, manager=self.kam)
+        contract_attachment_service.attach_to_new_interaction(contract=contract, author=None)
+
+        # Проверяем: КАМы из реестра не перешли на взаимодействие и остались на договоре
+        self.assertEqual([item["manager"]["id"] for item in self._get(contract)["current_responsibles"]], [self.kam.pk])

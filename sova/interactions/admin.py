@@ -4,6 +4,7 @@ from sova.core.admin import AbstractBaseModelAdmin, AbstractHistoryModelAdmin
 from sova.interactions.models import (
     Contract,
     ContractFile,
+    DocumentTemplate,
     Interaction,
     InteractionContact,
     InteractionDirection,
@@ -36,15 +37,26 @@ class ContractFileAdmin(AbstractHistoryModelAdmin[ContractFile]):
     autocomplete_fields = ("contract", "uploaded_by")
 
 
+@admin.register(DocumentTemplate)
+class DocumentTemplateAdmin(AbstractBaseModelAdmin[DocumentTemplate]):
+    """Шаблоны документов (docxtpl)."""
+
+    list_display = ("id", "name", "kind", "is_active", "created_at")
+    list_display_links = ("name",)
+    list_filter = ("kind", "is_active")
+    search_fields = ("id", "name")
+
+
 @admin.register(Interaction)
 class InteractionAdmin(AbstractBaseModelAdmin[Interaction]):
     """Админка взаимодействий."""
 
-    list_display = ("id", "university", "b2c_client", "is_active", "created_at")
+    list_display = ("display_number", "university", "b2c_client", "is_active", "created_at")
     list_select_related = ("university", "b2c_client")
-    search_fields = ("id", "comment", "university__name", "b2c_client__full_name")
+    search_fields = ("id", "sequence_number", "comment", "university__name", "b2c_client__full_name")
     list_filter = ("is_active",)
     autocomplete_fields = ("university", "b2c_client")
+    readonly_fields = ("sequence_number", "display_number")
 
 
 @admin.register(InteractionContact)
@@ -104,9 +116,10 @@ class LicenseAdmin(AbstractBaseModelAdmin[License]):
 
 @admin.register(Responsible)
 class ResponsibleAdmin(AbstractBaseModelAdmin[Responsible]):
-    """Админка назначений ответственных на взаимодействие."""
+    """Админка назначений ответственных на взаимодействие или договор."""
 
-    list_display = ("id", "interaction", "manager", "assigned_by", "assigned_at")
-    list_select_related = ("interaction", "manager", "assigned_by")
+    list_display = ("id", "interaction", "contract", "manager", "assigned_by", "assigned_at")
+    list_select_related = ("interaction", "contract", "manager", "assigned_by")
+    list_filter = (("interaction", admin.EmptyFieldListFilter),)
     search_fields = ("id",)
-    autocomplete_fields = ("interaction", "manager", "assigned_by")
+    autocomplete_fields = ("interaction", "contract", "manager", "assigned_by")

@@ -9,6 +9,7 @@ from rest_framework.exceptions import Throttled
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.policy import Action
 from sova.core.api.exceptions import ConflictError, Gone
 from sova.core.files import file_response
 from sova.reports.api import serializers
@@ -17,7 +18,7 @@ from sova.reports.models import ReportJob
 from sova.reports.services import jobs
 from sova.reports.services.dataset import ReportDataset
 from sova.reports.services.exporters import CONTENT_TYPES
-from sova.reports.services.summary import build_summary
+from sova.reports.services.presentation import build_report_presentation
 
 TAGS = ["reports"]
 
@@ -30,6 +31,8 @@ class InteractionReportPreviewView(APIView):
     и направления без программ; взаимодействие без состава — одна строка. В выборку попадают
     только взаимодействия, доступные пользователю по роли.
     """
+
+    policy_action = Action.REPORTS_READ
 
     @extend_schema(
         tags=TAGS,
@@ -67,16 +70,31 @@ class InteractionReportSummaryView(APIView):
     статусам процесса и актуальным этапам. Считается из той же выборки, что и предпросмотр.
     """
 
+    policy_action = Action.REPORTS_READ
+
     @extend_schema(
         tags=TAGS,
         request=serializers.ReportSpecSerializer,
         responses={200: serializers.ReportSummarySerializer},
     )
     def post(self, request):
-        serializer = serializers.ReportSpecSerializer(data=request.data)
+        serializer = serializers.ReportSummaryRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         dataset = ReportDataset(user=request.user, spec=serializer.to_spec())
-        return Response({**build_summary(dataset.iter_rows()), "meta": dataset.metadata()})
+        return Response(
+            {
+                **build_report_presentation(
+                    dataset.iter_rows(),
+                    date_from=serializer.validated_data.get("date_from"),
+                    date_to=serializer.validated_data.get("date_to"),
+                    locale=serializer.validated_data.get("locale", "ru"),
+                ),
+                "meta": {
+                    **dataset.metadata(),
+                    "locale": serializer.validated_data.get("locale", "ru"),
+                },
+            }
+        )
 
 
 class InteractionReportExportView(APIView):
@@ -85,6 +103,8 @@ class InteractionReportExportView(APIView):
 
     Файл строится в фоне; состояние — `GET /api/reports/exports/{id}/`.
     """
+
+    policy_action = Action.REPORTS_EXPORT
 
     @extend_schema(
         tags=TAGS,
@@ -114,6 +134,8 @@ def _own_job(request, pk) -> ReportJob:
 class ReportJobDetailView(APIView):
     """Состояние задания на выгрузку. Доступно только владельцу."""
 
+    policy_action = Action.REPORTS_READ
+
     @extend_schema(tags=TAGS, responses={200: serializers.ReportJobSerializer})
     def get(self, request, pk):
         job = _own_job(request, pk)
@@ -122,6 +144,8 @@ class ReportJobDetailView(APIView):
 
 class ReportJobDownloadView(APIView):
     """Скачивание готового файла. 409 — файл ещё не готов, 410 — срок хранения истёк."""
+
+    policy_action = Action.REPORTS_READ
 
     @extend_schema(
         tags=TAGS,

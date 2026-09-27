@@ -22,6 +22,15 @@ class ProvisionCommandTestCase(TestCase):
         self.assertEqual(Interaction.objects.filter(university__isnull=False).count(), 3)
         self.assertEqual(Interaction.objects.filter(b2c_client__isnull=False).count(), 1)
         self.assertEqual(
+            list(
+                Interaction.objects.order_by("sequence_number").values_list(
+                    "sequence_number",
+                    flat=True,
+                ),
+            ),
+            [1, 2, 3, 4],
+        )
+        self.assertEqual(
             Responsible.objects.filter(manager=manager, unassigned_at__isnull=True).count(),
             4,
         )

@@ -1,7 +1,8 @@
+from accounts.policy import Action
 from sova.core.api.views import SovaBaseViewSet
 from sova.interactions.api import filters, serializers
 from sova.interactions.models import License
-from sova.interactions.services import license_service
+from sova.interactions.services import license_service, visible_licenses
 
 
 class LicenseViewSet(SovaBaseViewSet):
@@ -25,6 +26,18 @@ class LicenseViewSet(SovaBaseViewSet):
         "interaction_product__product__name",
     )
     filterset_class = filters.LicenseFilter
+    policy_actions = {
+        "list": Action.LICENSES_READ,
+        "retrieve": Action.LICENSES_READ,
+        "create": Action.LICENSES_CREATE,
+        "update": Action.LICENSES_UPDATE,
+        "partial_update": Action.LICENSES_UPDATE,
+        "destroy": Action.LICENSES_DELETE,
+    }
+
+    def get_queryset(self):
+        """Лицензии только видимых пользователю договоров."""
+        return super().get_queryset().filter(pk__in=visible_licenses(self.request.user))
 
     def perform_create(self, serializer: serializers.WriteLicenseSerializer) -> None:
         """Выдача лицензии через сервис — с закрытием прежней действующей."""

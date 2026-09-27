@@ -54,8 +54,6 @@ class _Calculation:
         if self.changed:
             ActionInstance.objects.bulk_update(self.changed, ["planned_start", "planned_end"])
 
-    # === ПРИВАТНЫЕ МЕТОДЫ: ИНТЕРВАЛЫ ===
-
     def _stage_span(self, item: StageInstance, visiting: frozenset) -> _Span | None:
         """Интервал этапа: от конца последнего предшественника до конца последнего его действия."""
         cached = self.stage_spans.get(item.pk)
@@ -157,8 +155,6 @@ class _Calculation:
         """Плановая длительность действия; без неё в шаблоне — сутки."""
         days = instance.action.default_duration_days
         return _DEFAULT_DURATION if days is None else timedelta(days=days)
-
-    # === ПРИВАТНЫЕ МЕТОДЫ: ЗАГРУЗКА ===
 
     def _load_actions(self) -> dict:
         """Последнее исполнение каждого активного действия: экземпляр этапа → действие → экземпляр."""

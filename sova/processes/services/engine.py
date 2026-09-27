@@ -11,7 +11,6 @@ from sova.interactions.models import (
     InteractionDirection,
     InteractionProduct,
     InteractionProgram,
-    Responsible,
 )
 from sova.processes.enum import (
     ActionInstanceStatus,
@@ -103,8 +102,6 @@ class WorkflowEngineService:
     выполнялись по очереди. Состояние операции передаётся в приватные методы объектом `_Trace`, а не хранится
     в сервисе.
     """
-
-    # === ПУБЛИЧНЫЕ МЕТОДЫ ===
 
     @transaction.atomic
     def start(
@@ -318,6 +315,32 @@ class WorkflowEngineService:
         """Экземпляры этапов, на которые можно вернуться при отмене этапа: его предшественники."""
         return self._predecessor_instances(snapshot=snapshot, stage_instance=stage_instance)
 
+    @transaction.atomic
+    def sync_contexts(self, process: WorkflowInstance) -> None:
+        """
+        Досоздаёт этапы/действия для контекстов (направлений/программ/продуктов), привязанных к
+        процессу после его запуска, не дожидаясь следующего `complete_action`.
+
+        Деактивированный или удалённый контекст перестаёт быть значимым: процесс, у которого не
+        осталось незакрытых значимых этапов, завершается. Завершённый процесс не трогает.
+        """
+        process = self._lock_process(process_id=process.pk)
+        self._advance(process=process, now=timezone.now(), trace=_Trace(), actor=None)
+
+    def sync_interaction(self, interaction_id: object) -> None:
+        """
+        Синхронизирует с составом взаимодействия все его идущие процессы (см. `sync_contexts`).
+
+        Вызывается API после изменения состава взаимодействия: добавления, деактивации или удаления
+        направления/программы/продукта.
+        """
+        processes = WorkflowInstance.objects.filter(
+            interaction_id=interaction_id,
+            status=WorkflowInstanceStatus.RUNNING,
+        )
+        for process in processes:
+            self.sync_contexts(process=process)
+
     def _predecessor_instances(
         self,
         snapshot: ProcessSnapshot,
@@ -333,8 +356,6 @@ class WorkflowEngineService:
             )
             options.extend(sources)
         return options
-
-    # === ПРИВАТНЫЕ МЕТОДЫ: ПРОВЕРКИ ===
 
     def _check_can_start(self, workflow: Workflow, interaction: Interaction) -> None:
         """Проверяет, что workflow активен, подходит контрагенту взаимодействия и содержит этапы."""
@@ -365,8 +386,6 @@ class WorkflowEngineService:
             raise RuleViolationError("Для этого исхода нужен комментарий.", code="is_comment_required")
         if outcome.is_attachment_required and not ActionAttachment.objects.filter(action_instance=instance).exists():
             raise RuleViolationError("Для этого исхода нужно приложить файл.", code="is_attachment_required")
-
-    # === ПРИВАТНЫЕ МЕТОДЫ: ПРОДВИЖЕНИЕ ПРОЦЕССА ===
 
     def _lock_process(self, process_id: object) -> WorkflowInstance:
         """Блокирует процесс на время операции и возвращает его актуальное состояние."""
@@ -466,8 +485,6 @@ class WorkflowEngineService:
         process.save(update_fields=["status", "completed_at"])
         trace.is_workflow_completed = True
 
-    # === ПРИВАТНЫЕ МЕТОДЫ: ДЕЙСТВИЯ ===
-
     def _activate_ready(self, stage_instance: StageInstance, now: datetime, trace: _Trace) -> None:
         """
         Запускает ожидающие действия открытого этапа, у которых выполнены зависимости.
@@ -537,7 +554,6 @@ class WorkflowEngineService:
                 action_name_snapshot=target.name,
                 status=ActionInstanceStatus.PENDING,
                 execution_no=latest.execution_no + 1,
-                responsible=latest.responsible,
                 triggered_at=now,
             )
         elif latest.status == ActionInstanceStatus.PENDING and latest.triggered_at is None:
@@ -574,8 +590,6 @@ class WorkflowEngineService:
         ).values_list("action_id", "depends_on_action_id"):
             dependents[depends_on_id].append(action_id)
         return dependents
-
-    # === ПРИВАТНЫЕ МЕТОДЫ: ЭТАПЫ И КОНТЕКСТЫ ===
 
     def _load_graph(self, process: WorkflowInstance) -> _Graph:
         """Загружает активные этапы workflow и активные связи между ними."""
@@ -622,7 +636,6 @@ class WorkflowEngineService:
             StageInstance.objects.filter(workflow_instance=process).values_list("stage_id", "context_id"),
         )
         actions_by_stage: dict | None = None
-        responsible = None
         for stage in stages:
             for context_id in self._context_ids(interaction=process.interaction, context_type=stage.type):
                 if (stage.pk, context_id) in existing:
@@ -631,7 +644,6 @@ class WorkflowEngineService:
                     actions_by_stage = defaultdict(list)
                     for action in WorkflowAction.objects.filter(stage__workflow_id=process.workflow_id, is_active=True):
                         actions_by_stage[action.stage_id].append(action)
-                    responsible = self._current_manager(interaction=process.interaction)
                 stage_instance = StageInstance.objects.create(
                     workflow_instance=process,
                     stage=stage,
@@ -648,20 +660,10 @@ class WorkflowEngineService:
                             action_name_snapshot=action.name,
                             status=ActionInstanceStatus.PENDING,
                             execution_no=1,
-                            responsible=responsible,
                         )
                         for action in actions_by_stage[stage.pk]
                     ],
                 )
-
-    def _current_manager(self, interaction: Interaction) -> AbstractBaseUser | None:
-        """Действующий ответственный менеджер взаимодействия."""
-        current = (
-            Responsible.objects.select_related("manager")
-            .filter(interaction=interaction, unassigned_at__isnull=True)
-            .first()
-        )
-        return current.manager if current is not None else None
 
     def _source_instances(
         self,
@@ -702,8 +704,6 @@ class WorkflowEngineService:
             if any(source.status != StageInstanceStatus.COMPLETED for source in sources):
                 return False
         return True
-
-    # === ПРИВАТНЫЕ МЕТОДЫ: ОТКАТ ===
 
     def _pick_return_stage(
         self,
@@ -787,7 +787,6 @@ class WorkflowEngineService:
                 action_name_snapshot=instance.action.name,
                 status=ActionInstanceStatus.PENDING,
                 execution_no=instance.execution_no + 1,
-                responsible=instance.responsible,
             )
             return
         instance.status = ActionInstanceStatus.PENDING

@@ -26,7 +26,7 @@ class ActionInstanceApiTestCase(BaseApiTestMixin, APITestCase):
     def setUp(self) -> None:
         """Даёт пользователю роль администратора платформы: выборка зависит от роли в СОВА."""
         super().setUp()
-        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
+        UserRole.objects.update_or_create(user=self.user, defaults={"role": SystemRole.PLATFORM_ADMIN})
 
     def create_instance(self, **kwargs) -> ActionInstance:
         """Создаёт экземпляр действия пользователя: по умолчанию список показывает только свои."""
@@ -52,6 +52,7 @@ class ActionInstanceApiTestCase(BaseApiTestMixin, APITestCase):
             "workflow_instance": str(instance.stage_instance.workflow_instance_id),
             "interaction": {
                 "id": str(interaction.pk),
+                "number": interaction.display_number,
                 "university": {"id": str(interaction.university_id), "name": interaction.university.name},
                 "b2c_client": None,
             },

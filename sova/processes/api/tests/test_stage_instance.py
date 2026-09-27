@@ -5,6 +5,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
 from sova.core.tests.base import BaseApiTestMixin
 from sova.processes.enum import RollbackMode, StageInstanceContextType, StageInstanceStatus
 from sova.processes.models import StageInstance, StageRollback
@@ -20,6 +21,11 @@ class StageInstanceApiTestCase(BaseApiTestMixin, APITestCase):
     allow_create = False
     allow_update = False
     allow_delete = False
+
+    def setUp(self) -> None:
+        """Администратор платформы: процессы видны только по видимым взаимодействиям."""
+        super().setUp()
+        UserRole.objects.update_or_create(user=self.user, defaults={"role": SystemRole.PLATFORM_ADMIN})
 
     def create_instance(self, **kwargs) -> StageInstance:
         """Создаёт экземпляр этапа."""

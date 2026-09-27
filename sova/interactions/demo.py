@@ -67,6 +67,15 @@ def seed_interactions(count: int = DEFAULT_COUNT, manager_email: str = MANAGER_E
         )
         for number in range(existing, count)
     ]
+    if created:
+        last = (
+            Interaction.objects.select_for_update()
+            .order_by("-sequence_number")
+            .first()
+        )
+        start_sequence_number = (last.sequence_number if last else 0) + 1
+        for offset, interaction in enumerate(created):
+            interaction.sequence_number = start_sequence_number + offset
     Interaction.objects.bulk_create(created)
     Responsible.objects.bulk_create(
         [Responsible(interaction=interaction, manager=manager) for interaction in created],

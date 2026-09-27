@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 
 from sova.core.models import UUIDModel
 
@@ -40,6 +41,13 @@ class NotificationProfile(UUIDModel):
         verbose_name = "Профиль уведомлений"
         verbose_name_plural = "Профили уведомлений"
         ordering = ["user_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["telegram_chat_id"],
+                condition=~Q(telegram_chat_id=""),
+                name="unique_non_empty_telegram_chat_id",
+            ),
+        ]
 
     def __str__(self):
         return str(self.user)

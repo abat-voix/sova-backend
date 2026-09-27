@@ -1,9 +1,9 @@
 from django.db import models
 
-from sova.core.models import TimeStampedModel
+from sova.core.models import NormalizedTextFieldsMixin, TimeStampedModel
 
 
-class Program(TimeStampedModel):
+class Program(NormalizedTextFieldsMixin, TimeStampedModel):
     """
     Программа — учебный курс целиком (методические материалы, практика, расписание)
     по одному направлению. Продуктозависимость не хранится отдельным полем — она
@@ -25,6 +25,8 @@ class Program(TimeStampedModel):
         related_name="programs",
         verbose_name="Направление",
     )
+
+    normalized_text_fields = ("name",)
 
     class Meta:
         verbose_name = "Программа"

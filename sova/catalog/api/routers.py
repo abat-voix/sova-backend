@@ -12,5 +12,7 @@ router.register("products", views.ProductViewSet, basename="product")
 router.register("universities", views.UniversityViewSet, basename="university")
 router.register("b2c-clients", views.B2CClientViewSet, basename="b2c-client")
 router.register("contact-persons", views.ContactPersonViewSet, basename="contact-person")
+router.register("imports", views.CatalogImportViewSet, basename="catalog-import")
+router.register("import-mappings", views.CatalogImportMappingViewSet, basename="import-mapping")
 
 urlpatterns = router.urls

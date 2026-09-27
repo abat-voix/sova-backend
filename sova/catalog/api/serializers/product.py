@@ -4,6 +4,7 @@ from rest_framework import serializers
 from sova.catalog.api.serializers.program import ProgramShortSerializer
 from sova.catalog.api.serializers.vendor import VendorShortSerializer
 from sova.catalog.models import Product
+from sova.core.api.validators import validate_model_constraints
 
 
 class ProductShortSerializer(serializers.ModelSerializer):
@@ -64,15 +65,6 @@ class WriteProductSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs: dict) -> dict:
-        """Проверка уникальности названия продукта в рамках вендора."""
-        name = attrs.get("name", getattr(self.instance, "name", None))
-        vendor = attrs.get("vendor", getattr(self.instance, "vendor", None))
-
-        duplicates = Product.objects.filter(name=name, vendor=vendor)
-        if self.instance is not None:
-            duplicates = duplicates.exclude(pk=self.instance.pk)
-        if duplicates.exists():
-            raise serializers.ValidationError(
-                {"name": _("Продукт с таким названием у этого вендора уже существует.")},
-            )
+        """Уникальность названия в рамках вендора и кода без учёта регистра — 400 вместо ошибки БД."""
+        validate_model_constraints(model=Product, attrs=attrs, instance=self.instance)
         return attrs

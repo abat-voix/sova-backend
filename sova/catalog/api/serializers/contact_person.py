@@ -5,8 +5,8 @@ from rest_framework import serializers
 from sova.catalog.api.serializers.b2c_client import B2CClientShortSerializer
 from sova.catalog.api.serializers.university import UniversityShortSerializer
 from sova.catalog.models import ContactPerson
-from sova.core.api.validators import validate_exactly_one_counterparty
 from sova.core.api.exceptions import ConflictError
+from sova.core.api.validators import validate_exactly_one_counterparty, validate_model_constraints
 from sova.interactions.models import InteractionContact
 
 
@@ -57,10 +57,9 @@ class WriteContactPersonSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs: dict) -> dict:
-        """Проверка, что задан ровно один контрагент, и уникальности ФИО у него."""
+        """Проверка, что задан ровно один контрагент, и уникальности ФИО у него без учёта регистра."""
         validate_exactly_one_counterparty(attrs=attrs, instance=self.instance)
 
-        full_name = attrs.get("full_name", getattr(self.instance, "full_name", None))
         university = attrs.get("university", getattr(self.instance, "university", None))
         b2c_client = attrs.get("b2c_client", getattr(self.instance, "b2c_client", None))
 
@@ -70,18 +69,7 @@ class WriteContactPersonSerializer(serializers.ModelSerializer):
             b2c_client=b2c_client,
         )
 
-        duplicates = ContactPerson.objects.filter(
-            full_name=full_name,
-            university=university,
-            b2c_client=b2c_client,
-        )
-        if self.instance is not None:
-            duplicates = duplicates.exclude(pk=self.instance.pk)
-        if duplicates.exists():
-            raise serializers.ValidationError(
-                {"full_name": _("Контактное лицо с таким ФИО у этого контрагента уже есть.")},
-            )
-
+        validate_model_constraints(model=ContactPerson, attrs=attrs, instance=self.instance)
         return attrs
 
     @staticmethod

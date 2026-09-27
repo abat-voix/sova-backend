@@ -3,14 +3,16 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.policy import Action
 from sova.core.api.views import SovaReadOnlyViewSet
 from sova.processes.api import filters, serializers
+from sova.processes.api.views.mixins import VisibleInteractionMixin
 from sova.processes.api.errors import translate_engine_errors
 from sova.processes.models import StageInstance
 from sova.processes.services import workflow_engine_service
 
 
-class StageInstanceViewSet(SovaReadOnlyViewSet):
+class StageInstanceViewSet(VisibleInteractionMixin, SovaReadOnlyViewSet):
     """
     Экземпляры этапов процесса: просмотр и отмена.
 
@@ -19,10 +21,16 @@ class StageInstanceViewSet(SovaReadOnlyViewSet):
     """
 
     serializer_class = serializers.StageInstanceSerializer
+    interaction_lookup = "workflow_instance__interaction"
     queryset = StageInstance.objects.select_related("stage", "added_by")
     ordering_fields = "__all__"
     search_fields = ("status", "stage__name")
     filterset_class = filters.StageInstanceFilter
+    policy_actions = {
+        "list": Action.PROCESSES_READ,
+        "retrieve": Action.PROCESSES_READ,
+        "cancel": Action.PROCESSES_EXECUTE,
+    }
 
     @extend_schema(
         request=serializers.CancelStageSerializer,

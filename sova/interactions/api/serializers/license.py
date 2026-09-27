@@ -8,6 +8,7 @@ from sova.interactions.api.serializers.interaction_product import (
     InteractionProductShortSerializer,
 )
 from sova.interactions.models import License
+from sova.interactions.services import visible_contracts
 
 
 class LicenseSerializer(serializers.ModelSerializer):
@@ -63,6 +64,13 @@ class WriteLicenseSerializer(serializers.ModelSerializer):
             "contract",
             "interaction_product",
         )
+
+    def validate_contract(self, contract):
+        """Договор лицензии должен быть видим пользователю запроса."""
+        request = self.context["request"]
+        if not visible_contracts(request.user).filter(pk=contract.pk).exists():
+            raise serializers.ValidationError(_("Договор не найден."), code="not_found")
+        return contract
 
     def validate(self, attrs: dict) -> dict:
         """Проверка принадлежности одному взаимодействию и неизменности истории."""

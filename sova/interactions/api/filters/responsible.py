@@ -14,6 +14,11 @@ class ResponsibleFilter(SearchFilterMixin):
         label=_("Взаимодействия"),
         help_text=_("Фильтр по списку ID взаимодействий через запятую"),
     )
+    contract__ids = UUIDInFilter(
+        field_name="contract",
+        label=_("Договоры"),
+        help_text=_("Фильтр по списку ID договоров через запятую"),
+    )
     manager__ids = NumberInFilter(
         field_name="manager",
         label=_("Ответственные менеджеры"),

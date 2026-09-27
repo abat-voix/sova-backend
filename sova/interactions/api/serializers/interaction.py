@@ -25,13 +25,17 @@ class InteractionShortSerializer(serializers.ModelSerializer):
         help_text=_("Показывается развёрнуто; пусто у взаимодействий с вузом"),
     )
 
+    number = serializers.CharField(source="display_number", read_only=True)
+
     class Meta:
         model = Interaction
-        fields = ("id", "university", "b2c_client")
+        fields = ("id", "number", "university", "b2c_client")
 
 
 class InteractionSerializer(serializers.ModelSerializer):
     """Взаимодействие — представление для чтения (list/retrieve)."""
+
+    number = serializers.CharField(source="display_number", read_only=True, label=_("Номер"))
 
     university = UniversityShortSerializer(
         read_only=True,
@@ -43,9 +47,9 @@ class InteractionSerializer(serializers.ModelSerializer):
         label=_("B2C-клиент"),
         help_text=_("Показывается развёрнуто; пусто у взаимодействий с вузом"),
     )
-    current_responsible = serializers.SerializerMethodField(
-        label=_("Действующий ответственный"),
-        help_text=_("Назначение без даты снятия; пусто, если ответственный не назначен"),
+    current_responsibles = serializers.SerializerMethodField(
+        label=_("Действующие ответственные"),
+        help_text=_("Назначения без даты снятия в порядке назначения; пустой список, если КАМ не назначен"),
     )
     directions_count = serializers.IntegerField(
         read_only=True,
@@ -67,22 +71,23 @@ class InteractionSerializer(serializers.ModelSerializer):
         model = Interaction
         fields = (
             "id",
+            "number",
             "comment",
             "is_active",
             "university",
             "b2c_client",
             "created_at",
             "updated_at",
-            "current_responsible",
+            "current_responsibles",
             "directions_count",
             "programs_count",
             "products_count",
         )
 
-    @extend_schema_field(ResponsibleShortSerializer(allow_null=True))
-    def get_current_responsible(self, instance: Interaction) -> dict | None:
+    @extend_schema_field(ResponsibleShortSerializer(many=True))
+    def get_current_responsibles(self, instance: Interaction) -> list[dict]:
         """
-        Возвращает действующего ответственного.
+        Возвращает действующих ответственных.
 
         ViewSet заранее подгружает его через Prefetch(to_attr="current_responsibles"),
         поэтому запрос на каждую строку списка не выполняется.
@@ -92,11 +97,10 @@ class InteractionSerializer(serializers.ModelSerializer):
             current = list(
                 instance.responsibles
                 .filter(unassigned_at__isnull=True)
-                .select_related("manager"),
+                .select_related("manager")
+                .order_by("assigned_at", "pk"),
             )
-        if not current:
-            return None
-        return ResponsibleShortSerializer(current[0], context=self.context).data
+        return ResponsibleShortSerializer(current, many=True, context=self.context).data
 
 
 class WriteInteractionSerializer(serializers.ModelSerializer):

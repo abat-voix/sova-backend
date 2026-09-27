@@ -69,8 +69,9 @@ class ReportRow:
     university: str
     created_at: datetime.datetime
     updated_at: datetime.datetime
-    responsible_id: int | None = None
-    responsible: str = ""
+    # Действующие КАМы взаимодействия по алфавиту: id и имена в одном порядке
+    responsible_ids: list[int] = field(default_factory=list)
+    responsible: list[str] = field(default_factory=list)
     direction_id: uuid.UUID | None = None
     interaction_direction_id: uuid.UUID | None = None
     direction: str = ""
@@ -95,6 +96,8 @@ class ReportRow:
             return LIST_SEPARATOR.join(stage.name for stage in self.active_stages)
         if key == "contract_numbers":
             return LIST_SEPARATOR.join(self.contract_numbers)
+        if key == "responsible":
+            return LIST_SEPARATOR.join(self.responsible)
         if key == "contract_signed_at":
             return LIST_SEPARATOR.join(value.strftime("%d.%m.%Y") for value in self.contract_signed_at)
         if key in ("created_at", "updated_at"):
@@ -113,7 +116,7 @@ class ReportRow:
             "interaction_program_id": _str_or_none(self.interaction_program_id),
             "product_id": _str_or_none(self.product_id),
             "interaction_product_id": _str_or_none(self.interaction_product_id),
-            "responsible_id": self.responsible_id,
+            "responsible_ids": list(self.responsible_ids),
         }
         for column in columns:
             key = column.key
@@ -229,14 +232,19 @@ def filter_interactions(queryset: QuerySet[Interaction], spec: ReportSpec) -> Qu
     return queryset.order_by(*_ordering(spec.ordering))
 
 
+_RESPONSIBLE_ORDER = ("manager__last_name", "manager__first_name", "manager_id")
+
+
 def _ordering(ordering: str) -> tuple:
     if ordering == ReportOrdering.CREATED_AT:
         return ("created_at", "pk")
     if ordering == ReportOrdering.UNIVERSITY:
         return ("university__name", "created_at", "pk")
     if ordering == ReportOrdering.RESPONSIBLE:
-        current = Responsible.objects.filter(interaction=OuterRef("pk"), unassigned_at__isnull=True)
-        # Взаимодействия без ответственного — в конце
+        # По первому по алфавиту из действующих КАМов; взаимодействия без ответственного — в конце
+        current = Responsible.objects.filter(interaction=OuterRef("pk"), unassigned_at__isnull=True).order_by(
+            *_RESPONSIBLE_ORDER
+        )
         return (
             Subquery(current.values("manager__last_name")[:1]).asc(nulls_last=True),
             Subquery(current.values("manager__first_name")[:1]).asc(nulls_last=True),
@@ -268,12 +276,11 @@ def _build_rows(ids: list, spec: ReportSpec) -> Iterator[ReportRow]:
         for interaction in Interaction.objects.filter(pk__in=ids).select_related("university")
     }
 
-    responsibles = {
-        responsible.interaction_id: responsible
-        for responsible in Responsible.objects.filter(
-            interaction_id__in=ids, unassigned_at__isnull=True
-        ).select_related("manager")
-    }
+    responsibles = defaultdict(list)
+    for responsible in Responsible.objects.filter(interaction_id__in=ids, unassigned_at__isnull=True).select_related(
+        "manager"
+    ).order_by(*_RESPONSIBLE_ORDER):
+        responsibles[responsible.interaction_id].append(responsible.manager)
 
     directions = defaultdict(list)
     for item in InteractionDirection.objects.filter(interaction_id__in=ids, is_active=True).select_related(
@@ -334,7 +341,7 @@ def _build_rows(ids: list, spec: ReportSpec) -> Iterator[ReportRow]:
         interaction = interactions.get(interaction_id)
         if interaction is None:
             continue
-        responsible = responsibles.get(interaction_id)
+        managers = responsibles[interaction_id]
         interaction_contracts = contracts[interaction_id]
         interaction_directions = {item.direction_id: item for item in directions[interaction_id]}
         interaction_stages = stages.get((StageInstanceContextType.INTERACTION, interaction_id), ())
@@ -346,8 +353,8 @@ def _build_rows(ids: list, spec: ReportSpec) -> Iterator[ReportRow]:
                 university=interaction.university.name if interaction.university else "",
                 created_at=interaction.created_at,
                 updated_at=interaction.updated_at,
-                responsible_id=responsible.manager_id if responsible else None,
-                responsible=_user_name(responsible.manager) if responsible else "",
+                responsible_ids=[manager.pk for manager in managers],
+                responsible=[_user_name(manager) for manager in managers],
                 process_statuses=process_statuses[interaction_id],
                 contract_numbers=[c.contract_number or f"Договор #{c.pk}" for c in interaction_contracts],
                 contract_signed_at=[c.signed_at for c in interaction_contracts if c.signed_at],

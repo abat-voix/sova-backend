@@ -113,6 +113,12 @@ class ReportExportRequestSerializer(ReportSpecSerializer):
     format = serializers.ChoiceField(choices=ReportFormat.choices)
 
 
+class ReportSummaryRequestSerializer(ReportSpecSerializer):
+    """Параметры сводки и язык готовых подписей графиков."""
+
+    locale = serializers.ChoiceField(choices=("ru", "en"), required=False, default="ru")
+
+
 class ColumnSerializer(serializers.Serializer):
     key = serializers.CharField()
     title = serializers.CharField()
@@ -129,6 +135,7 @@ class ReportMetaSerializer(serializers.Serializer):
     filters = serializers.DictField(help_text="Нормализованные применённые параметры.")
     columns = ColumnSerializer(many=True)
     available_columns = ColumnSerializer(many=True)
+    locale = serializers.ChoiceField(choices=("ru", "en"), required=False)
 
 
 class ProcessStatusSerializer(serializers.Serializer):
@@ -155,14 +162,18 @@ class ReportRowSerializer(serializers.Serializer):
     interaction_program_id = serializers.UUIDField(allow_null=True)
     product_id = serializers.UUIDField(allow_null=True)
     interaction_product_id = serializers.UUIDField(allow_null=True)
-    responsible_id = serializers.IntegerField(allow_null=True)
+    responsible_ids = serializers.ListField(
+        child=serializers.IntegerField(), help_text="Действующие КАМы взаимодействия по алфавиту."
+    )
     university = serializers.CharField(required=False)
     direction = serializers.CharField(required=False)
     program = serializers.CharField(required=False)
     product = serializers.CharField(required=False)
     process_status = ProcessStatusSerializer(many=True, required=False)
     active_stages = ActiveStageSerializer(many=True, required=False)
-    responsible = serializers.CharField(required=False)
+    responsible = serializers.ListField(
+        child=serializers.CharField(), required=False, help_text="Имена КАМов в порядке `responsible_ids`."
+    )
     created_at = serializers.DateTimeField(required=False)
     updated_at = serializers.DateTimeField(required=False)
     contract_numbers = serializers.ListField(child=serializers.CharField(), required=False)
@@ -187,6 +198,36 @@ class DistributionItemSerializer(serializers.Serializer):
     interactions = serializers.IntegerField(help_text="Число уникальных взаимодействий.")
 
 
+class ReportMetricSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    label = serializers.CharField()
+    value = serializers.IntegerField()
+    display_value = serializers.CharField()
+
+
+class ChartPointSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    label = serializers.CharField()
+    value = serializers.IntegerField()
+    display_value = serializers.CharField()
+
+
+class ChartItemSerializer(ChartPointSerializer):
+    key = serializers.CharField(allow_null=True)
+
+
+class ReportChartSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    kind = serializers.ChoiceField(choices=("line", "horizontal_bar"))
+    title = serializers.CharField()
+    description = serializers.CharField(allow_blank=True)
+    value_label = serializers.CharField()
+    empty_message = serializers.CharField()
+    tone = serializers.CharField()
+    points = ChartPointSerializer(many=True, required=False)
+    items = ChartItemSerializer(many=True, required=False)
+
+
 class ReportSummarySerializer(serializers.Serializer):
     interactions_count = serializers.IntegerField(help_text="Уникальные взаимодействия.")
     rows_count = serializers.IntegerField()
@@ -196,6 +237,9 @@ class ReportSummarySerializer(serializers.Serializer):
     by_university = DistributionItemSerializer(many=True)
     by_process_status = DistributionItemSerializer(many=True)
     by_active_stage = DistributionItemSerializer(many=True)
+    metrics = ReportMetricSerializer(many=True)
+    charts = ReportChartSerializer(many=True)
+    chart_meta = serializers.DictField()
     meta = ReportMetaSerializer()
 
 

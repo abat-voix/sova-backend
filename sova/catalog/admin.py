@@ -3,6 +3,7 @@ from django.contrib import admin
 from sova.core.admin import AbstractBaseModelAdmin
 from sova.catalog.models import (
     B2CClient,
+    CatalogImportMapping,
     ContactPerson,
     Direction,
     Product,
@@ -20,6 +21,16 @@ class B2CClientAdmin(AbstractBaseModelAdmin[B2CClient]):
     list_display_links = ("full_name",)
     search_fields = ("id", "full_name", "inn", "email", "phone")
     list_filter = ("kind", "is_active")
+
+
+@admin.register(CatalogImportMapping)
+class CatalogImportMappingAdmin(AbstractBaseModelAdmin[CatalogImportMapping]):
+    """Админка настраиваемого маппинга импорта каталогов."""
+
+    list_display = ("id", "catalog_type", "source_column", "target_field", "updated_at")
+    list_display_links = ("source_column",)
+    list_filter = ("catalog_type",)
+    search_fields = ("source_column", "target_field")
 
 
 @admin.register(ContactPerson)

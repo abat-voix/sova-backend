@@ -2,9 +2,12 @@ from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
+from sova.core.api.root import ApiRootView
+
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("api/", ApiRootView.as_view(), name="api-root"),
     path("api/auth/", include("accounts.urls")),
     path("api/", include("accounts.api.routers")),
     path("api/auth/oidc/", include("mozilla_django_oidc.urls")),
@@ -20,5 +23,7 @@ urlpatterns = [
     path("api/workflows/", include("sova.workflows.api.routers")),
     path("api/processes/", include("sova.processes.api.routers")),
     path("api/notifications/", include("sova.notifications.api.routers")),
+    path("api/messaging/", include("sova.messaging.api.routers")),
     path("api/reports/", include("sova.reports.api.routers")),
+    path("api/integrations/", include("sova.integrations.api.routers")),
 ]

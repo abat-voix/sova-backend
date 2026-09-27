@@ -20,4 +20,5 @@ staticfiles/
 .idea/
 
 docsprivate/
-docs
+docs/*
+!docs/ACCESS_CONTROL.md

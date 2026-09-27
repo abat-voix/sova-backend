@@ -3,6 +3,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.decorators import action
 
+from accounts.policy import Action
 from sova.core.api.views import ReadWriteCreateModelMixin, SovaReadOnlyViewSet
 from sova.core.files import file_response
 from sova.interactions.services import visible_interactions
@@ -30,6 +31,12 @@ class ActionAttachmentViewSet(ReadWriteCreateModelMixin, SovaReadOnlyViewSet):
     ordering_fields = "__all__"
     search_fields = ("file",)
     filterset_class = filters.ActionAttachmentFilter
+    policy_actions = {
+        "list": Action.PROCESSES_READ,
+        "retrieve": Action.PROCESSES_READ,
+        "download": Action.PROCESSES_READ,
+        "create": Action.PROCESSES_ATTACHMENTS_UPLOAD,
+    }
 
     def get_queryset(self) -> QuerySet:
         """

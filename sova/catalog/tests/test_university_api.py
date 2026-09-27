@@ -1,6 +1,7 @@
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
 from sova.catalog.tests.factories import UniversityFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.tests.factories import InteractionFactory
@@ -11,7 +12,9 @@ class UniversityHasInteractionsTestCase(APITestCase):
 
     def setUp(self) -> None:
         """Аутентифицирует клиента: эндпоинты вузов закрыты для анонимов."""
-        self.client.force_authenticate(user=UserFactory())
+        user = UserFactory()
+        UserRole.objects.create(user=user, role=SystemRole.PLATFORM_ADMIN)
+        self.client.force_authenticate(user=user)
 
     def test_list_marks_only_universities_with_interactions(self) -> None:
         with_interaction = InteractionFactory().university

@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import dj_database_url
+from celery.schedules import crontab
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
@@ -45,6 +46,7 @@ ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
 
 INSTALLED_APPS = [
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -63,7 +65,10 @@ INSTALLED_APPS = [
     "sova.workflows",
     "sova.processes",
     "sova.notifications",
+    "sova.messaging",
+    "sova.realtime",
     "sova.reports",
+    "sova.integrations",
 ]
 
 MIDDLEWARE = [
@@ -96,6 +101,52 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "sova.wsgi.application"
 ASGI_APPLICATION = "sova.asgi.application"
+
+try:
+    REALTIME_MAX_CONNECTION_AGE_SECONDS = int(
+        os.getenv("REALTIME_MAX_CONNECTION_AGE_SECONDS", "1800")
+    )
+except ValueError as error:
+    raise ImproperlyConfigured(
+        "REALTIME_MAX_CONNECTION_AGE_SECONDS must be an integer."
+    ) from error
+if REALTIME_MAX_CONNECTION_AGE_SECONDS <= 0:
+    raise ImproperlyConfigured(
+        "REALTIME_MAX_CONNECTION_AGE_SECONDS must be greater than zero."
+    )
+
+try:
+    REALTIME_CHANNEL_CAPACITY = int(os.getenv("REALTIME_CHANNEL_CAPACITY", "100"))
+except ValueError as error:
+    raise ImproperlyConfigured("REALTIME_CHANNEL_CAPACITY must be an integer.") from error
+if REALTIME_CHANNEL_CAPACITY <= 0:
+    raise ImproperlyConfigured("REALTIME_CHANNEL_CAPACITY must be greater than zero.")
+
+CHANNEL_REDIS_URL = os.getenv("CHANNEL_REDIS_URL", "").strip()
+CHANNEL_REDIS_URL_MISSING = not CHANNEL_REDIS_URL
+if TESTING or ENVIRONMENT in {"test", "testing"}:
+    CHANNEL_LAYERS = {
+        "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"},
+    }
+else:
+    if not CHANNEL_REDIS_URL:
+        CHANNEL_REDIS_URL = "redis://localhost:6379/2"
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                # channels_redis waits up to 5 seconds in its blocking receive.
+                # Keep redis-py's socket read timeout above that interval; its
+                # default timeout of 5 seconds can otherwise disconnect idle
+                # WebSockets before the Redis command returns normally.
+                "hosts": [{"address": CHANNEL_REDIS_URL, "socket_timeout": 10}],
+                "prefix": "sova-realtime",
+                "expiry": 60,
+                "group_expiry": REALTIME_MAX_CONNECTION_AGE_SECONDS + 60,
+                "capacity": REALTIME_CHANNEL_CAPACITY,
+            },
+        },
+    }
 
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'db.sqlite3'}")
 DATABASES = {
@@ -139,18 +190,63 @@ CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", default=not CELE
 CELERY_TASK_EAGER_PROPAGATES = False
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_ROUTES = {
+    "sova.integrations.tasks.*": {"queue": "integrations"},
+}
 # На macOS prefork запускает дочерние процессы через spawn: в Celery 5.6
 # fast_trace_task остаётся без инициализированного реестра задач. Для локального
 # worker используем однопроцессный пул; Linux в контейнере сохраняет prefork.
 if sys.platform == "darwin" and ENVIRONMENT == "development":
     CELERY_WORKER_POOL = os.getenv("CELERY_WORKER_POOL", "solo")
 CELERY_TIMEZONE = "Europe/Moscow"
+# Час ежедневной рассылки уведомлений о сроках (по CELERY_TIMEZONE)
+OVERDUE_NOTIFY_HOUR = int(os.getenv("OVERDUE_NOTIFY_HOUR", "9"))
+# Срок хранения уведомлений в системе, дней (прочитанных и непрочитанных)
+NOTIFICATIONS_RETENTION_DAYS = int(os.getenv("NOTIFICATIONS_RETENTION_DAYS", "60"))
 CELERY_BEAT_SCHEDULE = {
+    "dispatch-integration-messages": {
+        "task": "sova.integrations.tasks.dispatch_pending_integration_messages",
+        "schedule": 60,
+    },
     "cleanup-report-jobs": {
         "task": "sova.reports.tasks.cleanup_report_jobs",
         "schedule": 60 * 60,
     },
+    "cleanup-staged-message-attachments": {
+        "task": "sova.messaging.tasks.cleanup_staged_message_attachments",
+        "schedule": 60 * 60,
+    },
+    "notify-deadlines": {
+        "task": "sova.processes.tasks.notify_deadlines",
+        "schedule": crontab(hour=OVERDUE_NOTIFY_HOUR, minute=0),
+    },
+    "cleanup-notifications": {
+        "task": "sova.notifications.tasks.cleanup_notifications",
+        "schedule": crontab(hour=3, minute=0),
+    },
 }
+
+INTEGRATION_SYSTEMS = {
+    "lms": {
+        "url": os.getenv("INTEGRATION_LMS_URL", "").strip(),
+        "inbound_token": os.getenv("INTEGRATION_LMS_INBOUND_TOKEN", ""),
+        "outbound_token": os.getenv("INTEGRATION_LMS_OUTBOUND_TOKEN", ""),
+    },
+    "cms": {
+        "url": os.getenv("INTEGRATION_CMS_URL", "").strip(),
+        "inbound_token": os.getenv("INTEGRATION_CMS_INBOUND_TOKEN", ""),
+        "outbound_token": os.getenv("INTEGRATION_CMS_OUTBOUND_TOKEN", ""),
+    },
+}
+INTEGRATION_HTTP_TIMEOUT = float(os.getenv("INTEGRATION_HTTP_TIMEOUT", "10"))
+INTEGRATION_MAX_ATTEMPTS = int(os.getenv("INTEGRATION_MAX_ATTEMPTS", "5"))
+INTEGRATION_MAX_PAYLOAD_BYTES = int(os.getenv("INTEGRATION_MAX_PAYLOAD_BYTES", str(1024 * 1024)))
+if ENVIRONMENT in {"production", "prod"}:
+    for _system_name, _system_config in INTEGRATION_SYSTEMS.items():
+        if _system_config["url"] and not _system_config["inbound_token"]:
+            raise ImproperlyConfigured(
+                f"INTEGRATION_{_system_name.upper()}_INBOUND_TOKEN must be set when the integration is enabled."
+            )
 
 # Приватное хранилище файлов отчётов: вне MEDIA_ROOT, отдаётся только через API.
 # API и worker должны видеть один и тот же каталог (общий том) или общий backend.
@@ -175,6 +271,7 @@ STORAGE_BACKEND = "filesystem" if TESTING else os.getenv("STORAGE_BACKEND", "fil
 # чей endpoint виден браузеру).
 S3_DOWNLOAD_MODE = os.getenv("S3_DOWNLOAD_MODE", "proxy")
 FILE_UPLOAD_MAX_SIZE = int(os.getenv("FILE_UPLOAD_MAX_SIZE_MB", "25")) * 1024 * 1024
+MESSAGE_ATTACHMENT_STAGING_TTL_HOURS = int(os.getenv("MESSAGE_ATTACHMENT_STAGING_TTL_HOURS", "24"))
 
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
@@ -253,7 +350,14 @@ if missing_smtp_settings:
 else:
     EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 
+if CHANNEL_REDIS_URL_MISSING and ENVIRONMENT not in {"development", "test", "testing"}:
+    raise ImproperlyConfigured("CHANNEL_REDIS_URL must be set outside development.")
+
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "")
+TELEGRAM_PROXY = os.getenv("TELEGRAM_PROXY", "")
+TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
+TELEGRAM_LINK_TOKEN_TTL_MINUTES = int(os.getenv("TELEGRAM_LINK_TOKEN_TTL_MINUTES", "30"))
 MAX_BOT_TOKEN = os.getenv("MAX_BOT_TOKEN", "")
 MAX_API_URL = os.getenv("MAX_API_URL", "https://platform-api.max.ru").rstrip("/")
 NOTIFICATION_HTTP_TIMEOUT = float(os.getenv("NOTIFICATION_HTTP_TIMEOUT", "10"))
@@ -332,7 +436,7 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication"
     ],
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_PERMISSION_CLASSES": ["accounts.api.permissions.PolicyPermission"],
     "DEFAULT_SCHEMA_CLASS": "sova.core.api.schema.SovaAutoSchema",
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
@@ -356,6 +460,8 @@ SPECTACULAR_SETTINGS = {
         "StageInstanceStatusEnum": "sova.processes.enum.StageInstanceStatus",
         "ActionInstanceStatusEnum": "sova.processes.enum.ActionInstanceStatus",
         "StageInstanceContextTypeEnum": "sova.processes.enum.StageInstanceContextType",
+        "KindEnum": "sova.catalog.enum.ClientKind",
+        "NotificationKindEnum": "sova.notifications.enum.NotificationKind",
     },
 }
 

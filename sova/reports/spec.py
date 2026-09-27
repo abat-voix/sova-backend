@@ -25,7 +25,7 @@ INTERACTION_COLUMNS: tuple[Column, ...] = (
     Column("product", "Продукт"),
     Column("process_status", "Статус процесса"),
     Column("active_stages", "Актуальные этапы"),
-    Column("responsible", "Ответственный"),
+    Column("responsible", "Ответственные"),
     Column("created_at", "Дата создания взаимодействия"),
     Column("updated_at", "Дата обновления взаимодействия"),
     Column("contract_numbers", "Договоры"),
@@ -46,7 +46,7 @@ ID_FIELDS: tuple[str, ...] = (
     "interaction_program_id",
     "product_id",
     "interaction_product_id",
-    "responsible_id",
+    "responsible_ids",
 )
 
 
