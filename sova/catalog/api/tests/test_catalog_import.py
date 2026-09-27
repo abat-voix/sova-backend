@@ -89,9 +89,15 @@ class CatalogImportApiTestCase(APITestCase):
 
     def test_file_level_error_returns_400(self) -> None:
         """Ошибка файла целиком (нет обязательной колонки) возвращает 400 без списка строк."""
-        file = _xlsx("vendors.xlsx", ("Вендор",), ("JetBrains",))
+        CatalogImportMappingFactory(
+            catalog_type=CatalogType.DIRECTION, source_column="Направление", target_field="name"
+        )
+        CatalogImportMappingFactory(
+            catalog_type=CatalogType.DIRECTION, source_column="Код", target_field="external_code"
+        )
+        file = _xlsx("directions.xlsx", ("Направление",), ("Разработка",))
 
-        response = self._post(CatalogType.VENDOR, file)
+        response = self._post(CatalogType.DIRECTION, file)
 
         # Проверяем, что ошибка описана в detail
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

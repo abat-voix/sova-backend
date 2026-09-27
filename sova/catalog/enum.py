@@ -18,3 +18,12 @@ class CatalogType(TextChoices):
     PRODUCT = "product", "Продукты"
     CONTACT_PERSON = "contact_person", "Ответственные от вуза"
     CONTRACT_REGISTRY = "contract_registry", "Реестр договоров"
+
+
+class ContactChannel(TextChoices):
+    """Предпочтительный способ связи с контактным лицом в организации."""
+
+    EMAIL = "email", "Почта"
+    TELEGRAM = "telegram", "Чат в Telegram"
+    PHONE = "phone", "Телефон"
+    OTHER = "other", "Другое"

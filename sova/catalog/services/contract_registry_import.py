@@ -6,14 +6,16 @@ from django.db import transaction
 
 from accounts.models import SystemRole
 from sova.catalog.exceptions import CatalogImportError
-from sova.catalog.models import ContactPerson
 from sova.catalog.schemas import ImportRowWarning
 from sova.catalog.services.catalog_lookup import catalog_lookup_service
+from sova.catalog.services.contact_affiliation import contact_affiliation_service
 from sova.catalog.services.import_file import Rows, import_file_service
 from sova.core.text import text_key
 from sova.interactions.exceptions import AmbiguousManagerError, ManagerNotFoundError
 from sova.interactions.models import Contract, InteractionDirection, InteractionProduct, InteractionProgram
-from sova.interactions.services import license_service, responsible_service
+# Модули, а не пакет sova.interactions.services: пакет импортирует сервис связей каталога (цикл импорта).
+from sova.interactions.services.license import license_service
+from sova.interactions.services.responsible import responsible_service
 
 _MANAGER_FIELD = "manager_full_name"
 _DRAFT_FIELDS = ("draft_status", "draft_comment")
@@ -233,11 +235,20 @@ class ContractRegistryImportService:
         )
 
         for full_name in import_file_service.split_list(row.get("university_contact")):
-            # Ответственный из реестра только дополняет справочник: найденная запись не переименовывается.
-            if not ContactPerson.objects.filter(university=university, full_name__iexact=full_name).exists():
-                ContactPerson.objects.create(university=university, full_name=full_name)
+            self._add_university_contact(university=university, full_name=full_name)
 
         return contract, was_created
+
+    def _add_university_contact(self, university, full_name: str) -> None:
+        """
+        Ответственный от вуза из реестра только дополняет справочник: найденный человек не меняется.
+
+        Тёзка у вуза есть (один или несколько) — ничего не создаётся: реестр не про контакты, и без email/телефона
+        выбрать среди тёзок нельзя.
+        """
+        if contact_affiliation_service.contacts_for(organization=university).filter(full_name__iexact=full_name).exists():
+            return
+        contact_affiliation_service.create_contact(organization=university, full_name=full_name)
 
     def _check_no_conflict(self, row: dict, contract_number: str, drafts: dict[str, str]) -> None:
         """Непустое черновое поле строки должно совпадать со значением договора из первой заполненной строки."""

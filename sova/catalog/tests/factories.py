@@ -3,13 +3,16 @@ import factory
 from sova.catalog.enum import CatalogType, ClientKind
 from sova.catalog.models import (
     B2CClient,
+    B2CClientContact,
     CatalogImportMapping,
     ContactPerson,
     Direction,
     Product,
     Program,
     University,
+    UniversityContact,
     Vendor,
+    VendorContact,
 )
 
 
@@ -77,13 +80,48 @@ class B2CClientFactory(factory.django.DjangoModelFactory):
 
 
 class ContactPersonFactory(factory.django.DjangoModelFactory):
-    """Фабрика контактного лица вуза (по умолчанию) или B2C-клиента."""
+    """Фабрика контактного лица — только человек; связь с организацией — фабрики `*ContactFactory`."""
 
     class Meta:
         model = ContactPerson
 
     full_name = factory.Sequence(lambda n: f"Контакт {n}")
+
+
+class UniversityContactFactory(factory.django.DjangoModelFactory):
+    """Фабрика связи контактного лица с вузом."""
+
+    class Meta:
+        model = UniversityContact
+
+    contact = factory.SubFactory(ContactPersonFactory)
     university = factory.SubFactory(UniversityFactory)
+
+
+class B2CClientContactFactory(factory.django.DjangoModelFactory):
+    """Фабрика связи контактного лица с B2C-клиентом."""
+
+    class Meta:
+        model = B2CClientContact
+
+    contact = factory.SubFactory(ContactPersonFactory)
+    b2c_client = factory.SubFactory(B2CClientFactory)
+
+
+class VendorContactFactory(factory.django.DjangoModelFactory):
+    """Фабрика связи контактного лица с вендором. Продукты передаются через `products=[...]`."""
+
+    class Meta:
+        model = VendorContact
+
+    contact = factory.SubFactory(ContactPersonFactory)
+    vendor = factory.SubFactory(VendorFactory)
+
+    @factory.post_generation
+    def products(self, create: bool, extracted: list | None, **kwargs) -> None:
+        """Привязывает переданные продукты."""
+        if create and extracted:
+            self.products.set(extracted)
 
 
 class CatalogImportMappingFactory(factory.django.DjangoModelFactory):

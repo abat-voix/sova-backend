@@ -7,7 +7,7 @@ from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
 
-from sova.catalog.tests.factories import ContactPersonFactory, UniversityFactory
+from sova.catalog.tests.factories import UniversityContactFactory, UniversityFactory
 from sova.core.tests.factories import UserFactory
 from sova.core.tests.media import TemporaryMediaMixin
 from sova.interactions.enum import DocumentTemplateKind
@@ -70,7 +70,7 @@ class CreateContractFeatureApiTestCase(TemporaryMediaMixin, APITestCase):
         }
 
     def test_initial_prefills_counterparty_contacts_and_products(self) -> None:
-        contact = ContactPersonFactory(university=self.interaction.university, position="Ректор")
+        contact = UniversityContactFactory(university=self.interaction.university, position="Ректор").contact
         InteractionContact.objects.create(interaction=self.interaction, contact_person=contact)
         product = InteractionProductFactory(interaction=self.interaction)
 
@@ -79,6 +79,7 @@ class CreateContractFeatureApiTestCase(TemporaryMediaMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
         self.assertEqual(response.data["templates"], [{"id": self.template.pk, "name": "Договор"}])
         self.assertEqual(response.data["contacts"][0]["full_name"], contact.full_name)
+        self.assertEqual(response.data["contacts"][0]["position"], "Ректор")
         document = response.data["document"]
         self.assertEqual(document["counterparty"]["name"], self.interaction.university.name)
         self.assertEqual(document["counterparty"]["short_name"], "ВУЗ")
