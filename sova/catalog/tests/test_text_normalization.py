@@ -8,6 +8,7 @@ from django.test import TestCase
 from sova.catalog.models import ContactPerson, Product, Program, University, Vendor
 from sova.catalog.tests.factories import (
     ContactPersonFactory,
+    UniversityContactFactory,
     DirectionFactory,
     UniversityFactory,
     VendorFactory,
@@ -40,12 +41,14 @@ class ModelTextNormalizationTestCase(TestCase):
         university = UniversityFactory(name="МГУ ", short_name=" МГУ ")
         program = Program.objects.create(name="DevOps  инженер", direction=DirectionFactory())
         product = Product.objects.create(name="Docker​", external_code="p 1")
-        contact = ContactPersonFactory(full_name="Иванов  Иван", university=university)
+        contact = ContactPersonFactory(full_name="Иванов  Иван")
+        link = UniversityContactFactory(contact=contact, university=university, position=" Проректор  по  науке ")
 
         self.assertEqual((university.name, university.short_name), ("МГУ", "МГУ"))
         self.assertEqual(program.name, "DevOps инженер")
         self.assertEqual((product.name, product.external_code), ("Docker", "p 1"))
         self.assertEqual(contact.full_name, "Иванов Иван")
+        self.assertEqual(link.position, "Проректор по науке")
 
 
 class CaseInsensitiveUniquenessTestCase(TestCase):
@@ -74,15 +77,6 @@ class CaseInsensitiveUniquenessTestCase(TestCase):
 
         self._assert_integrity_error(lambda: Product.objects.create(name="DOCKER", vendor=vendor))
         self._assert_integrity_error(lambda: Product.objects.create(name="kafka", vendor=None))
-
-    def test_contact_person_full_name_per_university(self) -> None:
-        university = UniversityFactory()
-        ContactPersonFactory(full_name="Иванов Иван", university=university)
-        ContactPersonFactory(full_name="Иванов Иван", university=UniversityFactory())
-
-        self._assert_integrity_error(
-            lambda: ContactPerson.objects.create(full_name="ИВАНОВ ИВАН", university=university)
-        )
 
     def test_model_form_reports_case_insensitive_duplicate(self) -> None:
         """Формы (в том числе админки) видят нормализованное значение до проверки уникальности."""

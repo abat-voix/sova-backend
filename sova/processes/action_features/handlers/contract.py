@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from sova.catalog.services.contact_affiliation import contact_affiliation_service
 from sova.interactions.enum import DocumentTemplateKind
 from sova.interactions.models import (
     Contract,
@@ -183,7 +184,7 @@ class CreateContractHandler:
         """Черновик формы: шаблоны и всё, что известно о взаимодействии."""
         if not context.university and not context.b2c_client:
             raise ActionFeatureError("invalid_action_context")
-        contacts = (
+        contacts = contact_affiliation_service.annotate_interaction_position(
             InteractionContact.objects
             .filter(interaction=context.interaction, unlinked_at__isnull=True)
             .select_related("contact_person")
@@ -195,7 +196,7 @@ class CreateContractHandler:
                 {
                     "id": link.contact_person.pk,
                     "full_name": link.contact_person.full_name,
-                    "position": link.contact_person.position,
+                    "position": link.position,
                 }
                 for link in contacts
             ],

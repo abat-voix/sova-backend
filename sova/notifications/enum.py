@@ -35,6 +35,7 @@ class NotifyType(TextChoices):
     KAM_ASSIGNED = "kam_assigned", "Назначение КАМа"
     HEAD_ASSIGNED = "head_assigned", "Назначение руководителя"
     HEAD_UNASSIGNED = "head_unassigned", "Снятие руководителя"
+    CONTACT_UNLINKED = "contact_unlinked", "Отвязка контактного лица"
 
 
 # Типы, которые обрабатывает задача notify_deadlines; только они пишутся в журнал DeadlineDelivery
@@ -48,6 +49,7 @@ NOTIFY_TYPE_GROUPS: dict[str, str] = {
     NotifyType.KAM_ASSIGNED: NotificationKind.ASSIGNMENT,
     NotifyType.HEAD_ASSIGNED: NotificationKind.ASSIGNMENT,
     NotifyType.HEAD_UNASSIGNED: NotificationKind.ASSIGNMENT,
+    NotifyType.CONTACT_UNLINKED: NotificationKind.ASSIGNMENT,
 }
 
 

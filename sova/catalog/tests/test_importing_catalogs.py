@@ -1,9 +1,9 @@
 from django.test import TestCase
 
 from sova.catalog.exceptions import CatalogImportError, CatalogImportRowsError
-from sova.catalog.models import ContactPerson, Direction, Product, Program, University, Vendor
+from sova.catalog.models import ContactPerson, Direction, Product, Program, University, UniversityContact, Vendor
 from sova.catalog.services import catalog_import_service, import_file_service
-from sova.catalog.tests.factories import DirectionFactory, UniversityFactory, VendorFactory
+from sova.catalog.tests.factories import DirectionFactory, UniversityContactFactory, UniversityFactory, VendorFactory
 
 
 class LoadVendorsServiceTestCase(TestCase):
@@ -25,7 +25,7 @@ class LoadVendorsServiceTestCase(TestCase):
 
 
 class LoadContactPersonsTestCase(TestCase):
-    """load_contact_persons — апсерт ответственных от вуза по (university, full_name)."""
+    """load_contact_persons — человек и его связь с вузом."""
 
     def test_creates_and_updates_contact_person(self) -> None:
         university = UniversityFactory(name="МГУ")
@@ -38,14 +38,30 @@ class LoadContactPersonsTestCase(TestCase):
         created, updated = catalog_import_service.load_contact_persons(rows)
 
         self.assertEqual((created, updated), (1, 0))
-        contact = ContactPerson.objects.get(university=university, full_name="Иванов Иван")
-        self.assertEqual(contact.email, "ivanov@example.com")
+        link = UniversityContact.objects.get(university=university, contact__full_name="Иванов Иван")
+        self.assertEqual(link.contact.email, "ivanov@example.com")
 
     def test_unknown_university_raises(self) -> None:
         rows = iter([(2, {"full_name": "Иванов Иван", "university": "Неизвестный вуз"})])
 
         with self.assertRaises(CatalogImportError):
             catalog_import_service.load_contact_persons(rows)
+
+    def test_inactive_contact_is_turned_on(self) -> None:
+        link = UniversityContactFactory(
+            university=UniversityFactory(name="МГУ"),
+            contact__full_name="Иванов Иван",
+            contact__is_active=False,
+            position="Проректор",
+        )
+        rows = iter([(2, {"full_name": "Иванов Иван", "university": "МГУ", "position": "Декан"})])
+
+        created, updated = catalog_import_service.load_contact_persons(rows)
+
+        link.refresh_from_db()
+        link.contact.refresh_from_db()
+        self.assertEqual((created, updated), (0, 1))
+        self.assertEqual((link.contact.is_active, link.position), (True, "Декан"))
 
 
 class CollectRowErrorsTestCase(TestCase):
@@ -127,7 +143,7 @@ class CaseInsensitiveMatchingTestCase(TestCase):
 
     def test_contact_person_is_matched_in_other_case(self) -> None:
         university = UniversityFactory(name="МГУ")
-        ContactPerson.objects.create(full_name="Иванов Иван", university=university)
+        UniversityContactFactory(university=university, contact__full_name="Иванов Иван")
         rows = iter([(2, {"full_name": "ИВАНОВ ИВАН", "university": "мгу", "email": "ivanov@example.com"})])
 
         created, updated = catalog_import_service.load_contact_persons(rows)
@@ -202,8 +218,12 @@ class FileColumnsAreSourceOfTruthTestCase(TestCase):
 
     def test_missing_contact_columns_keep_values(self) -> None:
         university = UniversityFactory(name="МГУ")
-        ContactPerson.objects.create(
-            full_name="Иванов Иван", university=university, position="Ректор", email="a@example.com", phone="1"
+        UniversityContactFactory(
+            university=university,
+            position="Ректор",
+            contact__full_name="Иванов Иван",
+            contact__email="a@example.com",
+            contact__phone="1",
         )
 
         catalog_import_service.load_contact_persons(
@@ -211,19 +231,23 @@ class FileColumnsAreSourceOfTruthTestCase(TestCase):
         )
 
         # Проверяем, что отсутствующие колонки не тронуты, а телефон обновлён
-        contact = ContactPerson.objects.get()
-        self.assertEqual((contact.position, contact.email, contact.phone), ("Ректор", "a@example.com", "2"))
+        link = UniversityContact.objects.select_related("contact").get()
+        self.assertEqual((link.position, link.contact.email, link.contact.phone), ("Ректор", "a@example.com", "2"))
 
-    def test_empty_contact_cells_clear_values(self) -> None:
+    def test_empty_affiliation_cells_clear_values_but_person_data_is_kept(self) -> None:
+        """Должность — данные связи с вузом файла, стирается; email человека может прийти из другой организации."""
         university = UniversityFactory(name="МГУ")
-        ContactPerson.objects.create(full_name="Иванов Иван", university=university, position="Ректор")
-
-        catalog_import_service.load_contact_persons(
-            iter([(2, {"full_name": "Иванов Иван", "university": "МГУ", "position": ""})])
+        UniversityContactFactory(
+            university=university, position="Ректор", contact__full_name="Иванов Иван", contact__email="a@example.com"
         )
 
-        # Проверяем, что пустая ячейка стёрла должность
-        self.assertEqual(ContactPerson.objects.get().position, "")
+        catalog_import_service.load_contact_persons(
+            iter([(2, {"full_name": "Иванов Иван", "university": "МГУ", "position": "", "email": ""})])
+        )
+
+        # Проверяем, что пустая ячейка стёрла должность, но не email человека
+        link = UniversityContact.objects.select_related("contact").get()
+        self.assertEqual((link.position, link.contact.email), ("", "a@example.com"))
 
 
 class ReadableValueErrorsTestCase(TestCase):

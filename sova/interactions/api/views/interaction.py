@@ -18,6 +18,7 @@ from accounts.services import get_system_role
 from sova.core.api.exceptions import ConflictError
 from sova.core.api.views import SovaBaseViewSet
 from sova.catalog.models import ContactPerson
+from sova.catalog.services.contact_affiliation import contact_affiliation_service
 from sova.interactions.api import filters, serializers
 from sova.interactions.exceptions import NoActiveResponsibleError
 from sova.interactions.models import (
@@ -266,6 +267,7 @@ class InteractionViewSet(SovaBaseViewSet):
                 .select_related("contact_person")
                 .order_by("linked_at")
             )
+            links = contact_affiliation_service.annotate_interaction_position(links)
             return Response(
                 serializers.InteractionContactSerializer(
                     links,
@@ -291,7 +293,9 @@ class InteractionViewSet(SovaBaseViewSet):
             contact_person=contact,
             actor=request.user,
         )
-        link = InteractionContact.objects.select_related("contact_person").get(pk=link.pk)
+        link = contact_affiliation_service.annotate_interaction_position(
+            InteractionContact.objects.select_related("contact_person")
+        ).get(pk=link.pk)
         return Response(
             serializers.InteractionContactSerializer(
                 link,
