@@ -1,5 +1,8 @@
+from django.db.models import Count
+from django.urls import reverse
 from rest_framework import serializers
 
+from sova.interactions.api.serializers.contract import WriteContractSerializer
 from sova.interactions.enum import DocumentTemplateKind
 from sova.interactions.models import (
     Contract,
@@ -241,3 +244,194 @@ class CreateContractHandler:
                 "file_generated": True,
             },
         )
+
+
+def _contract_id(data: dict):
+    try:
+        return serializers.UUIDField(required=True).run_validation(data.get("contract"))
+    except serializers.ValidationError as error:
+        raise ActionFeatureError(
+            "invalid_contract",
+            "Укажите корректный идентификатор договора.",
+            400,
+        ) from error
+
+
+def _contract_for_interaction(context, data: dict) -> Contract:
+    contract = Contract.objects.filter(
+        pk=_contract_id(data),
+        interaction=context.interaction,
+    ).first()
+    if contract is None:
+        raise ActionFeatureError(
+            "contract_not_found",
+            "Договор текущего взаимодействия не найден.",
+            404,
+        )
+    return contract
+
+
+def _contract_data(contract: Contract) -> dict:
+    return {
+        "contract_number": contract.contract_number,
+        "sent_at": contract.sent_at.isoformat() if contract.sent_at else None,
+        "corrected_at": (
+            contract.corrected_at.isoformat() if contract.corrected_at else None
+        ),
+        "signed_at": contract.signed_at.isoformat() if contract.signed_at else None,
+        "file_name": contract.file_name,
+        "download_url": (
+            reverse("interactions:contract-download", args=[contract.pk])
+            if contract.file
+            else None
+        ),
+        "files_count": contract.files.count(),
+    }
+
+
+def _update_contract(contract: Contract, data: dict) -> Contract:
+    serializer = WriteContractSerializer(
+        contract,
+        data=data,
+        partial=True,
+    )
+    serializer.is_valid(raise_exception=True)
+    return serializer.save()
+
+
+class ContractOperationHandler:
+    """Общие начальные данные для операций над договорами взаимодействия."""
+
+    code = ""
+
+    def initial(self, *, context, settings: dict) -> dict:
+        contracts = Contract.objects.filter(interaction=context.interaction)
+        if self.code == "contract.sign":
+            contracts = contracts.filter(signed_at__isnull=True)
+        elif self.code == "contract.mark_sent":
+            contracts = contracts.filter(
+                sent_at__isnull=True,
+                signed_at__isnull=True,
+            )
+        elif self.code == "contract.mark_corrected":
+            contracts = contracts.filter(
+                sent_at__isnull=False,
+                signed_at__isnull=True,
+            )
+        contracts = contracts.annotate(files_count=Count("files")).order_by(
+            "-created_at",
+            "pk",
+        )
+        return {
+            "contracts": [
+                {
+                    "id": item.pk,
+                    "contract_number": item.contract_number,
+                    "sent_at": item.sent_at,
+                    "corrected_at": item.corrected_at,
+                    "signed_at": item.signed_at,
+                    "file_name": item.file_name,
+                    "download_url": (
+                        reverse("interactions:contract-download", args=[item.pk])
+                        if item.file
+                        else None
+                    ),
+                    "files_count": item.files_count,
+                }
+                for item in contracts
+            ],
+        }
+
+
+class UpdateContractHandler(ContractOperationHandler):
+    code = "contract.update"
+
+    def execute(self, *, context, data: dict, settings: dict) -> ActionFeatureResult:
+        contract = _contract_for_interaction(context, data)
+        number = serializers.CharField(
+            max_length=255,
+            allow_blank=True,
+            trim_whitespace=True,
+        ).run_validation(data.get("contract_number"))
+        contract = _update_contract(contract, {"contract_number": number})
+        return ActionFeatureResult("contract", contract.pk, _contract_data(contract))
+
+
+class ContractDateHandler(ContractOperationHandler):
+    date_field = ""
+
+    def validate_contract(self, contract: Contract) -> None:
+        return None
+
+    def execute(self, *, context, data: dict, settings: dict) -> ActionFeatureResult:
+        contract = _contract_for_interaction(context, data)
+        self.validate_contract(contract)
+        value = serializers.DateField(required=True).run_validation(
+            data.get(self.date_field),
+        )
+        contract = _update_contract(contract, {self.date_field: value})
+        return ActionFeatureResult("contract", contract.pk, _contract_data(contract))
+
+
+class SignContractHandler(ContractDateHandler):
+    code = "contract.sign"
+    date_field = "signed_at"
+
+    def validate_contract(self, contract: Contract) -> None:
+        if contract.signed_at is not None:
+            raise ActionFeatureError(
+                "contract_already_signed",
+                "Договор уже отмечен подписанным.",
+                409,
+            )
+
+
+class MarkContractSentHandler(ContractDateHandler):
+    code = "contract.mark_sent"
+    date_field = "sent_at"
+
+    def validate_contract(self, contract: Contract) -> None:
+        if contract.sent_at is not None:
+            raise ActionFeatureError(
+                "contract_already_sent",
+                "Дата отправки договора уже указана.",
+                409,
+            )
+        if contract.signed_at is not None:
+            raise ActionFeatureError(
+                "contract_already_signed",
+                "Нельзя отметить отправку уже подписанного договора.",
+                409,
+            )
+
+
+class MarkContractCorrectedHandler(ContractDateHandler):
+    code = "contract.mark_corrected"
+    date_field = "corrected_at"
+
+    def validate_contract(self, contract: Contract) -> None:
+        if contract.sent_at is None:
+            raise ActionFeatureError(
+                "contract_not_sent",
+                "Сначала отметьте отправку договора.",
+                409,
+            )
+        if contract.signed_at is not None:
+            raise ActionFeatureError(
+                "contract_already_signed",
+                "Нельзя отметить доработку уже подписанного договора.",
+                409,
+            )
+
+
+class UploadContractFileHandler(ContractOperationHandler):
+    code = "contract.file.upload"
+
+    def execute(self, *, context, data: dict, settings: dict) -> ActionFeatureResult:
+        contract = _contract_for_interaction(context, data)
+        uploaded_file = serializers.FileField(required=True).run_validation(
+            data.get("file"),
+        )
+        contract = _update_contract(contract, {"file": uploaded_file})
+        record_contract_file(contract, context.user)
+        return ActionFeatureResult("contract", contract.pk, _contract_data(contract))
