@@ -1,3 +1,4 @@
+from accounts.policy import Action
 from sova.core.api.views import SovaBaseViewSet
 from sova.notifications.api import filters, serializers
 from sova.notifications.models import NotificationProfile
@@ -19,3 +20,4 @@ class NotificationProfileViewSet(SovaBaseViewSet):
         "user__last_name",
     )
     filterset_class = filters.NotificationProfileFilter
+    policy_action = Action.NOTIFICATIONS_USE

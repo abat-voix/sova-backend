@@ -35,7 +35,9 @@ class CatalogImportApiTestCase(APITestCase):
 
     def setUp(self) -> None:
         """Аутентифицирует клиента и настраивает маппинг вендоров."""
-        self.client.force_authenticate(user=UserFactory())
+        user = UserFactory()
+        UserRole.objects.create(user=user, role=SystemRole.PLATFORM_ADMIN)
+        self.client.force_authenticate(user=user)
         self.url = reverse("catalog:catalog-import-list")
         CatalogImportMappingFactory(catalog_type=CatalogType.VENDOR, source_column="Вендор", target_field="name")
         CatalogImportMappingFactory(catalog_type=CatalogType.VENDOR, source_column="Код", target_field="external_code")
@@ -132,6 +134,7 @@ class ContractRegistryImportWarningsApiTestCase(APITestCase):
 
     def setUp(self) -> None:
         self.user = UserFactory()
+        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
         self.client.force_authenticate(user=self.user)
         self.url = reverse("catalog:catalog-import-list")
         columns = {

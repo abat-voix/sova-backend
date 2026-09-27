@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.policy import Action
 from sova.core.api.views import ReadWriteCreateModelMixin, SovaReadOnlyViewSet
 from sova.processes.api import filters, serializers
 from sova.processes.api.views.mixins import VisibleInteractionMixin
@@ -41,6 +42,12 @@ class WorkflowInstanceViewSet(VisibleInteractionMixin, ReadWriteCreateModelMixin
         "interaction__b2c_client__full_name",
     )
     filterset_class = filters.WorkflowInstanceFilter
+    policy_actions = {
+        "list": Action.PROCESSES_READ,
+        "retrieve": Action.PROCESSES_READ,
+        "board": Action.PROCESSES_READ,
+        "create": Action.PROCESSES_START,
+    }
 
     def perform_create(self, serializer: serializers.WriteWorkflowInstanceSerializer) -> None:
         """Запускает процесс через движок от имени текущего пользователя."""

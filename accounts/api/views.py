@@ -81,7 +81,7 @@ class UserViewSet(SovaReadOnlyViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         role = serializer.validated_data["role"]
-        if user.pk == request.user.pk and role != SystemRole.PLATFORM_ADMIN:
+        if user.pk == request.user.pk and role != SystemRole.PLATFORM_ADMIN and not request.user.is_superuser:
             raise AccountRuleError(
                 detail=_("Нельзя снять роль администратора платформы с самого себя."),
                 code="self_lockout",

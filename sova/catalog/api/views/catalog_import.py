@@ -4,6 +4,7 @@ from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
+from accounts.policy import Action
 from sova.catalog.api import serializers
 from sova.catalog.exceptions import CatalogImportError, CatalogImportRowsError
 from sova.catalog.services import catalog_import_service
@@ -24,6 +25,7 @@ class CatalogImportViewSet(GenericViewSet):
 
     serializer_class = serializers.CatalogImportSerializer
     parser_classes = (MultiPartParser,)
+    policy_actions = {"create": Action.CATALOG_IMPORT}
 
     @extend_schema(
         request=serializers.CatalogImportSerializer,

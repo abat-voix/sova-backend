@@ -32,17 +32,12 @@ class BaseApiTestMixin:
     allow_create: bool = True
     allow_update: bool = True
     allow_delete: bool = True
-    user_role: str | None = None
+    user_role: str | None = SystemRole.PLATFORM_ADMIN
 
     def setUp(self) -> None:
         """Аутентифицирует клиента обычным пользователем."""
         self.user = UserFactory()
-        # Workflow administration is role-protected. Keep the generic CRUD
-        # fixtures for that app equivalent to their previous authenticated
-        # setup; dedicated permission tests cover head/KAM ownership rules.
-        if self.model.__module__.startswith("sova.workflows"):
-            UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
-        elif self.user_role is not None:
+        if self.user_role is not None:
             UserRole.objects.create(user=self.user, role=self.user_role)
         self.client.force_authenticate(user=self.user)
 

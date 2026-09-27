@@ -9,6 +9,7 @@ from rest_framework.exceptions import Throttled
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.policy import Action
 from sova.core.api.exceptions import ConflictError, Gone
 from sova.core.files import file_response
 from sova.reports.api import serializers
@@ -30,6 +31,8 @@ class InteractionReportPreviewView(APIView):
     и направления без программ; взаимодействие без состава — одна строка. В выборку попадают
     только взаимодействия, доступные пользователю по роли.
     """
+
+    policy_action = Action.REPORTS_READ
 
     @extend_schema(
         tags=TAGS,
@@ -67,6 +70,8 @@ class InteractionReportSummaryView(APIView):
     статусам процесса и актуальным этапам. Считается из той же выборки, что и предпросмотр.
     """
 
+    policy_action = Action.REPORTS_READ
+
     @extend_schema(
         tags=TAGS,
         request=serializers.ReportSpecSerializer,
@@ -99,6 +104,8 @@ class InteractionReportExportView(APIView):
     Файл строится в фоне; состояние — `GET /api/reports/exports/{id}/`.
     """
 
+    policy_action = Action.REPORTS_EXPORT
+
     @extend_schema(
         tags=TAGS,
         request=serializers.ReportExportRequestSerializer,
@@ -127,6 +134,8 @@ def _own_job(request, pk) -> ReportJob:
 class ReportJobDetailView(APIView):
     """Состояние задания на выгрузку. Доступно только владельцу."""
 
+    policy_action = Action.REPORTS_READ
+
     @extend_schema(tags=TAGS, responses={200: serializers.ReportJobSerializer})
     def get(self, request, pk):
         job = _own_job(request, pk)
@@ -135,6 +144,8 @@ class ReportJobDetailView(APIView):
 
 class ReportJobDownloadView(APIView):
     """Скачивание готового файла. 409 — файл ещё не готов, 410 — срок хранения истёк."""
+
+    policy_action = Action.REPORTS_READ
 
     @extend_schema(
         tags=TAGS,

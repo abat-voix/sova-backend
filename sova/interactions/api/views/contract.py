@@ -11,6 +11,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.policy import Action
 from sova.core.api.exceptions import ConflictError
 from sova.core.api.views import SovaBaseViewSet
 from sova.core.files import file_response
@@ -60,6 +61,16 @@ class ContractViewSet(SovaBaseViewSet):
     ordering_fields = "__all__"
     search_fields = ("contract_number",)
     filterset_class = filters.ContractFilter
+    policy_actions = {
+        "list": Action.CONTRACTS_READ,
+        "retrieve": Action.CONTRACTS_READ,
+        "create": Action.CONTRACTS_CREATE,
+        "update": Action.CONTRACTS_UPDATE,
+        "partial_update": Action.CONTRACTS_UPDATE,
+        "destroy": Action.CONTRACTS_DELETE,
+        "attach_to_new_interaction": Action.CONTRACTS_ATTACH,
+        "download": Action.CONTRACTS_READ,
+    }
 
     @extend_schema(request=None, responses={200: serializers.ContractSerializer})
     @action(methods=["POST"], detail=True, url_path="attach-to-new-interaction")

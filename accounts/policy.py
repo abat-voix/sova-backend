@@ -37,6 +37,41 @@ class Action:
     # Чат взаимодействия — переписка, а не просмотр взаимодействия: наблюдателю не положен
     INTERACTIONS_CHAT = "interactions.chat"
 
+    CONTRACTS_READ = "contracts.read"
+    CONTRACTS_CREATE = "contracts.create"
+    CONTRACTS_UPDATE = "contracts.update"
+    CONTRACTS_DELETE = "contracts.delete"
+    CONTRACTS_ATTACH = "contracts.attach"
+
+    LICENSES_READ = "licenses.read"
+    LICENSES_CREATE = "licenses.create"
+    LICENSES_UPDATE = "licenses.update"
+    LICENSES_DELETE = "licenses.delete"
+
+    PROCESSES_READ = "processes.read"
+    PROCESSES_START = "processes.start"
+    PROCESSES_EXECUTE = "processes.execute"
+    PROCESSES_ATTACHMENTS_UPLOAD = "processes.attachments.upload"
+
+    REPORTS_READ = "reports.read"
+    REPORTS_EXPORT = "reports.export"
+
+    CATALOG_READ = "catalog.read"
+    CATALOG_CREATE = "catalog.create"
+    CATALOG_UPDATE = "catalog.update"
+    CATALOG_DELETE = "catalog.delete"
+    CATALOG_IMPORT = "catalog.import"
+    CATALOG_MAPPINGS_MANAGE = "catalog.mappings.manage"
+
+    WORKFLOWS_MANAGE = "workflows.manage"
+    USERS_READ = "users.read"
+    USERS_MANAGE = "users.manage"
+    TEAMS_MANAGE = "teams.manage"
+    INTEGRATIONS_MANAGE = "integrations.manage"
+    NOTIFICATIONS_USE = "notifications.use"
+    MESSAGING_USE = "messaging.use"
+    REALTIME_CONNECT = "realtime.connect"
+
 
 class Scope(StrEnum):
     """Область видимости записей раздела."""
@@ -60,12 +95,70 @@ _INTERACTIONS_WORK = frozenset(
     },
 )
 
+_CONTRACTS_WORK = frozenset(
+    {
+        Action.CONTRACTS_READ,
+        Action.CONTRACTS_CREATE,
+        Action.CONTRACTS_UPDATE,
+        Action.CONTRACTS_DELETE,
+        Action.CONTRACTS_ATTACH,
+    }
+)
+_LICENSES_WORK = frozenset(
+    {Action.LICENSES_READ, Action.LICENSES_CREATE, Action.LICENSES_UPDATE, Action.LICENSES_DELETE}
+)
+_PROCESSES_WORK = frozenset(
+    {
+        Action.PROCESSES_READ,
+        Action.PROCESSES_START,
+        Action.PROCESSES_EXECUTE,
+        Action.PROCESSES_ATTACHMENTS_UPLOAD,
+    }
+)
+_REPORTS_WORK = frozenset({Action.REPORTS_READ, Action.REPORTS_EXPORT})
+_CATALOG_WORK = frozenset(
+    {Action.CATALOG_READ, Action.CATALOG_CREATE, Action.CATALOG_UPDATE, Action.CATALOG_DELETE}
+)
+_PERSONAL_WORK = frozenset(
+    {Action.NOTIFICATIONS_USE, Action.MESSAGING_USE, Action.REALTIME_CONNECT}
+)
+_OBSERVER_READ = frozenset(
+    {
+        Action.INTERACTIONS_READ,
+        Action.CONTRACTS_READ,
+        Action.LICENSES_READ,
+        Action.PROCESSES_READ,
+        Action.REPORTS_READ,
+        Action.REPORTS_EXPORT,
+        Action.CATALOG_READ,
+    }
+)
+_BASE_WORK = _INTERACTIONS_WORK | _CONTRACTS_WORK | _LICENSES_WORK | _PROCESSES_WORK | _REPORTS_WORK | _CATALOG_WORK
+
 # Какие операции разрешены роли. Кого именно можно назначить или снять ответственным — `responsible_policy`
 ROLE_ACTIONS: dict[str, frozenset[str]] = {
-    SystemRole.OBSERVER: frozenset({Action.INTERACTIONS_READ}),
-    SystemRole.KAM: _INTERACTIONS_WORK,
-    SystemRole.HEAD: _INTERACTIONS_WORK | {Action.INTERACTIONS_RESPONSIBLES_UNASSIGN},
-    SystemRole.PLATFORM_ADMIN: _INTERACTIONS_WORK | {Action.INTERACTIONS_RESPONSIBLES_UNASSIGN},
+    SystemRole.OBSERVER: _OBSERVER_READ,
+    SystemRole.KAM: _BASE_WORK | _PERSONAL_WORK,
+    SystemRole.HEAD: _BASE_WORK
+    | _PERSONAL_WORK
+    | {
+        Action.INTERACTIONS_RESPONSIBLES_UNASSIGN,
+        Action.WORKFLOWS_MANAGE,
+        Action.USERS_READ,
+        Action.TEAMS_MANAGE,
+    },
+    SystemRole.PLATFORM_ADMIN: _BASE_WORK
+    | _PERSONAL_WORK
+    | {
+        Action.INTERACTIONS_RESPONSIBLES_UNASSIGN,
+        Action.CATALOG_IMPORT,
+        Action.CATALOG_MAPPINGS_MANAGE,
+        Action.WORKFLOWS_MANAGE,
+        Action.USERS_READ,
+        Action.USERS_MANAGE,
+        Action.TEAMS_MANAGE,
+        Action.INTEGRATIONS_MANAGE,
+    },
 }
 
 ALL_ACTIONS: frozenset[str] = frozenset().union(*ROLE_ACTIONS.values())
@@ -84,6 +177,12 @@ READ_SCOPES: dict[str, dict[str, Scope]] = {
         SystemRole.HEAD: Scope.TEAM,
         SystemRole.PLATFORM_ADMIN: Scope.ALL,
     },
+    "licenses": {
+        SystemRole.OBSERVER: Scope.ALL,
+        SystemRole.KAM: Scope.OWN,
+        SystemRole.HEAD: Scope.TEAM,
+        SystemRole.PLATFORM_ADMIN: Scope.ALL,
+    },
 }
 
 # Предметная функция раздела `(user, scope) -> QuerySet`; `scope=None` — раздел не виден.
@@ -91,6 +190,7 @@ READ_SCOPES: dict[str, dict[str, Scope]] = {
 VISIBILITY_RULES: dict[str, str] = {
     "interactions": "sova.interactions.services.visibility.interactions_in_scope",
     "contracts": "sova.interactions.services.visibility.contracts_in_scope",
+    "licenses": "sova.interactions.services.visibility.licenses_in_scope",
 }
 
 

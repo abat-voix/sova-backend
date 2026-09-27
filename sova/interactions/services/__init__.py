@@ -14,7 +14,11 @@ from sova.interactions.services.responsible_policy import (
     assignment_candidates,
     removable_managers,
 )
-from sova.interactions.services.visibility import visible_contracts, visible_interactions
+from sova.interactions.services.visibility import (
+    visible_contracts,
+    visible_interactions,
+    visible_licenses,
+)
 
 __all__ = [
     "ContactLinkService",
@@ -31,4 +35,5 @@ __all__ = [
     "responsible_service",
     "visible_contracts",
     "visible_interactions",
+    "visible_licenses",
 ]

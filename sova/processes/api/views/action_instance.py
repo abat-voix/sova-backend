@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.policy import Action
 from sova.core.api.views import SovaReadOnlyViewSet
 from sova.interactions.services import visible_interactions
 from sova.processes.api import filters, serializers
@@ -60,6 +61,14 @@ class ActionInstanceViewSet(SovaReadOnlyViewSet):
     ordering_fields = _ORDERING_FIELDS
     search_fields = ("action_name_snapshot", "status")
     filterset_class = filters.ActionInstanceFilter
+    policy_actions = {
+        "list": Action.PROCESSES_READ,
+        "retrieve": Action.PROCESSES_READ,
+        "complete": Action.PROCESSES_EXECUTE,
+        "cancel": Action.PROCESSES_EXECUTE,
+        "execute_feature": Action.PROCESSES_EXECUTE,
+        "feature_initial": Action.PROCESSES_EXECUTE,
+    }
 
     def filter_queryset(self, queryset: QuerySet) -> QuerySet:
         """

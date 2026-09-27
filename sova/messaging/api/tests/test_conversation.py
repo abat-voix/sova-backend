@@ -2,6 +2,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
 from sova.core.tests.factories import UserFactory
 from sova.messaging.services import conversation_service, message_service, send_system_message
 
@@ -11,6 +12,7 @@ class ConversationApiTestCase(APITestCase):
 
     def setUp(self) -> None:
         self.user = UserFactory()
+        UserRole.objects.create(user=self.user, role=SystemRole.KAM)
         self.client.force_authenticate(user=self.user)
 
     def test_list_shows_only_own_conversations(self) -> None:

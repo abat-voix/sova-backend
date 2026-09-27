@@ -4,6 +4,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.policy import Action
 from sova.core.api.views import SovaReadOnlyViewSet
 from sova.notifications.api import filters, serializers
 from sova.notifications.models import Notification
@@ -18,6 +19,7 @@ class NotificationViewSet(SovaReadOnlyViewSet):
     ordering_fields = ("created_at", "is_read")
     search_fields = ("title", "text")
     filterset_class = filters.NotificationFilter
+    policy_action = Action.NOTIFICATIONS_USE
 
     def get_queryset(self) -> QuerySet:
         """Только уведомления текущего пользователя."""

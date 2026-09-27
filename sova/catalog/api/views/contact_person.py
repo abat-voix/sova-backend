@@ -1,9 +1,10 @@
 from sova.catalog.api import filters, serializers
 from sova.catalog.models import ContactPerson
 from sova.core.api.views import SovaBaseViewSet
+from sova.catalog.api.views.mixins import CatalogPolicyMixin
 
 
-class ContactPersonViewSet(SovaBaseViewSet):
+class ContactPersonViewSet(CatalogPolicyMixin, SovaBaseViewSet):
     """Контактные лица вузов и B2C-клиентов. Доступны CRUD операции."""
 
     read_serializer_class = serializers.ContactPersonSerializer

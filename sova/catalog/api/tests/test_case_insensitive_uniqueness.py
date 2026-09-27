@@ -2,6 +2,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
 from sova.catalog.models import Vendor
 from sova.catalog.tests.factories import (
     ContactPersonFactory,
@@ -17,7 +18,9 @@ class CaseInsensitiveUniquenessApiTestCase(APITestCase):
 
     def setUp(self) -> None:
         """Аутентифицирует клиента."""
-        self.client.force_authenticate(user=UserFactory())
+        user = UserFactory()
+        UserRole.objects.create(user=user, role=SystemRole.PLATFORM_ADMIN)
+        self.client.force_authenticate(user=user)
 
     def test_vendor_name_duplicate_in_other_case_returns_400(self) -> None:
         """Вендор «ЯНДЕКС» при существующем «Яндекс» отклоняется."""

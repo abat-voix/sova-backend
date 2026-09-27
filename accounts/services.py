@@ -27,7 +27,7 @@ def visible_users(user) -> QuerySet:
     Остальным роль списка не даёт: запрос к API отклоняется разрешением `CanListUsers`, а сам набор пуст.
     """
     user_model = get_user_model()
-    role = get_system_role(user)
+    role = SystemRole.PLATFORM_ADMIN if user.is_superuser else get_system_role(user)
 
     if role == SystemRole.PLATFORM_ADMIN:
         return user_model.objects.all()

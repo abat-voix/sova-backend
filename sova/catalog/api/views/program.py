@@ -3,9 +3,10 @@ from django.db.models import Count
 from sova.catalog.api import filters, serializers
 from sova.catalog.models import Program
 from sova.core.api.views import SovaBaseViewSet
+from sova.catalog.api.views.mixins import CatalogPolicyMixin
 
 
-class ProgramViewSet(SovaBaseViewSet):
+class ProgramViewSet(CatalogPolicyMixin, SovaBaseViewSet):
     """Программы. Доступны CRUD операции, в списке — число продуктов программы."""
 
     read_serializer_class = serializers.ProgramSerializer

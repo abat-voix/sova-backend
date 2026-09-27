@@ -1,9 +1,10 @@
 from sova.catalog.api import filters, serializers
 from sova.catalog.models import B2CClient
 from sova.core.api.views import SovaBaseViewSet
+from sova.catalog.api.views.mixins import CatalogPolicyMixin
 
 
-class B2CClientViewSet(SovaBaseViewSet):
+class B2CClientViewSet(CatalogPolicyMixin, SovaBaseViewSet):
     """B2C-клиенты (физ/юрлица вне вузовской сети). Доступны CRUD операции."""
 
     read_serializer_class = serializers.B2CClientSerializer

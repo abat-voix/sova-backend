@@ -25,7 +25,7 @@ class StageInstanceApiTestCase(BaseApiTestMixin, APITestCase):
     def setUp(self) -> None:
         """Администратор платформы: процессы видны только по видимым взаимодействиям."""
         super().setUp()
-        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
+        UserRole.objects.update_or_create(user=self.user, defaults={"role": SystemRole.PLATFORM_ADMIN})
 
     def create_instance(self, **kwargs) -> StageInstance:
         """Создаёт экземпляр этапа."""

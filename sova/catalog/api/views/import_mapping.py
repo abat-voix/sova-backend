@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from accounts.policy import Action
 from sova.catalog.api import filters, serializers
 from sova.catalog.enum import CatalogType
 from sova.catalog.exceptions import CatalogImportMappingError
@@ -36,6 +37,12 @@ class CatalogImportMappingViewSet(SovaReadOnlyViewSet):
     ordering_fields = "__all__"
     search_fields = ("source_column", "target_field")
     filterset_class = filters.CatalogImportMappingFilter
+    policy_actions = {
+        "list": Action.CATALOG_READ,
+        "retrieve": Action.CATALOG_READ,
+        "available_fields": Action.CATALOG_READ,
+        "by_type": {"GET": Action.CATALOG_READ, "PUT": Action.CATALOG_MAPPINGS_MANAGE},
+    }
 
     @extend_schema(
         parameters=[serializers.CatalogImportFieldsQuerySerializer],

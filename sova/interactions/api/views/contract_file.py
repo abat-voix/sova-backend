@@ -3,6 +3,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework.decorators import action
 
+from accounts.policy import Action
 from sova.core.api.views import SovaReadOnlyViewSet
 from sova.core.files import file_response
 from sova.interactions.api import filters, serializers
@@ -30,6 +31,11 @@ class ContractFileViewSet(SovaReadOnlyViewSet):
     queryset = ContractFile.objects.select_related("contract", "uploaded_by")
     ordering_fields = ("uploaded_at",)
     filterset_class = filters.ContractFileFilter
+    policy_actions = {
+        "list": Action.CONTRACTS_READ,
+        "retrieve": Action.CONTRACTS_READ,
+        "download": Action.CONTRACTS_READ,
+    }
 
     def get_queryset(self) -> QuerySet:
         """Только файлы видимых пользователю договоров (см. `visible_contracts`)."""

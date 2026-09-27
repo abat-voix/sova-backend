@@ -34,7 +34,18 @@ class PolicyTableTestCase(TestCase):
 
     def test_observer_only_reads_interactions(self) -> None:
         """Наблюдатель во взаимодействиях только читает."""
-        self.assertEqual(ROLE_ACTIONS[SystemRole.OBSERVER], {Action.INTERACTIONS_READ})
+        self.assertEqual(
+            ROLE_ACTIONS[SystemRole.OBSERVER],
+            {
+                Action.INTERACTIONS_READ,
+                Action.CONTRACTS_READ,
+                Action.LICENSES_READ,
+                Action.PROCESSES_READ,
+                Action.REPORTS_READ,
+                Action.REPORTS_EXPORT,
+                Action.CATALOG_READ,
+            },
+        )
 
 
 class CanTestCase(TestCase):

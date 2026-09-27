@@ -2,6 +2,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from accounts.models import SystemRole, UserRole
 from sova.catalog.enum import CatalogType
 from sova.catalog.models import CatalogImportMapping
 from sova.catalog.tests.factories import CatalogImportMappingFactory
@@ -54,7 +55,9 @@ class CatalogImportFieldsApiTestCase(APITestCase):
 
     def setUp(self) -> None:
         """Аутентифицирует клиента."""
-        self.client.force_authenticate(user=UserFactory())
+        user = UserFactory()
+        UserRole.objects.create(user=user, role=SystemRole.PLATFORM_ADMIN)
+        self.client.force_authenticate(user=user)
         self.url = reverse("catalog:import-mapping-fields")
 
     def test_returns_fields_of_catalog_type_with_required_flag(self) -> None:
@@ -88,7 +91,9 @@ class CatalogImportTypeMappingApiTestCase(APITestCase):
 
     def setUp(self) -> None:
         """Аутентифицирует клиента."""
-        self.client.force_authenticate(user=UserFactory())
+        user = UserFactory()
+        UserRole.objects.create(user=user, role=SystemRole.PLATFORM_ADMIN)
+        self.client.force_authenticate(user=user)
         self.url = reverse("catalog:import-mapping-by-type", args=[CatalogType.PRODUCT])
 
     def test_get_returns_all_fields_with_current_columns(self) -> None:

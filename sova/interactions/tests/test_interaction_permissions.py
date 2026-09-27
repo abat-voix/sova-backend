@@ -110,14 +110,19 @@ class InteractionPermissionsTestCase(APITestCase):
         self.assertTrue(InteractionDirection.objects.filter(pk=self.direction.pk, is_active=True).exists())
         self.assertTrue(self.foreign.responsibles.filter(unassigned_at__isnull=True).exists())
 
-    def test_observer_is_kept_out_of_sections_not_yet_on_the_policy(self) -> None:
-        """Разделы, не переведённые на политику, наблюдателю закрыты."""
+    def test_observer_reads_enabled_sections_but_not_personal_notifications(self) -> None:
+        """Наблюдатель читает договоры и процессы, но не личные уведомления."""
         self.client.force_authenticate(user=create_user(SystemRole.OBSERVER))
 
-        for url_name in ("interactions:contract-list", "processes:action-instance-list", "notifications:api-root"):
+        for url_name in ("interactions:contract-list", "processes:action-instance-list"):
             with self.subTest(url=url_name):
                 response = self.client.get(path=reverse(url_name))
-                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.assertEqual(
+            self.client.get(path=reverse("notifications:api-root")).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
 
     def test_users_without_role_are_forbidden(self) -> None:
         """Без прикладной роли, в том числе staff и неактивному администратору, раздел закрыт."""
@@ -192,5 +197,18 @@ class InteractionPermissionsTestCase(APITestCase):
 
         response = self.client.get(path=reverse("accounts:session"))
 
-        self.assertEqual(response.json()["user"]["permissions"], ["interactions.read"])
+        self.assertEqual(
+            response.json()["user"]["permissions"],
+            sorted(
+                {
+                    "catalog.read",
+                    "contracts.read",
+                    "interactions.read",
+                    "licenses.read",
+                    "processes.read",
+                    "reports.export",
+                    "reports.read",
+                }
+            ),
+        )
         self.assertFalse(response.json()["user"]["isSuperuser"])

@@ -39,7 +39,7 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
     def setUp(self) -> None:
         """Даёт пользователю роль администратора платформы: выборка зависит от роли в СОВА."""
         super().setUp()
-        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
+        UserRole.objects.update_or_create(user=self.user, defaults={"role": SystemRole.PLATFORM_ADMIN})
 
     def create_instance(self, **kwargs) -> Interaction:
         """Создаёт взаимодействие с вузом."""
@@ -305,7 +305,7 @@ class InteractionResponsibleActionsTestCase(APITestCase):
     def setUp(self) -> None:
         """Аутентифицирует клиента администратором платформы и создаёт взаимодействие."""
         self.user = UserFactory()
-        UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
+        UserRole.objects.update_or_create(user=self.user, defaults={"role": SystemRole.PLATFORM_ADMIN})
         self.client.force_authenticate(user=self.user)
         self.interaction = InteractionFactory()
         self.assign_url = reverse(

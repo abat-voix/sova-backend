@@ -2,7 +2,7 @@ from django.db.models import Exists, OuterRef, Q, QuerySet
 
 from accounts.models import SystemRole
 from accounts.policy import Scope, visible_queryset
-from sova.interactions.models import Contract, Interaction, Responsible
+from sova.interactions.models import Contract, Interaction, License, Responsible
 
 
 def visible_interactions(user) -> QuerySet[Interaction]:
@@ -28,6 +28,11 @@ def visible_contracts(user) -> QuerySet[Contract]:
     return visible_queryset(user, "contracts")
 
 
+def visible_licenses(user) -> QuerySet[License]:
+    """Лицензии договоров, видимых пользователю по политике раздела."""
+    return visible_queryset(user, "licenses")
+
+
 def interactions_in_scope(user, scope: Scope | None) -> QuerySet[Interaction]:
     """Взаимодействия в области `scope` пользователя `user` — правило раздела для `accounts.policy`."""
     if scope == Scope.ALL:
@@ -45,6 +50,13 @@ def contracts_in_scope(user, scope: Scope | None) -> QuerySet[Contract]:
         return Contract.objects.none()
     headless = Q(interaction__isnull=True) & _owned_or_unassigned(user=user, scope=scope, owner="contract")
     return Contract.objects.filter(Q(interaction__in=visible_interactions(user)) | headless)
+
+
+def licenses_in_scope(user, scope: Scope | None) -> QuerySet[License]:
+    """Лицензии в области договоров пользователя — правило раздела для `accounts.policy`."""
+    if scope is None:
+        return License.objects.none()
+    return License.objects.filter(contract__in=contracts_in_scope(user=user, scope=scope))
 
 
 def _owned_or_unassigned(user, scope: Scope, owner: str) -> Q:
