@@ -21,14 +21,16 @@ def _contact_id(data: dict):
         ) from error
 
 
-def _target_data(contact: ContactPerson, link) -> dict:
-    return {
+def _target_data(contact: ContactPerson, link=None) -> dict:
+    data = {
         "full_name": contact.full_name,
         "position": contact.position,
         "email": contact.email,
         "phone": contact.phone,
-        "linked_at": link.linked_at.isoformat(),
     }
+    if link is not None:
+        data["linked_at"] = link.linked_at.isoformat()
+    return data
 
 
 def _link(context, contact: ContactPerson):
@@ -80,3 +82,74 @@ class SelectContactPersonHandler:
 
 class LinkContactPersonHandler(SelectContactPersonHandler):
     code = "contact_person.link"
+
+
+class UpdateContactPersonHandler:
+    code = "contact_person.update"
+
+    def execute(self, *, context, data: dict, settings: dict) -> ActionFeatureResult:
+        contact_id = _contact_id(data)
+        try:
+            contact = ContactPerson.objects.get(pk=contact_id)
+        except ContactPerson.DoesNotExist as error:
+            raise ActionFeatureError("contact_not_found", "Контактное лицо не найдено.", 404) from error
+
+        # Из действия можно менять только контакт, который уже принадлежит этому
+        # взаимодействию. Так нельзя изменить постороннюю карточку, зная её UUID.
+        if not context.interaction.contact_links.filter(
+            contact_person=contact,
+            unlinked_at__isnull=True,
+        ).exists():
+            raise ActionFeatureError(
+                "contact_not_linked",
+                "Контактное лицо не привязано к этому взаимодействию.",
+                400,
+            )
+
+        payload = {
+            "full_name": data.get("full_name", contact.full_name),
+            "position": data.get("position", contact.position),
+            "email": data.get("email", contact.email),
+            "phone": data.get("phone", contact.phone),
+            # Контрагент не редактируется из feature: это отдельная операция
+            # каталога с собственными ограничениями для привязанных контактов.
+            "university": contact.university_id,
+            "b2c_client": contact.b2c_client_id,
+            "is_active": contact.is_active,
+        }
+        serializer = WriteContactPersonSerializer(instance=contact, data=payload)
+        if not serializer.is_valid():
+            raise serializers.ValidationError(serializer.errors)
+        contact = serializer.save()
+        return ActionFeatureResult("contact_person", contact.pk, _target_data(contact))
+
+
+class DeactivateContactPersonHandler:
+    code = "contact_person.deactivate"
+
+    def execute(self, *, context, data: dict, settings: dict) -> ActionFeatureResult:
+        contact_id = _contact_id(data)
+        try:
+            contact = ContactPerson.objects.get(pk=contact_id)
+        except ContactPerson.DoesNotExist as error:
+            raise ActionFeatureError("contact_not_found", "Контактное лицо не найдено.", 404) from error
+
+        if not context.interaction.contact_links.filter(
+            contact_person=contact,
+            unlinked_at__isnull=True,
+        ).exists():
+            raise ActionFeatureError(
+                "contact_not_linked",
+                "Контактное лицо не привязано к этому взаимодействию.",
+                400,
+            )
+        if not contact.is_active:
+            raise ActionFeatureError(
+                "contact_inactive",
+                "Контактное лицо уже деактивировано.",
+                409,
+            )
+
+        contact.is_active = False
+        contact.save(update_fields=("is_active", "updated_at"))
+        return ActionFeatureResult("contact_person", contact.pk, _target_data(contact))
