@@ -11,5 +11,4 @@ router.register("inbox", views.NotificationViewSet, basename="notification-inbox
 
 urlpatterns = router.urls + [
     path("telegram/", views.TelegramLinkView.as_view(), name="telegram-link"),
-    path("telegram/webhook/", views.TelegramWebhookView.as_view(), name="telegram-webhook"),
 ]
