@@ -4,7 +4,7 @@ from django.test import TestCase
 
 from sova.catalog.enum import CatalogType
 from sova.catalog.models import CatalogImportMapping
-from sova.catalog.schemas import CATALOG_IMPORT_FIELDS
+from sova.catalog.schemas import CATALOG_IMPORT_FIELD_LABELS, CATALOG_IMPORT_FIELDS
 
 
 class CatalogImportMappingTestCase(TestCase):
@@ -69,3 +69,10 @@ class CatalogImportFieldsTestCase(TestCase):
     def test_required_fields_are_subset_of_all_fields(self) -> None:
         for catalog_type, fields in CATALOG_IMPORT_FIELDS.items():
             self.assertLessEqual(fields.required, fields.all, msg=catalog_type)
+
+    def test_every_import_field_has_label(self) -> None:
+        """У каждого канонического поля любого типа есть подпись для интерфейса."""
+        all_fields = set().union(*(fields.all for fields in CATALOG_IMPORT_FIELDS.values()))
+
+        # Проверяем, что подписаны все поля и нет лишних подписей
+        self.assertEqual(set(CATALOG_IMPORT_FIELD_LABELS), all_fields)

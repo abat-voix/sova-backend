@@ -19,7 +19,7 @@ from sova.catalog.enum import ContactChannel
 from sova.catalog.exceptions import CatalogImportError, CatalogImportRowsError
 from sova.catalog.models import CatalogImportMapping
 from sova.catalog.schemas import ImportRowError
-from sova.core.text import normalize_text, quote_insensitive_key, split_quoted_list, strip_outer_quotes, text_key
+from sova.core.text import header_key, normalize_text, quote_insensitive_key, split_quoted_list, strip_outer_quotes
 
 Rows = Iterator[tuple[int, dict]]
 # Путь на диске (CLI) или загруженный файл (API) — у обоих есть name с расширением.
@@ -66,6 +66,20 @@ class ImportFileService:
             present=set(header_to_key.values()), required=required, context=self._file_name(source=source)
         )
         return self._translate_rows(raw_rows=raw_rows, header_to_key=header_to_key)
+
+    def read_headers(self, source: ImportSource) -> list[str]:
+        """
+        Непустые нормализованные заголовки первой строки первого листа в порядке файла, без повторов.
+
+        Для настройки маппинга: файл читается тем же кодом, что и при импорте, строки данных не читаются.
+        """
+        headers, _rows, close = self._open_rows(source=source)
+        close()
+        # В одну строку: поле маппинга однострочное, а сопоставление всё равно не различает перенос и пробел
+        result = list(dict.fromkeys(" ".join(header.split()) for header in headers if header))
+        if not result:
+            raise CatalogImportError(f"В файле {self._file_name(source=source)} нет заголовков в первой строке.")
+        return result
 
     def read_canonical_rows(self, source: ImportSource, required: set[str]) -> Rows:
         """Читает файл, заголовки которого уже являются каноническими ключами (без маппинга)."""
@@ -205,13 +219,8 @@ class ImportFileService:
             raise ValueError(f"ожидалось число, получено {value}")
         return number
 
-    def _read_raw_rows(self, source: ImportSource) -> tuple[list[str], Rows]:
-        """
-        Читает первый лист: нормализованные заголовки + построчные словари {заголовок: значение}.
-
-        Формат определяется по содержимому, а не по расширению: 1С и веб-системы сохраняют HTML-таблицу
-        под именем .xls, а пользователи переименовывают xls в xlsx. Текст ячеек нормализуется (normalize_text).
-        """
+    def _open_rows(self, source: ImportSource) -> tuple[list[str], Iterator[tuple], Callable[[], None]]:
+        """Открывает первый лист: нормализованные заголовки, итератор остальных строк и функция закрытия."""
         name = self._file_name(source=source)
         if Path(name).suffix.lower() not in (".xlsx", ".xls"):
             raise CatalogImportError(f"Неподдерживаемый формат файла {name}: ожидается .xlsx или .xls.")
@@ -231,6 +240,16 @@ class ImportFileService:
             raise CatalogImportError(f"Файл {name} пуст.") from error
 
         headers = [normalize_text(str(value)) if value is not None else "" for value in raw_headers]
+        return headers, rows, close
+
+    def _read_raw_rows(self, source: ImportSource) -> tuple[list[str], Rows]:
+        """
+        Читает первый лист: нормализованные заголовки + построчные словари {заголовок: значение}.
+
+        Формат определяется по содержимому, а не по расширению: 1С и веб-системы сохраняют HTML-таблицу
+        под именем .xls, а пользователи переименовывают xls в xlsx. Текст ячеек нормализуется (normalize_text).
+        """
+        headers, rows, close = self._open_rows(source=source)
 
         def _iter_rows() -> Rows:
             for row_number, values in enumerate(rows, start=2):
@@ -364,8 +383,8 @@ class ImportFileService:
         )
         if not configured:
             raise CatalogImportError(f"Для типа '{catalog_type}' не настроен маппинг ни одной колонки.")
-        by_key = {text_key(source_column): target_field for source_column, target_field in configured.items()}
-        header_keys = {header: text_key(header) for header in headers}
+        by_key = {header_key(source_column): target_field for source_column, target_field in configured.items()}
+        header_keys = {header: header_key(header) for header in headers}
         return {header: by_key[key] for header, key in header_keys.items() if key in by_key}
 
     def _translate_rows(self, raw_rows: Rows, header_to_key: dict[str, str]) -> Rows:

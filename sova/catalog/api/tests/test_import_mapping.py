@@ -69,11 +69,11 @@ class CatalogImportFieldsApiTestCase(APITestCase):
         self.assertEqual(
             response.data,
             [
-                {"name": "external_code", "required": True},
-                {"name": "name", "required": True},
-                {"name": "vendor", "required": True},
-                {"name": "is_active", "required": False},
-                {"name": "programs", "required": False},
+                {"name": "external_code", "label": "Внешний код", "required": True},
+                {"name": "name", "label": "Название", "required": True},
+                {"name": "vendor", "label": "Вендор", "required": True},
+                {"name": "is_active", "label": "Активен", "required": False},
+                {"name": "programs", "label": "Программы", "required": False},
             ],
         )
 
@@ -108,11 +108,11 @@ class CatalogImportTypeMappingApiTestCase(APITestCase):
         self.assertEqual(
             response.data,
             [
-                {"target_field": "external_code", "required": True, "source_column": None},
-                {"target_field": "name", "required": True, "source_column": "Название"},
-                {"target_field": "vendor", "required": True, "source_column": None},
-                {"target_field": "is_active", "required": False, "source_column": None},
-                {"target_field": "programs", "required": False, "source_column": "Программы"},
+                {"target_field": "external_code", "label": "Внешний код", "required": True, "source_column": None},
+                {"target_field": "name", "label": "Название", "required": True, "source_column": "Название"},
+                {"target_field": "vendor", "label": "Вендор", "required": True, "source_column": None},
+                {"target_field": "is_active", "label": "Активен", "required": False, "source_column": None},
+                {"target_field": "programs", "label": "Программы", "required": False, "source_column": "Программы"},
             ],
         )
 

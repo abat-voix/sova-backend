@@ -1,5 +1,6 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
@@ -7,7 +8,7 @@ from rest_framework.viewsets import GenericViewSet
 from accounts.policy import Action
 from sova.catalog.api import serializers
 from sova.catalog.exceptions import CatalogImportError, CatalogImportRowsError
-from sova.catalog.services import catalog_import_service
+from sova.catalog.services import catalog_import_service, import_file_service
 
 # Сколько ошибок строк отдавать в ответе: файл с тысячами плохих строк не должен раздувать ответ.
 MAX_ERRORS_IN_RESPONSE = 100
@@ -25,7 +26,7 @@ class CatalogImportViewSet(GenericViewSet):
 
     serializer_class = serializers.CatalogImportSerializer
     parser_classes = (MultiPartParser,)
-    policy_actions = {"create": Action.CATALOG_IMPORT}
+    policy_actions = {"create": Action.CATALOG_IMPORT, "read_headers": Action.CATALOG_IMPORT}
 
     @extend_schema(
         request=serializers.CatalogImportSerializer,
@@ -78,5 +79,36 @@ class CatalogImportViewSet(GenericViewSet):
                     ],
                 }
             ).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        request=serializers.CatalogImportHeadersSerializer,
+        responses={
+            200: serializers.CatalogImportHeadersResultSerializer,
+            400: serializers.CatalogImportErrorSerializer,
+        },
+    )
+    @action(
+        methods=["POST"],
+        detail=False,
+        url_path="headers",
+        url_name="headers",
+        serializer_class=serializers.CatalogImportHeadersSerializer,
+    )
+    def read_headers(self, request) -> Response:
+        """Заголовки файла для настройки маппинга; ничего не импортирует."""
+        # Не `headers`: так в DRF называется атрибут view с заголовками ответа
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            headers = import_file_service.read_headers(source=serializer.validated_data["file"])
+        except CatalogImportError as error:
+            return Response(
+                data=serializers.CatalogImportErrorSerializer({"detail": str(error), "code": "import_error"}).data,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(
+            data=serializers.CatalogImportHeadersResultSerializer({"headers": headers}).data,
             status=status.HTTP_200_OK,
         )

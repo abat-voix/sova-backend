@@ -13,7 +13,7 @@ from openpyxl import Workbook
 from sova.catalog.exceptions import CatalogImportError
 from sova.catalog.enum import CatalogType
 from sova.catalog.models import CatalogImportMapping, Vendor
-from sova.catalog.services import catalog_import_service
+from sova.catalog.services import catalog_import_service, import_file_service
 from sova.catalog.tests.factories import ProductFactory, UniversityFactory, VendorFactory
 from sova.interactions.models import Contract, License
 
@@ -67,6 +67,19 @@ class CatalogImportFileTestCase(TestCase):
 
             self.assertEqual((created, updated), (1, 0))
             self.assertTrue(Vendor.objects.filter(external_code="vendor-1").exists())
+
+    def test_multiline_header_matches_single_line_mapping(self) -> None:
+        """Заголовок с переносом строки (Alt+Enter в Excel) совпадает с маппингом, записанным в одну строку."""
+        _map(CatalogType.VENDOR, {"Наименование вендора": "name"})
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "vendors.xlsx"
+            _write_workbook(source, ("Наименование\nвендора",), ("JetBrains",))
+
+            created, _, _ = catalog_import_service.import_file(CatalogType.VENDOR, source)
+
+            # Проверяем, что колонка найдена и вендор создан
+            self.assertEqual(created, 1)
+            self.assertTrue(Vendor.objects.filter(name="JetBrains").exists())
 
     def test_no_mapping_configured_raises(self) -> None:
         with TemporaryDirectory() as directory:
@@ -313,3 +326,41 @@ class CatalogImportTextNormalizationTestCase(TestCase):
         vendor = Vendor.objects.get()
         self.assertEqual(vendor.name, "Сервис Яндекс Облако й")
         self.assertEqual(vendor.external_code, "yacloud")
+
+
+class ReadHeadersTestCase(TestCase):
+    """import_file_service.read_headers — заголовки файла для настройки маппинга."""
+
+    def test_read_headers_returns_normalized_non_empty_headers_in_file_order(self) -> None:
+        """Заголовки первой строки: нормализованы, пустые и повторы отброшены, порядок файла сохранён."""
+        workbook = Workbook()
+        workbook.active.append(("Вендор ", None, "Код\u00a0товара", "Вендор"))
+        workbook.active.append(("JetBrains", "x", "jb", "y"))
+        content = BytesIO()
+        workbook.save(content)
+
+        headers = import_file_service.read_headers(source=SimpleUploadedFile("v.xlsx", content.getvalue()))
+
+        # Проверяем состав и порядок заголовков
+        self.assertEqual(headers, ["Вендор", "Код товара"])
+
+    def test_read_headers_joins_multiline_header_into_one_line(self) -> None:
+        """Перенос строки в заголовке — пробел: так заголовок можно выбрать в однострочном поле маппинга."""
+        workbook = Workbook()
+        workbook.active.append(("Дата\nподписания",))
+        content = BytesIO()
+        workbook.save(content)
+
+        headers = import_file_service.read_headers(source=SimpleUploadedFile("r.xlsx", content.getvalue()))
+
+        # Проверяем, что заголовок отдан в одну строку
+        self.assertEqual(headers, ["Дата подписания"])
+
+    def test_read_headers_of_empty_file_raises(self) -> None:
+        """Пустой файл — ошибка файла, как при импорте."""
+        content = BytesIO()
+        Workbook().save(content)
+
+        # Проверяем, что пустой файл отклоняется
+        with self.assertRaises(CatalogImportError):
+            import_file_service.read_headers(source=SimpleUploadedFile("empty.xlsx", content.getvalue()))
