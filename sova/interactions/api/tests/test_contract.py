@@ -41,6 +41,7 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
             "signed_at": instance.signed_at and instance.signed_at.isoformat(),
             "interaction": {
                 "id": str(instance.interaction_id),
+                "number": instance.interaction.display_number,
                 "university": {
                     "id": str(instance.interaction.university_id),
                     "name": instance.interaction.university.name,

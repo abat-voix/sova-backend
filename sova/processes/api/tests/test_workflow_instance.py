@@ -56,6 +56,7 @@ class WorkflowInstanceApiTestCase(BaseApiTestMixin, APITestCase):
             },
             "interaction": {
                 "id": str(instance.interaction_id),
+                "number": instance.interaction.display_number,
                 "university": {
                     "id": str(instance.interaction.university_id),
                     "name": instance.interaction.university.name,

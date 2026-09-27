@@ -52,6 +52,7 @@ class ActionInstanceApiTestCase(BaseApiTestMixin, APITestCase):
             "workflow_instance": str(instance.stage_instance.workflow_instance_id),
             "interaction": {
                 "id": str(interaction.pk),
+                "number": interaction.display_number,
                 "university": {"id": str(interaction.university_id), "name": interaction.university.name},
                 "b2c_client": None,
             },
