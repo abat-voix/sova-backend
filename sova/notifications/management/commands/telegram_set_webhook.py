@@ -28,6 +28,12 @@ class Command(BaseCommand):
             raise CommandError("TELEGRAM_WEBHOOK_SECRET не задан")
 
         webhook_url = f"{options['base_url'].rstrip('/')}/api/notifications/telegram/webhook/"
+        request_kwargs = {}
+        if settings.TELEGRAM_PROXY:
+            request_kwargs["proxies"] = {
+                "http": settings.TELEGRAM_PROXY,
+                "https": settings.TELEGRAM_PROXY,
+            }
         response = requests.post(
             f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/setWebhook",
             data={
@@ -36,6 +42,7 @@ class Command(BaseCommand):
                 "allowed_updates": '["message"]',
             },
             timeout=settings.NOTIFICATION_HTTP_TIMEOUT,
+            **request_kwargs,
         )
         response.raise_for_status()
         result = response.json()
