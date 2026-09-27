@@ -10,8 +10,8 @@ class TelegramLinkToken(TimeStampedModel):
     Одноразовый токен привязки Telegram-аккаунта к пользователю СОВА.
 
     Выдаётся по запросу «Подключить Telegram» и кодируется в deep-ссылку
-    `https://t.me/<бот>?start=<id>`. Погашается webhook'ом бота после
-    успешной привязки (`used_at`) либо истекает по `expires_at`.
+    `https://t.me/<бот>?start=<id>`. Погашается Telegram-ботом после успешной
+    привязки (`used_at`) либо истекает по `expires_at`.
     """
 
     user = models.ForeignKey(
