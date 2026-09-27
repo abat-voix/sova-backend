@@ -23,7 +23,12 @@ class ContactPersonFeatureApiTestCase(APITestCase):
         self.action_instance = ActionInstanceFactory(
             stage_instance__workflow_instance__interaction=self.interaction,
         )
-        for code in ("contact_person.create", "contact_person.link"):
+        for code in (
+            "contact_person.create",
+            "contact_person.link",
+            "contact_person.update",
+            "contact_person.deactivate",
+        ):
             ActionFeatureFactory(action=self.action_instance.action, code=code)
 
     def _execute(self, code: str, data: dict):
@@ -81,3 +86,55 @@ class ContactPersonFeatureApiTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(InteractionContact.objects.exists())
+
+    def test_update_changes_person_and_position_for_interaction_counterparty(self) -> None:
+        """Общие данные меняются у человека, должность — только в связи с текущим вузом."""
+        affiliation = UniversityContactFactory(
+            university=self.interaction.university,
+            position="Менеджер",
+            contact__telegram="old_name",
+        )
+        other_affiliation = UniversityContactFactory(contact=affiliation.contact, position="Доцент")
+        InteractionContact.objects.create(interaction=self.interaction, contact_person=affiliation.contact)
+
+        response = self._execute(
+            "contact_person.update",
+            {
+                "contact_person": str(affiliation.contact_id),
+                "full_name": "Иванов Иван Иванович",
+                "position": "Проректор",
+                "telegram": "@new_name",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        affiliation.refresh_from_db()
+        other_affiliation.refresh_from_db()
+        affiliation.contact.refresh_from_db()
+        self.assertEqual(affiliation.position, "Проректор")
+        self.assertEqual(other_affiliation.position, "Доцент")
+        self.assertEqual(affiliation.contact.full_name, "Иванов Иван Иванович")
+        self.assertEqual(affiliation.contact.telegram, "new_name")
+        self.assertEqual(response.data["target"]["data"]["position"], "Проректор")
+
+    def test_deactivate_unlinks_contact_and_deletes_all_affiliations(self) -> None:
+        """Деактивация из feature означает уход человека из всех организаций."""
+        affiliation = UniversityContactFactory(university=self.interaction.university, position="Проректор")
+        UniversityContactFactory(contact=affiliation.contact)
+        interaction_link = InteractionContact.objects.create(
+            interaction=self.interaction,
+            contact_person=affiliation.contact,
+        )
+
+        response = self._execute(
+            "contact_person.deactivate",
+            {"contact_person": str(affiliation.contact_id)},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        affiliation.contact.refresh_from_db()
+        interaction_link.refresh_from_db()
+        self.assertFalse(affiliation.contact.is_active)
+        self.assertIsNotNone(interaction_link.unlinked_at)
+        self.assertFalse(UniversityContact.objects.filter(contact=affiliation.contact).exists())
+        self.assertEqual(response.data["target"]["data"]["position"], "Проректор")
