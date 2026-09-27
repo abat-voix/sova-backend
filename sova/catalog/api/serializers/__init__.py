@@ -10,8 +10,19 @@ from sova.catalog.api.serializers.catalog_import import (
     CatalogImportRowWarningSerializer,
     CatalogImportSerializer,
 )
+from sova.catalog.api.serializers.contact_affiliation import (
+    B2CClientContactSerializer,
+    UniversityContactSerializer,
+    VendorContactSerializer,
+    WriteB2CClientContactSerializer,
+    WriteUniversityContactSerializer,
+    WriteVendorContactSerializer,
+)
 from sova.catalog.api.serializers.contact_person import (
+    ContactAffiliationSerializer,
     ContactPersonSerializer,
+    ContactPersonShortSerializer,
+    PossibleDuplicatesQuerySerializer,
     WriteContactPersonSerializer,
 )
 from sova.catalog.api.serializers.direction import (
@@ -49,6 +60,7 @@ from sova.catalog.api.serializers.vendor import (
 )
 
 __all__ = [
+    "B2CClientContactSerializer",
     "B2CClientSerializer",
     "B2CClientShortSerializer",
     "CatalogImportErrorSerializer",
@@ -60,24 +72,32 @@ __all__ = [
     "CatalogImportRowWarningSerializer",
     "CatalogImportSerializer",
     "CatalogImportTypeMappingFieldSerializer",
+    "ContactAffiliationSerializer",
     "ContactPersonSerializer",
+    "ContactPersonShortSerializer",
     "DirectionSerializer",
     "DirectionShortSerializer",
+    "PossibleDuplicatesQuerySerializer",
     "ProductSerializer",
     "ProductShortSerializer",
     "ProgramSerializer",
     "ProgramShortSerializer",
-    "UniversitySerializer",
+    "UniversityContactSerializer",
     "UniversityMapPointSerializer",
+    "UniversitySerializer",
     "UniversityShortSerializer",
+    "VendorContactSerializer",
     "VendorSerializer",
     "VendorShortSerializer",
+    "WriteB2CClientContactSerializer",
     "WriteB2CClientSerializer",
     "WriteCatalogImportTypeMappingSerializer",
     "WriteContactPersonSerializer",
     "WriteDirectionSerializer",
     "WriteProductSerializer",
     "WriteProgramSerializer",
+    "WriteUniversityContactSerializer",
     "WriteUniversitySerializer",
+    "WriteVendorContactSerializer",
     "WriteVendorSerializer",
 ]

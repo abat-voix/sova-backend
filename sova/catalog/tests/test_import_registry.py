@@ -7,9 +7,16 @@ from django.test.utils import CaptureQueriesContext
 from accounts.models import SystemRole, UserRole
 
 from sova.catalog.exceptions import CatalogImportError, CatalogImportRowsError
-from sova.catalog.models import ContactPerson
+from sova.catalog.models import ContactPerson, UniversityContact
 from sova.catalog.services import contract_registry_import_service
-from sova.catalog.tests.factories import DirectionFactory, ProductFactory, ProgramFactory, UniversityFactory, VendorFactory
+from sova.catalog.tests.factories import (
+    DirectionFactory,
+    ProductFactory,
+    ProgramFactory,
+    UniversityContactFactory,
+    UniversityFactory,
+    VendorFactory,
+)
 from sova.core.tests.factories import UserFactory
 from sova.interactions.models import Contract, InteractionProduct, License, Responsible
 from sova.interactions.services.contract_attachment import contract_attachment_service
@@ -198,8 +205,34 @@ class ImportContractRegistryTestCase(TestCase):
 
         contract_registry_import_service.import_rows(rows)
 
-        self.assertTrue(ContactPerson.objects.filter(university=self.university, full_name="Петров Пётр").exists())
-        self.assertTrue(ContactPerson.objects.filter(university=self.university, full_name="Сидорова Анна").exists())
+        self.assertEqual(
+            set(
+                UniversityContact.objects.filter(university=self.university).values_list(
+                    "contact__full_name", flat=True
+                )
+            ),
+            {"Петров Пётр", "Сидорова Анна"},
+        )
+
+    def test_existing_university_contact_is_not_duplicated(self) -> None:
+        UniversityContactFactory(university=self.university, contact__full_name="Петров Пётр")
+        rows = iter([(2, self._row(university_contact="ПЕТРОВ ПЁТР"))])
+
+        contract_registry_import_service.import_rows(rows)
+
+        self.assertEqual(UniversityContact.objects.filter(university=self.university).count(), 1)
+
+    def test_inactive_university_contact_is_left_as_is(self) -> None:
+        link = UniversityContactFactory(
+            university=self.university, contact__full_name="Петров Пётр", contact__is_active=False
+        )
+        rows = iter([(2, self._row(university_contact="Петров Пётр"))])
+
+        contract_registry_import_service.import_rows(rows)
+
+        link.contact.refresh_from_db()
+        self.assertFalse(link.contact.is_active)
+        self.assertEqual(UniversityContact.objects.filter(university=self.university).count(), 1)
 
 
 class ContractRegistryDraftFieldsTestCase(TestCase):

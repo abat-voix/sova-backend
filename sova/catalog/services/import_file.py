@@ -15,10 +15,11 @@ from django.db import transaction
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
+from sova.catalog.enum import ContactChannel
 from sova.catalog.exceptions import CatalogImportError, CatalogImportRowsError
 from sova.catalog.models import CatalogImportMapping
 from sova.catalog.schemas import ImportRowError
-from sova.core.text import normalize_text, text_key
+from sova.core.text import normalize_text, quote_insensitive_key, split_quoted_list, strip_outer_quotes, text_key
 
 Rows = Iterator[tuple[int, dict]]
 # Путь на диске (CLI) или загруженный файл (API) — у обоих есть name с расширением.
@@ -26,6 +27,14 @@ ImportSource = Path | File
 RowResult = TypeVar("RowResult")
 
 _TRUE_VALUES = {"1", "true", "да", "yes"}
+# Способы связи в файлах импорта (ключ — `quote_insensitive_key`) → ContactChannel.
+_CONTACT_CHANNEL_SYNONYMS = {
+    **dict.fromkeys(("почта", "email", "e-mail", "эл. почта", "электронная почта"), ContactChannel.EMAIL.value),
+    **dict.fromkeys(
+        ("чат в тг", "тг", "telegram", "телеграм", "телеграмм", "чат в telegram"), ContactChannel.TELEGRAM.value
+    ),
+    **dict.fromkeys(("телефон", "звонок", "phone"), ContactChannel.PHONE.value),
+}
 _FALSE_VALUES = {"0", "false", "нет", "no"}
 _DATE_FORMATS = ("%d.%m.%Y", "%Y-%m-%d")
 
@@ -72,13 +81,17 @@ class ImportFileService:
         обработка продолжается. Если ошибки есть — `CatalogImportRowsError` со всеми ошибками;
         вызывать внутри `transaction.atomic`, чтобы исключение откатило весь импорт.
         """
+        return self.process_numbered_rows(rows=rows, handler=lambda _row_number, row: handler(row))
+
+    def process_numbered_rows(self, rows: Rows, handler: Callable[[int, dict], RowResult]) -> list[RowResult]:
+        """Как `process_rows`, но handler получает и номер строки — для предупреждений по строке."""
         results: list[RowResult] = []
         errors: list[ImportRowError] = []
 
         for row_number, row in rows:
             try:
                 with transaction.atomic():
-                    results.append(handler(row))
+                    results.append(handler(row_number, row))
             except KeyError as error:
                 errors.append(ImportRowError(row_number=row_number, message=f"отсутствует поле {error}"))
             except (CatalogImportError, InvalidOperation, TypeError, ValueError) as error:
@@ -151,6 +164,36 @@ class ImportFileService:
     def split_list(self, value) -> list[str]:
         """Список значений, перечисленных в ячейке через «;»."""
         return [part.strip() for part in self.to_text(value).split(";") if part.strip()]
+
+    def split_quoted_names(self, value) -> list[str]:
+        """
+        Названия, перечисленные через «,» или «;» вне кавычек, без внешней пары кавычек у каждого.
+
+        «RT.DataLake», «RT.Warehouse» → [RT.DataLake, RT.Warehouse]; «Система «Яга»» → [Система «Яга»].
+        Повторы (без учёта регистра и вида кавычек) схлопываются; непарные кавычки — ValueError.
+        """
+        names: dict[str, str] = {}
+        for item in split_quoted_list(self.to_text(value)):
+            name = strip_outer_quotes(item)
+            if name:
+                names.setdefault(quote_insensitive_key(name), name)
+        return list(names.values())
+
+    def to_contact_channels(self, value) -> list[str]:
+        """
+        Способы связи из ячейки через «,» или «;»: «Почта, Чат в ТГ» → [email, telegram].
+
+        Значение сравнивается со словарём синонимов без учёта регистра; неизвестное — ValueError.
+        """
+        channels: list[str] = []
+        for item in split_quoted_list(self.to_text(value)):
+            channel = _CONTACT_CHANNEL_SYNONYMS.get(quote_insensitive_key(item))
+            if channel is None:
+                allowed = ", ".join(sorted({synonym for synonym in _CONTACT_CHANNEL_SYNONYMS}))
+                raise ValueError(f"неизвестный способ связи {item}; допустимые: {allowed}")
+            if channel not in channels:
+                channels.append(channel)
+        return channels
 
     def _parse_number(self, value) -> Decimal:
         """Конечное число из ячейки; текст вместо числа — ValueError с понятным сообщением."""

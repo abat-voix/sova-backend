@@ -354,7 +354,36 @@ if CHANNEL_REDIS_URL_MISSING and ENVIRONMENT not in {"development", "test", "tes
     raise ImproperlyConfigured("CHANNEL_REDIS_URL must be set outside development.")
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "")
 TELEGRAM_PROXY = os.getenv("TELEGRAM_PROXY", "")
+TELEGRAM_WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
+TELEGRAM_LINK_TOKEN_TTL_MINUTES = int(os.getenv("TELEGRAM_LINK_TOKEN_TTL_MINUTES", "30"))
+
+# Keep webhook diagnostics on stdout even when Django DEBUG is disabled.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "telegram_webhook": {
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        },
+    },
+    "handlers": {
+        "telegram_webhook_console": {
+            "class": "logging.StreamHandler",
+            "formatter": "telegram_webhook",
+            "stream": "ext://sys.stdout",
+        },
+    },
+    "loggers": {
+        "sova.telegram_webhook": {
+            "handlers": ["telegram_webhook_console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
+
 MAX_BOT_TOKEN = os.getenv("MAX_BOT_TOKEN", "")
 MAX_API_URL = os.getenv("MAX_API_URL", "https://platform-api.max.ru").rstrip("/")
 NOTIFICATION_HTTP_TIMEOUT = float(os.getenv("NOTIFICATION_HTTP_TIMEOUT", "10"))

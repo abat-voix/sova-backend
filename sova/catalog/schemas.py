@@ -55,9 +55,14 @@ CATALOG_IMPORT_FIELDS = {
             "works_count", "cited_by_count", "city", "region", "lat", "lon", "homepage_url",
         }),
     ),
+    # Справочник вендоров (name/external_code) или файл «вендор + продукты + контактное лицо» (Вендоры.xlsx).
     CatalogType.VENDOR: CatalogImportFields(
-        required=frozenset({"name", "external_code"}),
-        optional=frozenset({"is_active"}),
+        required=frozenset({"name"}),
+        optional=frozenset({
+            "external_code", "is_active", "products",
+            "contact_full_name", "contact_email", "contact_phone", "contact_telegram", "contact_position",
+            "contact_channels",
+        }),
     ),
     CatalogType.DIRECTION: CatalogImportFields(
         required=frozenset({"name", "external_code"}),
@@ -73,7 +78,7 @@ CATALOG_IMPORT_FIELDS = {
     ),
     CatalogType.CONTACT_PERSON: CatalogImportFields(
         required=frozenset({"full_name", "university"}),
-        optional=frozenset({"position", "email", "phone"}),
+        optional=frozenset({"position", "email", "phone", "telegram", "channels"}),
     ),
     CatalogType.CONTRACT_REGISTRY: CatalogImportFields(
         required=frozenset({"university", "vendor", "product", "contract_number"}),

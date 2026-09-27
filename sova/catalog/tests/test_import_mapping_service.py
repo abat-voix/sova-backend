@@ -10,7 +10,7 @@ from sova.catalog.tests.factories import CatalogImportMappingFactory
 class CatalogImportMappingServiceTestCase(TestCase):
     """Маппинг типа каталога читается и заменяется целиком."""
 
-    def _saved(self, catalog_type: str = CatalogType.VENDOR) -> dict[str, str]:
+    def _saved(self, catalog_type: str = CatalogType.DIRECTION) -> dict[str, str]:
         """Сохранённый маппинг типа {target_field: source_column}."""
         return dict(
             CatalogImportMapping.objects.filter(catalog_type=catalog_type).values_list("target_field", "source_column")
@@ -19,7 +19,7 @@ class CatalogImportMappingServiceTestCase(TestCase):
     def test_replace_creates_mapping(self) -> None:
         """Замена сохраняет непустые пары, пустые колонки пропускаются."""
         catalog_import_mapping_service.replace_for_type(
-            catalog_type=CatalogType.VENDOR,
+            catalog_type=CatalogType.DIRECTION,
             mappings={"name": "Название", "external_code": "Код", "is_active": ""},
         )
 
@@ -28,11 +28,11 @@ class CatalogImportMappingServiceTestCase(TestCase):
 
     def test_replace_swaps_columns_between_fields(self) -> None:
         """Колонки можно поменять местами — уникальность source_column не мешает."""
-        CatalogImportMappingFactory(catalog_type=CatalogType.VENDOR, target_field="name", source_column="А")
-        CatalogImportMappingFactory(catalog_type=CatalogType.VENDOR, target_field="external_code", source_column="Б")
+        CatalogImportMappingFactory(catalog_type=CatalogType.DIRECTION, target_field="name", source_column="А")
+        CatalogImportMappingFactory(catalog_type=CatalogType.DIRECTION, target_field="external_code", source_column="Б")
 
         catalog_import_mapping_service.replace_for_type(
-            catalog_type=CatalogType.VENDOR, mappings={"name": "Б", "external_code": "А"}
+            catalog_type=CatalogType.DIRECTION, mappings={"name": "Б", "external_code": "А"}
         )
 
         # Проверяем, что колонки поменялись местами
@@ -40,10 +40,10 @@ class CatalogImportMappingServiceTestCase(TestCase):
 
     def test_replace_removes_omitted_fields(self) -> None:
         """Поле, которого нет в новом маппинге, перестаёт быть замапленным."""
-        CatalogImportMappingFactory(catalog_type=CatalogType.VENDOR, target_field="is_active", source_column="Активен")
+        CatalogImportMappingFactory(catalog_type=CatalogType.DIRECTION, target_field="is_active", source_column="Активен")
 
         catalog_import_mapping_service.replace_for_type(
-            catalog_type=CatalogType.VENDOR, mappings={"name": "Название", "external_code": "Код"}
+            catalog_type=CatalogType.DIRECTION, mappings={"name": "Название", "external_code": "Код"}
         )
 
         # Проверяем, что is_active удалён
@@ -63,7 +63,7 @@ class CatalogImportMappingServiceTestCase(TestCase):
     def test_replace_normalizes_source_column(self) -> None:
         """Колонка сохраняется нормализованной: без лишних и неразрывных пробелов."""
         catalog_import_mapping_service.replace_for_type(
-            catalog_type=CatalogType.VENDOR, mappings={"name": "  Название  вендора ", "external_code": "Код"}
+            catalog_type=CatalogType.DIRECTION, mappings={"name": "  Название  вендора ", "external_code": "Код"}
         )
 
         # Проверяем нормализованное значение
@@ -73,7 +73,7 @@ class CatalogImportMappingServiceTestCase(TestCase):
         """Колонки, совпадающие без учёта регистра и пробелов, — дубль."""
         with self.assertRaises(CatalogImportMappingError) as context:
             catalog_import_mapping_service.replace_for_type(
-                catalog_type=CatalogType.VENDOR, mappings={"name": "Название", "external_code": " НАЗВАНИЕ"}
+                catalog_type=CatalogType.DIRECTION, mappings={"name": "Название", "external_code": " НАЗВАНИЕ"}
             )
 
         # Проверяем, что ошибка на втором поле
@@ -81,11 +81,11 @@ class CatalogImportMappingServiceTestCase(TestCase):
 
     def test_replace_rejects_missing_required_fields(self) -> None:
         """Незаполненное обязательное поле — ошибка, старый маппинг не меняется."""
-        CatalogImportMappingFactory(catalog_type=CatalogType.VENDOR, target_field="name", source_column="Название")
+        CatalogImportMappingFactory(catalog_type=CatalogType.DIRECTION, target_field="name", source_column="Название")
 
         with self.assertRaises(CatalogImportMappingError) as context:
             catalog_import_mapping_service.replace_for_type(
-                catalog_type=CatalogType.VENDOR, mappings={"name": "Другое", "external_code": ""}
+                catalog_type=CatalogType.DIRECTION, mappings={"name": "Другое", "external_code": ""}
             )
 
         # Проверяем ошибку и сохранность старого маппинга
@@ -96,7 +96,7 @@ class CatalogImportMappingServiceTestCase(TestCase):
         """Ключ, которого нет у типа, — ошибка."""
         with self.assertRaises(CatalogImportMappingError) as context:
             catalog_import_mapping_service.replace_for_type(
-                catalog_type=CatalogType.VENDOR,
+                catalog_type=CatalogType.DIRECTION,
                 mappings={"name": "Название", "external_code": "Код", "programs": "Программы"},
             )
 
@@ -105,9 +105,9 @@ class CatalogImportMappingServiceTestCase(TestCase):
 
     def test_get_for_type_lists_required_first(self) -> None:
         """Поля типа: сначала обязательные по алфавиту, затем необязательные; незамапленные — None."""
-        CatalogImportMappingFactory(catalog_type=CatalogType.VENDOR, target_field="is_active", source_column="Активен")
+        CatalogImportMappingFactory(catalog_type=CatalogType.DIRECTION, target_field="is_active", source_column="Активен")
 
-        fields = catalog_import_mapping_service.get_for_type(catalog_type=CatalogType.VENDOR)
+        fields = catalog_import_mapping_service.get_for_type(catalog_type=CatalogType.DIRECTION)
 
         # Проверяем порядок и значения
         self.assertEqual(

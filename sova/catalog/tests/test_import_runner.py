@@ -78,14 +78,14 @@ class CatalogImportFileTestCase(TestCase):
 
     def test_missing_required_mapped_field_raises(self) -> None:
         CatalogImportMapping.objects.create(
-            catalog_type=CatalogType.VENDOR, source_column="Наименование вендора", target_field="name"
+            catalog_type=CatalogType.DIRECTION, source_column="Наименование направления", target_field="name"
         )
         with TemporaryDirectory() as directory:
-            source = Path(directory) / "vendors.xlsx"
-            _write_workbook(source, ("Наименование вендора",), ("Вендор",))
+            source = Path(directory) / "directions.xlsx"
+            _write_workbook(source, ("Наименование направления",), ("Направление",))
 
             with self.assertRaises(CatalogImportError):
-                catalog_import_service.import_file(CatalogType.VENDOR, source)
+                catalog_import_service.import_file(CatalogType.DIRECTION, source)
 
     def test_dispatches_contract_registry(self) -> None:
         UniversityFactory(name="МГУ")
