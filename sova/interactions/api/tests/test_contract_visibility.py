@@ -56,6 +56,16 @@ class HeadlessContractVisibilityApiTestCase(APITestCase):
         # Проверяем, что администратор видит все договоры
         self.assertEqual(self.visible_ids(self.create_user(SystemRole.PLATFORM_ADMIN)), contracts)
 
+    def test_headless_contract_shows_own_counterparty(self) -> None:
+        contract = self.create_contract()
+        self.client.force_authenticate(user=self.create_user(SystemRole.PLATFORM_ADMIN))
+        item = self.client.get(self.list_url).data["results"][0]
+
+        # Проверяем, что у договора без взаимодействия контрагент берётся из самого договора
+        self.assertIsNone(item["interaction"])
+        self.assertEqual(item["organization"]["id"], str(contract.organization.pk))
+        self.assertIsNone(item["b2c_client"])
+
     def test_user_without_role_sees_nothing(self) -> None:
         self.create_contract()
         self.client.force_authenticate(user=self.create_user())

@@ -57,6 +57,8 @@ class ContractViewSet(SovaBaseViewSet):
     queryset = Contract.objects.select_related(
         "interaction__organization",
         "interaction__b2c_client",
+        "organization",
+        "b2c_client",
     )
     ordering_fields = "__all__"
     search_fields = ("contract_number",)
