@@ -7,14 +7,12 @@ from rest_framework.viewsets import GenericViewSet
 
 from accounts.policy import Action
 from sova.catalog.api import serializers
-from sova.catalog.exceptions import CatalogImportError, CatalogImportRowsError
+from sova.catalog.api.views.mixins import ImportResponseMixin
+from sova.catalog.exceptions import CatalogImportError
 from sova.catalog.services import catalog_import_service, import_file_service
 
-# Сколько ошибок строк отдавать в ответе: файл с тысячами плохих строк не должен раздувать ответ.
-MAX_ERRORS_IN_RESPONSE = 100
 
-
-class CatalogImportViewSet(GenericViewSet):
+class CatalogImportViewSet(ImportResponseMixin, GenericViewSet):
     """
     Загрузка каталога или реестра договоров из xlsx/xls.
 
@@ -41,45 +39,20 @@ class CatalogImportViewSet(GenericViewSet):
         serializer.is_valid(raise_exception=True)
         validated_data = serializer.validated_data
 
-        try:
-            result = catalog_import_service.import_file(
+        return self.import_response(
+            run=lambda: catalog_import_service.import_file(
                 catalog_type=validated_data["catalog_type"],
                 source=validated_data["file"],
                 user=request.user,
-            )
-        except CatalogImportRowsError as error:
-            return Response(
-                data=serializers.CatalogImportErrorSerializer(
-                    {
-                        "detail": f"Импорт отменён, ошибок: {len(error.errors)}",
-                        "code": "import_failed",
-                        "errors": [
-                            {"row": row_error.row_number, "message": row_error.message}
-                            for row_error in error.errors[:MAX_ERRORS_IN_RESPONSE]
-                        ],
-                        "errors_total": len(error.errors),
-                    }
-                ).data,
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except CatalogImportError as error:
-            return Response(
-                data=serializers.CatalogImportErrorSerializer({"detail": str(error), "code": "import_error"}).data,
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        return Response(
-            data=serializers.CatalogImportResultSerializer(
+            ),
+            data=lambda result: serializers.CatalogImportResultSerializer(
                 {
                     "catalog_type": validated_data["catalog_type"],
                     "created": result.created,
                     "updated": result.updated,
-                    "warnings": [
-                        {"row": warning.row_number, "message": warning.message} for warning in result.warnings
-                    ],
+                    "warnings": self.import_warnings(result.warnings),
                 }
             ).data,
-            status=status.HTTP_200_OK,
         )
 
     @extend_schema(

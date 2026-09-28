@@ -69,6 +69,11 @@ class Action:
     USERS_MANAGE = "users.manage"
     TEAMS_MANAGE = "teams.manage"
     INTEGRATIONS_MANAGE = "integrations.manage"
+    # Потоки обучения, заявки и оплаты — видимость по взаимодействию программы потока
+    TRAINING_READ = "training.read"
+    TRAINING_UPDATE = "training.update"
+    # Полные персональные данные обучающихся (паспорт, СНИЛС, адрес, диплом) — только администратор платформы
+    TRAINING_PERSONAL_DATA_READ = "training.personal_data.read"
     NOTIFICATIONS_USE = "notifications.use"
     MESSAGING_USE = "messaging.use"
     REALTIME_CONNECT = "realtime.connect"
@@ -117,6 +122,7 @@ _PROCESSES_WORK = frozenset(
     }
 )
 _REPORTS_WORK = frozenset({Action.REPORTS_READ, Action.REPORTS_EXPORT})
+_TRAINING_WORK = frozenset({Action.TRAINING_READ, Action.TRAINING_UPDATE})
 _CATALOG_WORK = frozenset(
     {Action.CATALOG_READ, Action.CATALOG_CREATE, Action.CATALOG_UPDATE, Action.CATALOG_DELETE}
 )
@@ -132,6 +138,7 @@ _OBSERVER_READ = frozenset(
         Action.REPORTS_READ,
         Action.REPORTS_EXPORT,
         Action.CATALOG_READ,
+        Action.TRAINING_READ,
     }
 )
 _BASE_WORK = (
@@ -141,6 +148,7 @@ _BASE_WORK = (
     | _PROCESSES_WORK
     | _REPORTS_WORK
     | _CATALOG_WORK
+    | _TRAINING_WORK
     | {Action.WORKFLOWS_READ}
 )
 
@@ -167,6 +175,7 @@ ROLE_ACTIONS: dict[str, frozenset[str]] = {
         Action.USERS_MANAGE,
         Action.TEAMS_MANAGE,
         Action.INTEGRATIONS_MANAGE,
+        Action.TRAINING_PERSONAL_DATA_READ,
     },
 }
 
@@ -192,6 +201,13 @@ READ_SCOPES: dict[str, dict[str, Scope]] = {
         SystemRole.HEAD: Scope.TEAM,
         SystemRole.PLATFORM_ADMIN: Scope.ALL,
     },
+    # Потоки обучения; заявки и оплаты видны вместе со своим потоком
+    "training": {
+        SystemRole.OBSERVER: Scope.ALL,
+        SystemRole.KAM: Scope.OWN,
+        SystemRole.HEAD: Scope.TEAM,
+        SystemRole.PLATFORM_ADMIN: Scope.ALL,
+    },
 }
 
 # Предметная функция раздела `(user, scope) -> QuerySet`; `scope=None` — раздел не виден.
@@ -200,6 +216,7 @@ VISIBILITY_RULES: dict[str, str] = {
     "interactions": "sova.interactions.services.visibility.interactions_in_scope",
     "contracts": "sova.interactions.services.visibility.contracts_in_scope",
     "licenses": "sova.interactions.services.visibility.licenses_in_scope",
+    "training": "sova.training.services.visibility.training_streams_in_scope",
 }
 
 

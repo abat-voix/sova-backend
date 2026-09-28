@@ -156,6 +156,16 @@ def phone_key(value: str) -> str:
     return digits
 
 
+def email_key(value: str) -> str:
+    """Ключ email для хранения и поиска: без пробелов по краям, в нижнем регистре."""
+    return (value or "").strip().lower()
+
+
+def snils_key(value: str) -> str:
+    """Ключ СНИЛС для поиска — только цифры."""
+    return re.sub(r"\D", "", value or "")
+
+
 def normalize_telegram(value: str) -> str:
     """
     Ник Telegram без @ и ссылки: @ivanov, t.me/ivanov, https://t.me/ivanov → ivanov; регистр сохраняется.

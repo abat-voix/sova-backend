@@ -18,6 +18,8 @@ class CatalogType(TextChoices):
     PRODUCT = "product", "Продукты"
     CONTACT_PERSON = "contact_person", "Ответственные от вуза"
     CONTRACT_REGISTRY = "contract_registry", "Реестр договоров"
+    # Файл «Пользователи» обучения: грузится через /api/training/learners/import/, здесь — только маппинг колонок
+    LEARNER = "learner", "Обучающиеся"
 
 
 class ContactChannel(TextChoices):

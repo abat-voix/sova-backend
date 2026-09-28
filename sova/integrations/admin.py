@@ -23,7 +23,8 @@ class IntegrationMessageAdmin(admin.ModelAdmin):
     search_fields = ("external_id", "correlation_id")
     readonly_fields = (
         "id", "created_at", "updated_at", "system", "direction", "event_type", "external_id",
-        "correlation_id", "payload_pretty", "status", "attempts", "next_retry_at", "last_error", "processed_at",
+        "correlation_id", "payload_pretty", "mapping", "result", "status", "attempts", "next_retry_at",
+        "last_error", "processed_at",
     )
     fields = readonly_fields
     actions = ("retry_messages",)
