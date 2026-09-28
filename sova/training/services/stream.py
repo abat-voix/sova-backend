@@ -1,12 +1,17 @@
 from django.db import transaction
+from django.db.models import QuerySet
 
 from sova.interactions.models import Contract, InteractionProgram
+from sova.training.enum import TrainingStreamStatus
 from sova.training.exceptions import TrainingError
 from sova.training.models import TrainingInstructor, TrainingStream, TrainingStreamInstructor
 
 
+CLOSED_STREAM_STATUSES = (TrainingStreamStatus.COMPLETED, TrainingStreamStatus.CANCELLED)
+
+
 class TrainingStreamService:
-    """Потоки обучения и назначение преподавателей — единая точка проверок для API, ActionFeature и admin."""
+    """Потоки обучения и назначение преподавателей — единая точка проверок для API и ActionFeature."""
 
     @transaction.atomic
     def create_training_stream(
@@ -48,9 +53,44 @@ class TrainingStreamService:
         if not has_signed_contract:
             raise TrainingError("contract_not_signed", "У взаимодействия нет подписанного договора.")
 
-    def assign_instructor(self, stream: TrainingStream, instructor: TrainingInstructor, user) -> TrainingStreamInstructor:
-        """Назначает преподавателя: он активен и работает в организации-контрагенте взаимодействия потока."""
-        interaction = stream.interaction_program.interaction
+    @staticmethod
+    def suitable_instructors(interaction_program: InteractionProgram, queryset: QuerySet | None = None) -> QuerySet:
+        """Кто может вести поток по программе: активные, из контрагента, программа есть у них."""
+        interaction = interaction_program.interaction
+        queryset = TrainingInstructor.objects.all() if queryset is None else queryset
+        return queryset.filter(
+            organization_id=interaction.organization_id,
+            b2c_client_id=interaction.b2c_client_id,
+            programs=interaction_program.program_id,
+            is_active=True,
+        )
+
+    def assignable_instructors(self, stream: TrainingStream, queryset: QuerySet | None = None) -> QuerySet:
+        """Кого ещё можно назначить на поток: подходящие по программе и не назначенные; на закрытый поток — никого."""
+        if stream.status in CLOSED_STREAM_STATUSES:
+            return TrainingInstructor.objects.none()
+        return self.suitable_instructors(stream.interaction_program, queryset).exclude(stream_links__stream=stream)
+
+    @staticmethod
+    def check_stream_open(stream: TrainingStream) -> None:
+        """Состав преподавателей завершённого или отменённого потока не меняют."""
+        if stream.status in CLOSED_STREAM_STATUSES:
+            raise TrainingError("stream_closed", "Поток завершён или отменён.")
+
+    def assign_instructor(
+        self,
+        stream: TrainingStream,
+        instructor: TrainingInstructor,
+        user,
+    ) -> TrainingStreamInstructor:
+        """
+        Назначает преподавателя на открытый поток.
+
+        Преподаватель активен, работает в организации-контрагенте взаимодействия потока и ведёт программу потока.
+        """
+        self.check_stream_open(stream)
+        interaction_program = stream.interaction_program
+        interaction = interaction_program.interaction
         if not instructor.is_active:
             raise TrainingError("instructor_inactive", "Преподаватель неактивен.")
         same_organization = (
@@ -62,6 +102,8 @@ class TrainingStreamService:
                 "instructor_counterparty_mismatch",
                 "Преподаватель работает не в организации-контрагенте взаимодействия.",
             )
+        if not instructor.programs.filter(pk=interaction_program.program_id).exists():
+            raise TrainingError("instructor_program_mismatch", "Преподаватель не ведёт программу потока.")
         if stream.instructor_links.filter(instructor=instructor).exists():
             raise TrainingError("instructor_already_assigned", "Преподаватель уже назначен на поток.")
         return TrainingStreamInstructor.objects.create(
@@ -70,9 +112,9 @@ class TrainingStreamService:
             assigned_by=user if getattr(user, "is_authenticated", False) else None,
         )
 
-    @staticmethod
-    def unassign_instructor(stream: TrainingStream, instructor: TrainingInstructor) -> None:
-        """Снимает преподавателя с потока."""
+    def unassign_instructor(self, stream: TrainingStream, instructor: TrainingInstructor) -> None:
+        """Снимает преподавателя с открытого потока."""
+        self.check_stream_open(stream)
         stream.instructor_links.filter(instructor=instructor).delete()
 
 

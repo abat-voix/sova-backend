@@ -42,11 +42,14 @@ class PersonalDataAdminMixin:
         return personal_data_access_service.can_read(request.user) and super().has_module_permission(request)
 
 
-class TrainingStreamInstructorInline(admin.TabularInline):
+class TrainingStreamInstructorInline(NoManualAddingMixin, admin.TabularInline):
+    """Назначения только для просмотра: назначают и снимают через API — там проверки `TrainingStreamService`."""
+
     model = TrainingStreamInstructor
     extra = 0
-    autocomplete_fields = ("instructor",)
-    readonly_fields = ("assigned_by",)
+    can_delete = False
+    fields = ("instructor", "assigned_by", "created_at")
+    readonly_fields = fields
 
 
 @admin.register(TrainingStream)

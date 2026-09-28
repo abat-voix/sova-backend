@@ -5,7 +5,12 @@ from accounts.models import SystemRole, UserRole
 from accounts.policy import Action, can
 from sova.core.tests.factories import UserFactory
 from sova.training.models import LearnerPersonalDataAccessLog
-from sova.training.tests.factories import LearnerFactory, LearnerPersonalDataFactory
+from sova.training.tests.factories import (
+    LearnerFactory,
+    LearnerPersonalDataFactory,
+    TrainingInstructorFactory,
+    TrainingStreamFactory,
+)
 
 
 def create_user(role: str | None = None, **kwargs):
@@ -79,3 +84,19 @@ class PaymentAdminRemovedTestCase(TestCase):
         """Оплата — только признак участника заявки, отдельной админки оплат нет."""
         with self.assertRaises(NoReverseMatch):
             reverse("admin:training_trainingpayment_changelist")
+
+
+class TrainingStreamAdminTestCase(TestCase):
+    def test_instructors_are_read_only(self) -> None:
+        """Назначения видны в карточке потока, но меняют их только через API — с проверками сервиса."""
+        stream = TrainingStreamFactory()
+        instructor = TrainingInstructorFactory(organization=stream.interaction_program.interaction.organization)
+        stream.instructors.add(instructor)
+        login(self.client, create_user(is_superuser=True, is_staff=True))
+
+        response = self.client.get(reverse("admin:training_trainingstream_change", args=(stream.pk,)))
+
+        self.assertContains(response, instructor.full_name)
+        formset = response.context["inline_admin_formsets"][0]
+        self.assertFalse(formset.has_add_permission)
+        self.assertFalse(formset.formset.can_delete)

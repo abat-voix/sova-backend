@@ -36,6 +36,12 @@ class TrainingInstructorFactory(factory.django.DjangoModelFactory):
     first_name = "Пётр"
     organization = factory.SubFactory(OrganizationFactory)
 
+    @factory.post_generation
+    def programs(self, create, extracted, **kwargs):
+        """`programs=[...]` — программы, которые ведёт преподаватель."""
+        if create and extracted:
+            self.programs.set(extracted)
+
 
 class TrainingInstructorQualificationFactory(factory.django.DjangoModelFactory):
     """Фабрика записи о подготовке преподавателя."""

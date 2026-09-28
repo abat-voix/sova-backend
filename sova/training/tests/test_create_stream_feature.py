@@ -27,8 +27,10 @@ class CreateTrainingStreamFeatureTestCase(APITestCase):
         self.program = InteractionProgramFactory(interaction=self.interaction)
         self.other_program = InteractionProgramFactory(interaction=self.interaction)
         InteractionProgramFactory(interaction=self.interaction, is_active=False)
-        self.instructor = TrainingInstructorFactory(organization=self.interaction.organization)
-        TrainingInstructorFactory(organization=OrganizationFactory())
+        self.instructor = TrainingInstructorFactory(
+            organization=self.interaction.organization, programs=[self.program.program]
+        )
+        TrainingInstructorFactory(organization=OrganizationFactory(), programs=[self.program.program])
         self.use_stage()
 
     def use_stage(self, **stage) -> None:
@@ -39,15 +41,17 @@ class CreateTrainingStreamFeatureTestCase(APITestCase):
         ActionFeatureFactory(action=self.action_instance.action, code="training.create")
         self.base_url = f"/api/processes/action-instances/{self.action_instance.pk}/features/training.create"
 
-    def test_initial_lists_active_programs_and_counterparty_instructors(self) -> None:
+    def test_initial_lists_active_programs_with_their_counterparty_instructors(self) -> None:
         response = self.client.get(f"{self.base_url}/initial/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        instructors = {
+            item["id"]: [instructor["id"] for instructor in item["instructors"]] for item in response.data["programs"]
+        }
         self.assertEqual(
-            {item["id"] for item in response.data["programs"]}, {str(self.program.pk), str(self.other_program.pk)}
+            instructors, {str(self.program.pk): [str(self.instructor.pk)], str(self.other_program.pk): []}
         )
         self.assertTrue(response.data["has_signed_contract"])
-        self.assertEqual([item["id"] for item in response.data["instructors"]], [str(self.instructor.pk)])
 
     def test_initial_on_program_stage_offers_only_its_program(self) -> None:
         self.use_stage(context_type=StageInstanceContextType.PROGRAM, context_id=self.program.pk)
@@ -111,4 +115,19 @@ class CreateTrainingStreamFeatureTestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(response.data["code"], "instructor_counterparty_mismatch")
+        self.assertFalse(TrainingStream.objects.exists())
+
+    def test_execute_rejects_instructor_of_another_program_atomically(self) -> None:
+        response = self.client.post(
+            f"{self.base_url}/execute/",
+            {
+                "interaction_program": str(self.other_program.pk),
+                "name": "1",
+                "instructors": [str(self.instructor.pk)],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "instructor_program_mismatch")
         self.assertFalse(TrainingStream.objects.exists())

@@ -6,7 +6,7 @@ from sova.catalog.tests.factories import ProgramFactory, OrganizationFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.services import responsible_service
 from sova.interactions.tests.factories import InteractionFactory, InteractionProgramFactory
-from sova.training.enum import TrainingApplicationStatus
+from sova.training.enum import TrainingApplicationStatus, TrainingStreamStatus
 from sova.training.models import (
     LearnerPersonalDataAccessLog,
     TrainingInstructor,
@@ -89,13 +89,13 @@ class StreamApiTestCase(TrainingApiTestCase):
         self.assertEqual(response.data["name"], "Новое")
 
     def test_assign_and_unassign_instructor(self) -> None:
-        instructor = TrainingInstructorFactory(organization=self.interaction.organization)
+        program = self.stream.interaction_program.program
+        instructor = TrainingInstructorFactory(organization=self.interaction.organization, programs=[program])
+        foreign_instructor = TrainingInstructorFactory(organization=OrganizationFactory(), programs=[program])
         url = f"{BASE}/streams/{self.stream.pk}/instructors/"
 
         assigned = self.client.post(url, {"instructor": str(instructor.pk)}, format="json")
-        foreign = self.client.post(
-            url, {"instructor": str(TrainingInstructorFactory(organization=OrganizationFactory()).pk)}, format="json"
-        )
+        foreign = self.client.post(url, {"instructor": str(foreign_instructor.pk)}, format="json")
         removed = self.client.delete(f"{url}{instructor.pk}/")
 
         self.assertEqual(assigned.status_code, status.HTTP_200_OK, msg=assigned.data)
@@ -103,6 +103,22 @@ class StreamApiTestCase(TrainingApiTestCase):
         self.assertEqual(foreign.data["code"], "instructor_counterparty_mismatch")
         self.assertEqual(removed.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(self.stream.instructors.exists())
+
+    def test_closed_stream_instructors_are_frozen(self) -> None:
+        program = self.stream.interaction_program.program
+        instructor = TrainingInstructorFactory(organization=self.interaction.organization, programs=[program])
+        candidate = TrainingInstructorFactory(organization=self.interaction.organization, programs=[program])
+        self.stream.instructors.add(instructor)
+        self.stream.status = TrainingStreamStatus.COMPLETED
+        self.stream.save()
+        url = f"{BASE}/streams/{self.stream.pk}/instructors/"
+
+        assigned = self.client.post(url, {"instructor": str(candidate.pk)}, format="json")
+        removed = self.client.delete(f"{url}{instructor.pk}/")
+
+        self.assertEqual((assigned.status_code, assigned.data["code"]), (status.HTTP_409_CONFLICT, "stream_closed"))
+        self.assertEqual((removed.status_code, removed.data["code"]), (status.HTTP_409_CONFLICT, "stream_closed"))
+        self.assertEqual(list(self.stream.instructors.all()), [instructor])
 
     def test_unassign_with_invalid_id_is_not_found(self) -> None:
         response = self.client.delete(f"{BASE}/streams/{self.stream.pk}/instructors/not-a-uuid/")
@@ -346,3 +362,16 @@ class InstructorApiTestCase(TrainingApiTestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_filter_assignable_to_stream(self) -> None:
+        program = self.stream.interaction_program.program
+        suitable = TrainingInstructorFactory(organization=self.interaction.organization, programs=[program])
+        TrainingInstructorFactory(organization=self.interaction.organization, programs=[ProgramFactory()])
+        TrainingInstructorFactory(organization=OrganizationFactory(), programs=[program])
+
+        response = self.client.get(f"{BASE}/instructors/", {"assignable_to_stream": str(self.stream.pk)})
+        unknown = self.client.get(f"{BASE}/instructors/", {"assignable_to_stream": str(self.interaction.pk)})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        self.assertEqual(self.ids(response), {str(suitable.pk)})
+        self.assertEqual(self.ids(unknown), set())

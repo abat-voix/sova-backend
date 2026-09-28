@@ -35,15 +35,6 @@ def _programs(context):
     )
 
 
-def _instructors(context):
-    """Активные преподаватели организации-контрагента взаимодействия."""
-    return TrainingInstructor.objects.filter(
-        organization=context.organization,
-        b2c_client=context.b2c_client,
-        is_active=True,
-    )
-
-
 class CreateTrainingStreamHandler:
     """
     Создаёт поток обучения по программе взаимодействия («Создать обучение»).
@@ -55,17 +46,22 @@ class CreateTrainingStreamHandler:
 
     def initial(self, *, context, settings: dict) -> dict:
         return {
+            # Преподаватели — по каждой программе: назначить можно только тех, кто её ведёт
             "programs": [
-                {"id": str(item.pk), "name": item.program.name, "direction": item.program.direction.name}
-                for item in _programs(context).select_related("program__direction")
+                {
+                    "id": str(item.pk),
+                    "name": item.program.name,
+                    "direction": item.program.direction.name,
+                    "instructors": [
+                        {"id": str(instructor.pk), "full_name": instructor.full_name, "position": instructor.position}
+                        for instructor in training_stream_service.suitable_instructors(item)
+                    ],
+                }
+                for item in _programs(context).select_related("program__direction", "interaction")
             ],
             "has_signed_contract": Contract.objects.filter(
                 interaction=context.interaction, signed_at__isnull=False
             ).exists(),
-            "instructors": [
-                {"id": str(item.pk), "full_name": item.full_name, "position": item.position}
-                for item in _instructors(context)
-            ],
             "stream": {"name": "", "starts_at": None, "ends_at": None},
         }
 
