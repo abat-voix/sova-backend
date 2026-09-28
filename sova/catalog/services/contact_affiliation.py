@@ -9,19 +9,19 @@ from sova.catalog.models import (
     B2CClientContact,
     ContactPerson,
     Product,
-    University,
-    UniversityContact,
+    Organization,
+    OrganizationContact,
     Vendor,
     VendorContact,
 )
 from sova.catalog.models.contact_affiliation import AbstractContactAffiliation
 
-Organization = University | B2CClient | Vendor
-Affiliation = UniversityContact | B2CClientContact | VendorContact
+ContactOwner = Organization | B2CClient | Vendor
+Affiliation = OrganizationContact | B2CClientContact | VendorContact
 
 # Тип организации → (модель связи, FK связи на организацию, related_name связей у ContactPerson).
 _ADAPTERS: dict[type, tuple[type[AbstractContactAffiliation], str, str]] = {
-    University: (UniversityContact, "university", "university_links"),
+    Organization: (OrganizationContact, "organization", "organization_links"),
     B2CClient: (B2CClientContact, "b2c_client", "b2c_client_links"),
     Vendor: (VendorContact, "vendor", "vendor_links"),
 }
@@ -31,19 +31,19 @@ class ContactAffiliationService:
     """
     Связи человека с организациями — единственное место, которое знает, какая модель связи у какой организации.
 
-    Вызывающий код передаёт саму организацию (`University` / `B2CClient` / `Vendor`) и не разбирает типы.
+    Вызывающий код передаёт саму организацию (`Organization` / `B2CClient` / `Vendor`) и не разбирает типы.
     Новый тип организации — новая модель связи и строка в `_ADAPTERS`, без изменений у вызывающих.
     """
 
-    def type_code(self, organization: Organization) -> str:
-        """Код типа организации в API: university, b2c_client, vendor."""
+    def type_code(self, organization: ContactOwner) -> str:
+        """Код типа организации в API: organization, b2c_client, vendor."""
         return self._adapter(organization=organization)[1]
 
-    def model_for(self, organization: Organization) -> type[AbstractContactAffiliation]:
+    def model_for(self, organization: ContactOwner) -> type[AbstractContactAffiliation]:
         """Модель связи для организации."""
         return self._adapter(organization=organization)[0]
 
-    def organization_of(self, affiliation: Affiliation) -> Organization:
+    def organization_of(self, affiliation: Affiliation) -> ContactOwner:
         """Организация, с которой связан человек."""
         return getattr(affiliation, self._field_of(affiliation=affiliation))
 
@@ -65,12 +65,12 @@ class ContactAffiliationService:
         lookups = [f"{related_name}__{field}" for _model, field, related_name in _ADAPTERS.values()]
         return queryset.prefetch_related(*lookups, "vendor_links__products")
 
-    def find(self, contact: ContactPerson, organization: Organization) -> Affiliation | None:
+    def find(self, contact: ContactPerson, organization: ContactOwner) -> Affiliation | None:
         """Связь человека с организацией; не связан — None."""
         model, field, _related_name = self._adapter(organization=organization)
         return model.objects.filter(contact=contact, **{field: organization}).first()
 
-    def get_or_create(self, contact: ContactPerson, organization: Organization) -> tuple[Affiliation, bool]:
+    def get_or_create(self, contact: ContactPerson, organization: ContactOwner) -> tuple[Affiliation, bool]:
         """Связь человека с организацией; True — создана."""
         model, field, _related_name = self._adapter(organization=organization)
         return model.objects.get_or_create(contact=contact, **{field: organization})
@@ -78,7 +78,7 @@ class ContactAffiliationService:
     @transaction.atomic
     def create_contact(
         self,
-        organization: Organization,
+        organization: ContactOwner,
         full_name: str,
         email: str = "",
         phone: str = "",
@@ -109,7 +109,7 @@ class ContactAffiliationService:
         """
         Человек ушёл из организации: связь удаляется вместе с должностью, способами связи и продуктами.
 
-        Для вуза и B2C-клиента его привязки к активным взаимодействиям организации закрываются, действующие КАМы
+        Для организации и B2C-клиента его привязки к активным взаимодействиям организации закрываются, действующие КАМы
         получают уведомление. Возвращает закрытые привязки `InteractionContact`. Вендор не бывает контрагентом
         взаимодействия — связь с ним просто удаляется.
         """
@@ -166,21 +166,21 @@ class ContactAffiliationService:
             getattr(contact, related_name).all().delete()
         contact.delete()
 
-    def contacts_for(self, organization: Organization) -> QuerySet[ContactPerson]:
+    def contacts_for(self, organization: ContactOwner) -> QuerySet[ContactPerson]:
         """Люди, связанные с организацией."""
         _model, field, related_name = self._adapter(organization=organization)
         return ContactPerson.objects.filter(**{f"{related_name}__{field}": organization}).distinct()
 
-    def position_for(self, contact: ContactPerson, organization: Organization | None) -> str:
+    def position_for(self, contact: ContactPerson, organization: ContactOwner | None) -> str:
         """Должность человека в организации; не связан — пустая строка."""
         if organization is None:
             return ""
         affiliation = self.find(contact=contact, organization=organization)
         return affiliation.position if affiliation is not None else ""
 
-    def interaction_counterparty(self, interaction) -> University | B2CClient:
-        """Контрагент взаимодействия — вуз или B2C-клиент."""
-        return interaction.university or interaction.b2c_client
+    def interaction_counterparty(self, interaction) -> Organization | B2CClient:
+        """Контрагент взаимодействия — организация или B2C-клиент."""
+        return interaction.organization or interaction.b2c_client
 
     def annotate_interaction_position(self, queryset: QuerySet) -> QuerySet:
         """
@@ -200,7 +200,7 @@ class ContactAffiliationService:
         ]
         return queryset.annotate(position=Coalesce(*positions, Value("")))
 
-    def _adapter(self, organization: Organization) -> tuple[type[AbstractContactAffiliation], str, str]:
+    def _adapter(self, organization: ContactOwner) -> tuple[type[AbstractContactAffiliation], str, str]:
         """Модель связи, FK на организацию и related_name у ContactPerson для типа организации."""
         try:
             return _ADAPTERS[type(organization)]

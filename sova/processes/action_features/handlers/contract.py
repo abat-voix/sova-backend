@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from sova.interactions.api.serializers.contract import WriteContractSerializer
 from sova.catalog.services.contact_affiliation import contact_affiliation_service
+from sova.catalog.services.organization_address import organization_address_service
 from sova.interactions.enum import DocumentTemplateKind
 from sova.interactions.models import (
     Contract,
@@ -72,15 +73,17 @@ def _contract_templates():
 
 
 def _counterparty(context) -> dict:
-    if context.university:
-        university = context.university
+    if context.organization:
+        organization = context.organization
+        # В договор — юридический адрес; если его нет, фактический
+        address = organization_address_service.legal(organization) or organization_address_service.actual(organization)
         return {
-            "name": university.name,
-            "short_name": university.short_name,
-            "inn": university.inn or "",
-            "address": "",
-            "email": university.email,
-            "phone": university.phone,
+            "name": organization.name,
+            "short_name": organization.short_name,
+            "inn": organization.inn or "",
+            "address": address.full_text if address else "",
+            "email": organization.email,
+            "phone": organization.phone,
         }
     client = context.b2c_client
     return {
@@ -185,7 +188,7 @@ class CreateContractHandler:
 
     def initial(self, *, context, settings: dict) -> dict:
         """Черновик формы: шаблоны и всё, что известно о взаимодействии."""
-        if not context.university and not context.b2c_client:
+        if not context.organization and not context.b2c_client:
             raise ActionFeatureError("invalid_action_context")
         contacts = contact_affiliation_service.annotate_interaction_position(
             InteractionContact.objects
@@ -206,7 +209,7 @@ class CreateContractHandler:
             "document": {
                 "contract_number": "",
                 "contract_date": None,
-                "city": getattr(context.university, "city", "") or "",
+                "city": organization_address_service.city(context.organization) if context.organization else "",
                 "counterparty": _counterparty(context),
                 "signatory": {"full_name": "", "position": "", "basis": ""},
                 # По умолчанию в договор идёт весь состав взаимодействия.
@@ -217,7 +220,7 @@ class CreateContractHandler:
         }
 
     def execute(self, *, context, data: dict, settings: dict) -> ActionFeatureResult:
-        if not context.university and not context.b2c_client:
+        if not context.organization and not context.b2c_client:
             raise ActionFeatureError("invalid_action_context")
         serializer = CreateContractPayloadSerializer(data=data)
         serializer.is_valid(raise_exception=True)

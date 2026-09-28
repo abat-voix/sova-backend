@@ -2,7 +2,7 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
-from sova.catalog.tests.factories import UniversityFactory
+from sova.catalog.tests.factories import OrganizationFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.models import ContractFile, Responsible
 from sova.interactions.tests.factories import ContractFactory, InteractionFactory
@@ -23,7 +23,7 @@ class HeadlessContractVisibilityApiTestCase(APITestCase):
 
     @staticmethod
     def create_contract(*managers):
-        contract = ContractFactory(interaction=None, university=UniversityFactory())
+        contract = ContractFactory(interaction=None, organization=OrganizationFactory())
         for manager in managers:
             Responsible.objects.create(contract=contract, manager=manager)
         return contract
@@ -93,7 +93,7 @@ class HeadlessContractVisibilityApiTestCase(APITestCase):
         """Привязка headless-договора только через attach-to-new-interaction: PATCH interaction отклоняется."""
         kam = self.create_user(SystemRole.KAM)
         contract = self.create_contract(kam)
-        interaction = InteractionFactory(university=contract.university)
+        interaction = InteractionFactory(organization=contract.organization)
         self.client.force_authenticate(user=kam)
 
         response = self.client.patch(

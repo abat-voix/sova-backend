@@ -55,11 +55,11 @@ class ConversationSerializer(serializers.ModelSerializer):
         return UserShortSerializer(participant.user).data if participant else None
 
     def get_title(self, instance: Conversation) -> str | None:
-        """Название чата Взаимодействия — по его вузу или B2C-клиенту; для остальных типов отсутствует."""
+        """Название чата Взаимодействия — по его организации или B2C-клиенту; для остальных типов отсутствует."""
         if instance.kind != ConversationKind.INTERACTION or instance.interaction_id is None:
             return None
         interaction = instance.interaction
-        return str(interaction.university or interaction.b2c_client)
+        return str(interaction.organization or interaction.b2c_client)
 
     def get_participants(self, instance: Conversation) -> list[dict] | None:
         """Состав чата Взаимодействия; для остальных типов беседы отсутствует."""

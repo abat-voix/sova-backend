@@ -27,8 +27,8 @@ def build_summary(rows: Iterable[ReportRow]) -> dict:
     rows_count = 0
     by_responsible = defaultdict(set)
     responsible_names = {}
-    by_university = defaultdict(set)
-    university_names = {}
+    by_organization = defaultdict(set)
+    organization_names = {}
     by_process_status = defaultdict(set)
     process_labels = {}
     by_stage = defaultdict(set)
@@ -48,8 +48,8 @@ def build_summary(rows: Iterable[ReportRow]) -> dict:
         else:
             by_responsible[None].add(row.interaction_id)
             responsible_names[None] = NO_RESPONSIBLE
-        by_university[row.university_id].add(row.interaction_id)
-        university_names[row.university_id] = row.university
+        by_organization[row.organization_id].add(row.interaction_id)
+        organization_names[row.organization_id] = row.organization
 
         if row.process_statuses:
             for item in row.process_statuses:
@@ -78,7 +78,7 @@ def build_summary(rows: Iterable[ReportRow]) -> dict:
         "programs_count": len(programs),
         "products_count": len(products),
         "by_responsible": distribution(by_responsible, "id", responsible_names.__getitem__),
-        "by_university": distribution(by_university, "id", university_names.__getitem__),
+        "by_organization": distribution(by_organization, "id", organization_names.__getitem__),
         "by_process_status": distribution(by_process_status, "status", process_labels.__getitem__),
         "by_active_stage": distribution(
             by_stage, "stage", lambda key: NO_ACTIVE_STAGE if key is None else key

@@ -6,7 +6,7 @@ from django.core.management import call_command
 from django.db import IntegrityError, connection, transaction
 from django.test import TestCase, override_settings
 
-from sova.catalog.tests.factories import B2CClientFactory, UniversityFactory
+from sova.catalog.tests.factories import B2CClientFactory, OrganizationFactory
 from sova.core.crypto import blind_index, decrypt
 from sova.training.models import Learner, LearnerPersonalData, TrainingInstructor
 from sova.training.tests.factories import (
@@ -45,11 +45,11 @@ class TrainingStreamModelTestCase(TestCase):
 
 class TrainingInstructorModelTestCase(TestCase):
     def test_exactly_one_organization(self) -> None:
-        TrainingInstructorFactory(university=None, b2c_client=B2CClientFactory())
+        TrainingInstructorFactory(organization=None, b2c_client=B2CClientFactory())
         with transaction.atomic(), self.assertRaises(IntegrityError):
-            TrainingInstructorFactory(university=None, b2c_client=None)
+            TrainingInstructorFactory(organization=None, b2c_client=None)
         with self.assertRaises(IntegrityError):
-            TrainingInstructorFactory(university=UniversityFactory(), b2c_client=B2CClientFactory())
+            TrainingInstructorFactory(organization=OrganizationFactory(), b2c_client=B2CClientFactory())
 
     def test_lms_id_unique_only_when_filled(self) -> None:
         TrainingInstructorFactory()

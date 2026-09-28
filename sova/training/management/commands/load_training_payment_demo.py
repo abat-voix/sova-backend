@@ -5,7 +5,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from sova.catalog.models import Direction, Program, University
+from sova.catalog.models import Direction, Program, Organization
 from sova.core.crypto import blind_index
 from sova.core.text import email_key
 from sova.integrations.api.serializers import IntegrationMappingSerializer
@@ -77,9 +77,9 @@ class Command(BaseCommand):
 
     @staticmethod
     def _interaction() -> Interaction:
-        university, _ = University.objects.get_or_create(name="Демо-вуз: оплаты обучения")
-        interaction = Interaction.objects.filter(university=university).first()
-        return interaction or Interaction.objects.create(university=university)
+        organization, _ = Organization.objects.get_or_create(name="Демо-вуз: оплаты обучения")
+        interaction = Interaction.objects.filter(organization=organization).first()
+        return interaction or Interaction.objects.create(organization=organization)
 
     @staticmethod
     def _stream(interaction: Interaction, number: str, course: str) -> TrainingStream:

@@ -2,7 +2,7 @@ import datetime
 
 from django.test import TestCase
 
-from sova.catalog.tests.factories import B2CClientFactory, UniversityFactory
+from sova.catalog.tests.factories import B2CClientFactory, OrganizationFactory
 from sova.interactions.tests.factories import ContractFactory, InteractionFactory, InteractionProgramFactory
 from sova.training.exceptions import TrainingError
 from sova.training.services.stream import training_stream_service
@@ -19,7 +19,7 @@ def signed_program(**interaction_kwargs):
 class CreateTrainingStreamTestCase(TestCase):
     def test_creates_stream_with_instructors(self) -> None:
         program = signed_program()
-        instructor = TrainingInstructorFactory(university=program.interaction.university)
+        instructor = TrainingInstructorFactory(organization=program.interaction.organization)
 
         stream = training_stream_service.create_training_stream(
             interaction_program=program,
@@ -56,8 +56,8 @@ class CreateTrainingStreamTestCase(TestCase):
         self.assertEqual(error.exception.error_code, "program_inactive")
 
     def test_b2c_interaction_allowed(self) -> None:
-        program = signed_program(university=None, b2c_client=B2CClientFactory())
-        instructor = TrainingInstructorFactory(university=None, b2c_client=program.interaction.b2c_client)
+        program = signed_program(organization=None, b2c_client=B2CClientFactory())
+        instructor = TrainingInstructorFactory(organization=None, b2c_client=program.interaction.b2c_client)
 
         stream = training_stream_service.create_training_stream(
             interaction_program=program, name="1", instructors=[instructor], user=None
@@ -69,17 +69,17 @@ class CreateTrainingStreamTestCase(TestCase):
 class AssignInstructorTestCase(TestCase):
     def setUp(self) -> None:
         self.stream = TrainingStreamFactory()
-        self.university = self.stream.interaction_program.interaction.university
+        self.organization = self.stream.interaction_program.interaction.organization
 
     def test_other_organization_rejected(self) -> None:
         with self.assertRaises(TrainingError) as error:
             training_stream_service.assign_instructor(
-                stream=self.stream, instructor=TrainingInstructorFactory(university=UniversityFactory()), user=None
+                stream=self.stream, instructor=TrainingInstructorFactory(organization=OrganizationFactory()), user=None
             )
         self.assertEqual(error.exception.error_code, "instructor_counterparty_mismatch")
 
     def test_repeat_assignment_rejected(self) -> None:
-        instructor = TrainingInstructorFactory(university=self.university)
+        instructor = TrainingInstructorFactory(organization=self.organization)
         training_stream_service.assign_instructor(stream=self.stream, instructor=instructor, user=None)
 
         with self.assertRaises(TrainingError) as error:
@@ -87,14 +87,14 @@ class AssignInstructorTestCase(TestCase):
         self.assertEqual(error.exception.error_code, "instructor_already_assigned")
 
     def test_inactive_instructor_rejected(self) -> None:
-        instructor = TrainingInstructorFactory(university=self.university, is_active=False)
+        instructor = TrainingInstructorFactory(organization=self.organization, is_active=False)
 
         with self.assertRaises(TrainingError) as error:
             training_stream_service.assign_instructor(stream=self.stream, instructor=instructor, user=None)
         self.assertEqual(error.exception.error_code, "instructor_inactive")
 
     def test_unassign(self) -> None:
-        instructor = TrainingInstructorFactory(university=self.university)
+        instructor = TrainingInstructorFactory(organization=self.organization)
         training_stream_service.assign_instructor(stream=self.stream, instructor=instructor, user=None)
 
         training_stream_service.unassign_instructor(stream=self.stream, instructor=instructor)

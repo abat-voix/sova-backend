@@ -182,7 +182,7 @@ class ResponsibleService:
         """Уведомляет нового КАМа; назначившему самого себя не отправляется — его отсекает actor."""
         text = (
             f"{manager.get_full_name()}({manager.email}), Вас назначили КАМом — "
-            f"{interaction.university or interaction.b2c_client}"
+            f"{interaction.organization or interaction.b2c_client}"
         )
         event_notification_service.notify(
             notify_type=NotifyType.KAM_ASSIGNED,

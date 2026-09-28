@@ -9,7 +9,7 @@ from sova.catalog.tests.factories import (
     DirectionFactory,
     ProductFactory,
     ProgramFactory,
-    UniversityFactory,
+    OrganizationFactory,
 )
 from sova.core.tests.factories import UserFactory
 from sova.interactions.tests.factories import (
@@ -35,9 +35,9 @@ def enroll(stream, learner=None, is_paid=True, application=None):
     )
 
 
-def stream_for(university=None, b2c_client=None, program=None):
+def stream_for(organization=None, b2c_client=None, program=None):
     """Поток по программе взаимодействия с контрагентом."""
-    interaction = InteractionFactory(university=university, b2c_client=b2c_client)
+    interaction = InteractionFactory(organization=organization, b2c_client=b2c_client)
     interaction_program = InteractionProgramFactory(interaction=interaction, program=program or ProgramFactory())
     return TrainingStreamFactory(interaction_program=interaction_program)
 
@@ -67,25 +67,25 @@ class RankingApiTestCase(APITestCase):
         self.assertEqual(response.status_code, 200, response.data)
         return {item["id"]: item["rank"] for item in response.json()["results"]}
 
-    def test_universities_ranked_by_enrolled_people(self) -> None:
-        first, second, tied, unranked = (UniversityFactory() for _ in range(4))
-        first_stream = stream_for(university=first)
+    def test_organizations_ranked_by_enrolled_people(self) -> None:
+        first, second, tied, unranked = (OrganizationFactory() for _ in range(4))
+        first_stream = stream_for(organization=first)
         learner = LearnerFactory()
         enroll(first_stream, learner=learner)
         enroll(first_stream)
         # Тот же человек на другом потоке того же вуза считается один раз
-        enroll(stream_for(university=first), learner=learner)
-        enroll(stream_for(university=second))
-        enroll(stream_for(university=tied))
+        enroll(stream_for(organization=first), learner=learner)
+        enroll(stream_for(organization=second))
+        enroll(stream_for(organization=tied))
         # Не оплатили или заявка отменена — не зачислены
-        enroll(stream_for(university=unranked), is_paid=False)
+        enroll(stream_for(organization=unranked), is_paid=False)
         cancelled = TrainingApplicationFactory(
-            stream=stream_for(university=unranked),
+            stream=stream_for(organization=unranked),
             status=TrainingApplicationStatus.CANCELLED,
         )
         enroll(cancelled.stream, application=cancelled)
 
-        ranks = self.ranks("catalog:university-list")
+        ranks = self.ranks("catalog:organization-list")
 
         self.assertEqual(ranks[str(first.id)], 1)
         self.assertEqual(ranks[str(second.id)], 2)
@@ -93,24 +93,24 @@ class RankingApiTestCase(APITestCase):
         self.assertIsNone(ranks[str(unranked.id)])
 
     def test_rank_does_not_depend_on_list_filters(self) -> None:
-        leader, runner_up = UniversityFactory(), UniversityFactory(name="Второй вуз")
-        enroll(stream_for(university=leader))
-        enroll(stream_for(university=leader))
-        enroll(stream_for(university=runner_up))
+        leader, runner_up = OrganizationFactory(), OrganizationFactory(name="Второй вуз")
+        enroll(stream_for(organization=leader))
+        enroll(stream_for(organization=leader))
+        enroll(stream_for(organization=runner_up))
 
-        ranks = self.ranks("catalog:university-list", {"search": "Второй вуз"})
+        ranks = self.ranks("catalog:organization-list", {"search": "Второй вуз"})
 
         self.assertEqual(ranks, {str(runner_up.id): 2})
 
     def test_filters_and_ordering_by_rank(self) -> None:
-        leader, runner_up, unranked = UniversityFactory(), UniversityFactory(), UniversityFactory()
-        enroll(stream_for(university=leader))
-        enroll(stream_for(university=leader))
-        enroll(stream_for(university=runner_up))
+        leader, runner_up, unranked = OrganizationFactory(), OrganizationFactory(), OrganizationFactory()
+        enroll(stream_for(organization=leader))
+        enroll(stream_for(organization=leader))
+        enroll(stream_for(organization=runner_up))
 
-        top = self.ranks("catalog:university-list", {"rank_max": 1})
-        ranked = self.ranks("catalog:university-list", {"has_rank": "true", "ordering": "rank"})
-        without_rank = self.ranks("catalog:university-list", {"has_rank": "false"})
+        top = self.ranks("catalog:organization-list", {"rank_max": 1})
+        ranked = self.ranks("catalog:organization-list", {"has_rank": "true", "ordering": "rank"})
+        without_rank = self.ranks("catalog:organization-list", {"has_rank": "false"})
 
         self.assertEqual(top, {str(leader.id): 1})
         self.assertEqual(list(ranked), [str(leader.id), str(runner_up.id)])
@@ -131,10 +131,10 @@ class RankingApiTestCase(APITestCase):
         leading_program = ProgramFactory(direction=leading_direction)
         other_program = ProgramFactory(direction=leading_direction)
         third_program = ProgramFactory(direction=other_direction)
-        enroll(stream_for(university=UniversityFactory(), program=leading_program))
-        enroll(stream_for(university=UniversityFactory(), program=leading_program))
-        enroll(stream_for(university=UniversityFactory(), program=other_program))
-        enroll(stream_for(university=UniversityFactory(), program=third_program))
+        enroll(stream_for(organization=OrganizationFactory(), program=leading_program))
+        enroll(stream_for(organization=OrganizationFactory(), program=leading_program))
+        enroll(stream_for(organization=OrganizationFactory(), program=other_program))
+        enroll(stream_for(organization=OrganizationFactory(), program=third_program))
 
         programs = self.ranks("catalog:program-list")
         directions = self.ranks("catalog:direction-list")
@@ -156,10 +156,10 @@ class RankingApiTestCase(APITestCase):
         self.assertEqual(ranks, {str(leader.id): 1, str(runner_up.id): 2, str(inactive.id): None})
 
     def test_retrieve_and_create_return_rank(self) -> None:
-        university = UniversityFactory()
-        enroll(stream_for(university=university))
+        organization = OrganizationFactory()
+        enroll(stream_for(organization=organization))
 
-        retrieved = self.client.get(reverse("catalog:university-detail", args=(university.id,)))
+        retrieved = self.client.get(reverse("catalog:organization-detail", args=(organization.id,)))
         created = self.client.post(reverse("catalog:direction-list"), {"name": "Новое направление"}, format="json")
 
         self.assertEqual(retrieved.json()["rank"], 1)

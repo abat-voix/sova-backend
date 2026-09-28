@@ -1,5 +1,5 @@
 from sova.catalog.exceptions import CatalogImportError
-from sova.catalog.models import Direction, Product, Program, University, Vendor
+from sova.catalog.models import Direction, Product, Program, Organization, Vendor
 from sova.catalog.services.import_file import import_file_service
 
 
@@ -7,23 +7,23 @@ class CatalogLookupService:
     """
     Поиск записей справочников по значению ячейки файла импорта.
 
-    Вуз, вендор и направление ищутся сначала по external_code, затем по name; программа и продукт —
+    Организация, вендор и направление ищутся сначала по external_code, затем по name; программа и продукт —
     по name. Сравнение без учёта регистра — как у ограничений уникальности моделей. Не найденное значение — `CatalogImportError` (номер строки добавляет
     `ImportFileService.process_rows`).
     """
 
-    def find_university(self, raw_value) -> University:
-        """Обязательный вуз."""
+    def find_organization(self, raw_value) -> Organization:
+        """Обязательная организация."""
         value = import_file_service.to_text(raw_value)
         if not value:
-            raise CatalogImportError("поле university обязательно")
-        university = (
-            University.objects.filter(external_code__iexact=value).first()
-            or University.objects.filter(name__iexact=value).first()
+            raise CatalogImportError("поле organization обязательно")
+        organization = (
+            Organization.objects.filter(external_code__iexact=value).first()
+            or Organization.objects.filter(name__iexact=value).first()
         )
-        if university is None:
-            raise CatalogImportError(f"вуз не найден: {value}")
-        return university
+        if organization is None:
+            raise CatalogImportError(f"организация не найдена: {value}")
+        return organization
 
     def find_vendor(self, raw_value) -> Vendor | None:
         """Необязательный вендор: пустая ячейка — None."""

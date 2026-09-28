@@ -8,7 +8,7 @@ class ContactPerson(NormalizedTextFieldsMixin, TimeStampedModel):
     """
     Контактное лицо — человек, без привязки к организации.
 
-    С организациями его связывают `UniversityContact` / `B2CClientContact` / `VendorContact`: должность и способы
+    С организациями его связывают `OrganizationContact` / `B2CClientContact` / `VendorContact`: должность и способы
     связи принадлежат связи, а один человек может быть связан с несколькими организациями. ФИО не уникально —
     тёзки считаются разными людьми, пока пользователь явно не свяжет их или не сольёт.
     """

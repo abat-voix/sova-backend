@@ -65,8 +65,8 @@ class ReportRow:
     """Строка отчёта: идентификаторы, связи и отображаемые значения."""
 
     interaction_id: uuid.UUID
-    university_id: uuid.UUID | None
-    university: str
+    organization_id: uuid.UUID | None
+    organization: str
     created_at: datetime.datetime
     updated_at: datetime.datetime
     # Действующие КАМы взаимодействия по алфавиту: id и имена в одном порядке
@@ -109,7 +109,7 @@ class ReportRow:
         """JSON-представление: все идентификаторы плюс выбранные колонки."""
         data = {
             "interaction_id": str(self.interaction_id),
-            "university_id": _str_or_none(self.university_id),
+            "organization_id": _str_or_none(self.organization_id),
             "direction_id": _str_or_none(self.direction_id),
             "interaction_direction_id": _str_or_none(self.interaction_direction_id),
             "program_id": _str_or_none(self.program_id),
@@ -153,7 +153,7 @@ class ReportDataset:
         return self.spec.selected_columns
 
     def interactions(self) -> QuerySet[Interaction]:
-        """Базовая выборка: только видимые пользователю взаимодействия с вузами."""
+        """Базовая выборка: только видимые пользователю взаимодействия с организациями."""
         return filter_interactions(visible_interactions(self.user), self.spec)
 
     def iter_rows(self) -> Iterator[ReportRow]:
@@ -183,13 +183,13 @@ def filter_interactions(queryset: QuerySet[Interaction], spec: ReportSpec) -> Qu
     Фильтры по направлению/программе/продукту здесь только отсекают взаимодействия;
     строки внутри взаимодействия ограничивает `_row_matches`.
     """
-    queryset = queryset.filter(university__isnull=False)
+    queryset = queryset.filter(organization__isnull=False)
     if spec.date_from:
         queryset = queryset.filter(created_at__date__gte=spec.date_from)
     if spec.date_to:
         queryset = queryset.filter(created_at__date__lte=spec.date_to)
-    if spec.universities:
-        queryset = queryset.filter(university_id__in=spec.universities)
+    if spec.organizations:
+        queryset = queryset.filter(organization_id__in=spec.organizations)
     if spec.responsibles:
         queryset = queryset.filter(
             Exists(
@@ -238,8 +238,8 @@ _RESPONSIBLE_ORDER = ("manager__last_name", "manager__first_name", "manager_id")
 def _ordering(ordering: str) -> tuple:
     if ordering == ReportOrdering.CREATED_AT:
         return ("created_at", "pk")
-    if ordering == ReportOrdering.UNIVERSITY:
-        return ("university__name", "created_at", "pk")
+    if ordering == ReportOrdering.ORGANIZATION:
+        return ("organization__name", "created_at", "pk")
     if ordering == ReportOrdering.RESPONSIBLE:
         # По первому по алфавиту из действующих КАМов; взаимодействия без ответственного — в конце
         current = Responsible.objects.filter(interaction=OuterRef("pk"), unassigned_at__isnull=True).order_by(
@@ -273,7 +273,7 @@ def _build_rows(ids: list, spec: ReportSpec) -> Iterator[ReportRow]:
     """Строит строки для пачки взаимодействий фиксированным числом запросов."""
     interactions = {
         interaction.pk: interaction
-        for interaction in Interaction.objects.filter(pk__in=ids).select_related("university")
+        for interaction in Interaction.objects.filter(pk__in=ids).select_related("organization")
     }
 
     responsibles = defaultdict(list)
@@ -349,8 +349,8 @@ def _build_rows(ids: list, spec: ReportSpec) -> Iterator[ReportRow]:
         def new_row() -> ReportRow:
             return ReportRow(
                 interaction_id=interaction.pk,
-                university_id=interaction.university_id,
-                university=interaction.university.name if interaction.university else "",
+                organization_id=interaction.organization_id,
+                organization=interaction.organization.name if interaction.organization else "",
                 created_at=interaction.created_at,
                 updated_at=interaction.updated_at,
                 responsible_ids=[manager.pk for manager in managers],

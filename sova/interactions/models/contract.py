@@ -15,7 +15,7 @@ class Contract(NormalizedTextFieldsMixin, TimeStampedModel):
     (5, опциональная корректировка) → signed_at (6, подписан).
 
     Может существовать без `Interaction` ("безголовый" договор, созданный импортом реестра
-    договоров) — тогда `university`/`b2c_client` хранят контрагента напрямую. После привязки к `Interaction` оба поля остаются заполненными как
+    договоров) — тогда `organization`/`b2c_client` хранят контрагента напрямую. После привязки к `Interaction` оба поля остаются заполненными как
     исторический снимок и должны совпадать со стороной взаимодействия (`clean()`).
 
     `file` — текущий файл договора; при повторной загрузке ссылка заменяется, но прежний
@@ -74,13 +74,13 @@ class Contract(NormalizedTextFieldsMixin, TimeStampedModel):
         blank=True,
         verbose_name="Взаимодействие",
     )
-    university = models.ForeignKey(
-        to="catalog.University",
+    organization = models.ForeignKey(
+        to="catalog.Organization",
         on_delete=models.PROTECT,
         related_name="contracts",
         null=True,
         blank=True,
-        verbose_name="Вуз",
+        verbose_name="Организация",
     )
     b2c_client = models.ForeignKey(
         to="catalog.B2CClient",
@@ -100,8 +100,8 @@ class Contract(NormalizedTextFieldsMixin, TimeStampedModel):
         constraints = [
             models.CheckConstraint(
                 check=(
-                    Q(university__isnull=False, b2c_client__isnull=True)
-                    | Q(university__isnull=True, b2c_client__isnull=False)
+                    Q(organization__isnull=False, b2c_client__isnull=True)
+                    | Q(organization__isnull=True, b2c_client__isnull=False)
                 ),
                 name="contract_exactly_one_counterparty",
             ),
@@ -111,7 +111,7 @@ class Contract(NormalizedTextFieldsMixin, TimeStampedModel):
         if self.interaction_id is None:
             return
         if (
-            self.university_id != self.interaction.university_id
+            self.organization_id != self.interaction.organization_id
             or self.b2c_client_id != self.interaction.b2c_client_id
         ):
             raise ValidationError(
@@ -121,7 +121,7 @@ class Contract(NormalizedTextFieldsMixin, TimeStampedModel):
     def save(self, *args, **kwargs):
         # Договор, привязанный к Interaction, хранит снимок его контрагента.
         if self.interaction_id is not None:
-            self.university_id = self.interaction.university_id
+            self.organization_id = self.interaction.organization_id
             self.b2c_client_id = self.interaction.b2c_client_id
         super().save(*args, **kwargs)
 

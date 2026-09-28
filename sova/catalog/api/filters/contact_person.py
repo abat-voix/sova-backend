@@ -7,11 +7,11 @@ from sova.core.api.filters import SearchFilterMixin, UUIDInFilter
 class ContactPersonFilter(SearchFilterMixin):
     """Фильтр контактных лиц: по организациям их связей (человек со связью с любой из указанных)."""
 
-    university__ids = UUIDInFilter(
-        field_name="university_links__university",
+    organization__ids = UUIDInFilter(
+        field_name="organization_links__organization",
         distinct=True,
-        label=_("Вузы"),
-        help_text=_("Фильтр по списку ID вузов через запятую"),
+        label=_("Организации"),
+        help_text=_("Фильтр по списку ID организаций через запятую"),
     )
     b2c_client__ids = UUIDInFilter(
         field_name="b2c_client_links__b2c_client",

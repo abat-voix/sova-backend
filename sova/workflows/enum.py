@@ -4,8 +4,8 @@ from django.db.models import TextChoices
 class Audience(TextChoices):
     """Целевая аудитория workflow-шаблона."""
 
-    B2B = "b2b", "Вузы"
-    B2C = "b2c", "Физ/юрлица"
+    B2B = "b2b", "Организации"
+    B2C = "b2c", "Физлица"
 
 
 class WorkflowChangeType(TextChoices):

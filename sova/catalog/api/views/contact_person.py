@@ -13,9 +13,9 @@ from sova.core.api.views import SovaBaseViewSet
 
 class ContactPersonViewSet(CatalogPolicyMixin, SovaBaseViewSet):
     """
-    Контактные лица — люди со связями с вузами, B2C-клиентами и вендорами. Доступны CRUD операции.
+    Контактные лица — люди со связями с организациями, B2C-клиентами и вендорами. Доступны CRUD операции.
 
-    Связи создаются и меняются через `/university-contacts/`, `/b2c-client-contacts/`, `/vendor-contacts/`.
+    Связи создаются и меняются через `/organization-contacts/`, `/b2c-client-contacts/`, `/vendor-contacts/`.
     """
 
     read_serializer_class = serializers.ContactPersonSerializer
@@ -27,7 +27,7 @@ class ContactPersonViewSet(CatalogPolicyMixin, SovaBaseViewSet):
         "email",
         "phone",
         "telegram",
-        "university_links__position",
+        "organization_links__position",
         "b2c_client_links__position",
         "vendor_links__position",
     )

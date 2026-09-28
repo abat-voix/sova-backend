@@ -51,11 +51,11 @@ class DocumentTemplateAdmin(AbstractBaseModelAdmin[DocumentTemplate]):
 class InteractionAdmin(AbstractBaseModelAdmin[Interaction]):
     """Админка взаимодействий."""
 
-    list_display = ("display_number", "university", "b2c_client", "is_active", "created_at")
-    list_select_related = ("university", "b2c_client")
-    search_fields = ("id", "sequence_number", "comment", "university__name", "b2c_client__full_name")
+    list_display = ("display_number", "organization", "b2c_client", "is_active", "created_at")
+    list_select_related = ("organization", "b2c_client")
+    search_fields = ("id", "sequence_number", "comment", "organization__name", "b2c_client__full_name")
     list_filter = ("is_active",)
-    autocomplete_fields = ("university", "b2c_client")
+    autocomplete_fields = ("organization", "b2c_client")
     readonly_fields = ("sequence_number", "display_number")
 
 

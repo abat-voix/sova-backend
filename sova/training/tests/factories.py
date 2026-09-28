@@ -2,7 +2,7 @@ import datetime
 
 import factory
 
-from sova.catalog.tests.factories import ProgramFactory, UniversityFactory
+from sova.catalog.tests.factories import ProgramFactory, OrganizationFactory
 from sova.interactions.tests.factories import InteractionProgramFactory
 from sova.training.enum import QualificationKind
 from sova.training.models import (
@@ -34,7 +34,7 @@ class TrainingInstructorFactory(factory.django.DjangoModelFactory):
 
     last_name = "Петров"
     first_name = "Пётр"
-    university = factory.SubFactory(UniversityFactory)
+    organization = factory.SubFactory(OrganizationFactory)
 
 
 class TrainingInstructorQualificationFactory(factory.django.DjangoModelFactory):

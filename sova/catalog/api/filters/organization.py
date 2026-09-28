@@ -3,22 +3,25 @@ from django.utils.translation import gettext_lazy as _
 from django_filters import rest_framework as filters
 
 from sova.catalog.api.filters.rank import RankFilterMixin
-from sova.catalog.models import University
+from sova.catalog.models import Organization
 from sova.interactions.models import Interaction
 
 
-class UniversityFilter(RankFilterMixin):
-    """Фильтр вузов."""
+class OrganizationFilter(RankFilterMixin):
+    """Фильтр организаций."""
 
     has_interactions = filters.BooleanFilter(
         method="filter_has_interactions",
         label=_("Наличие взаимодействий"),
-        help_text=_("True — только вузы со взаимодействиями, false — без них"),
+        help_text=_("True — только организации со взаимодействиями, false — без них"),
     )
 
     class Meta:
-        model = University
-        fields = ("is_active",)
+        model = Organization
+        fields = (
+            "is_active",
+            "organization_type",
+        )
         exact_search_fields = ["name", "inn", "external_code"]
 
     def filter_has_interactions(
@@ -27,6 +30,6 @@ class UniversityFilter(RankFilterMixin):
         name: str,
         value: bool,
     ) -> QuerySet:
-        """Фильтрует вузы по наличию связанных взаимодействий."""
-        has_interactions = Exists(Interaction.objects.filter(university=OuterRef("pk")))
+        """Фильтрует организации по наличию связанных взаимодействий."""
+        has_interactions = Exists(Interaction.objects.filter(organization=OuterRef("pk")))
         return queryset.filter(has_interactions if value else ~has_interactions)

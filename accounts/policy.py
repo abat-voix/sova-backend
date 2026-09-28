@@ -62,6 +62,9 @@ class Action:
     CATALOG_DELETE = "catalog.delete"
     CATALOG_IMPORT = "catalog.import"
     CATALOG_MAPPINGS_MANAGE = "catalog.mappings.manage"
+    # Адрес регистрации B2C-клиента (физлица) — персональные данные: только администратор платформы
+    CATALOG_PERSONAL_DATA_READ = "catalog.personal_data.read"
+    CATALOG_PERSONAL_DATA_UPDATE = "catalog.personal_data.update"
 
     WORKFLOWS_READ = "workflows.read"
     WORKFLOWS_MANAGE = "workflows.manage"
@@ -176,6 +179,8 @@ ROLE_ACTIONS: dict[str, frozenset[str]] = {
         Action.TEAMS_MANAGE,
         Action.INTEGRATIONS_MANAGE,
         Action.TRAINING_PERSONAL_DATA_READ,
+        Action.CATALOG_PERSONAL_DATA_READ,
+        Action.CATALOG_PERSONAL_DATA_UPDATE,
     },
 }
 

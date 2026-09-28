@@ -7,9 +7,9 @@ from sova.training.enum import AcademicDegree, AcademicTitle
 
 class TrainingInstructor(NormalizedTextFieldsMixin, TimeStampedModel):
     """
-    Преподаватель, который ведёт потоки от вуза или B2C-организации — организация ровно одна из двух.
+    Преподаватель, который ведёт потоки от организации или B2C-клиента — место работы ровно одно из двух.
 
-    Не путать с `UniversityContact`: те — контакты для договора и коммуникации.
+    Не путать с `OrganizationContact`: те — контакты для договора и коммуникации.
     """
 
     last_name = models.CharField(max_length=255, verbose_name="Фамилия")
@@ -19,13 +19,13 @@ class TrainingInstructor(NormalizedTextFieldsMixin, TimeStampedModel):
     phone = models.CharField(max_length=50, blank=True, verbose_name="Телефон")
     telegram = models.CharField(max_length=64, blank=True, verbose_name="Telegram")
 
-    university = models.ForeignKey(
-        to="catalog.University",
+    organization = models.ForeignKey(
+        to="catalog.Organization",
         on_delete=models.PROTECT,
         related_name="training_instructors",
         null=True,
         blank=True,
-        verbose_name="Вуз",
+        verbose_name="Организация",
     )
     b2c_client = models.ForeignKey(
         to="catalog.B2CClient",
@@ -83,8 +83,8 @@ class TrainingInstructor(NormalizedTextFieldsMixin, TimeStampedModel):
         constraints = [
             models.CheckConstraint(
                 check=(
-                    Q(university__isnull=False, b2c_client__isnull=True)
-                    | Q(university__isnull=True, b2c_client__isnull=False)
+                    Q(organization__isnull=False, b2c_client__isnull=True)
+                    | Q(organization__isnull=True, b2c_client__isnull=False)
                 ),
                 name="training_instructor_exactly_one_organization",
             ),
@@ -103,5 +103,6 @@ class TrainingInstructor(NormalizedTextFieldsMixin, TimeStampedModel):
         return " ".join(part for part in (self.last_name, self.first_name, self.middle_name) if part)
 
     @property
-    def organization(self):
-        return self.university or self.b2c_client
+    def employer(self):
+        """Где работает преподаватель: организация или B2C-клиент."""
+        return self.organization or self.b2c_client

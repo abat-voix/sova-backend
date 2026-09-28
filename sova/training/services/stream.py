@@ -21,7 +21,7 @@ class TrainingStreamService:
         Создаёт поток по программе взаимодействия.
 
         Программа должна быть активной, а у взаимодействия — подписанный договор: поток запускают после заключения
-        договора. Обучение возможно и с вузом, и с B2C-клиентом.
+        договора. Обучение возможно и с организацией, и с B2C-клиентом.
         """
         self.check_can_create(interaction_program)
         stream = TrainingStream.objects.create(
@@ -54,7 +54,7 @@ class TrainingStreamService:
         if not instructor.is_active:
             raise TrainingError("instructor_inactive", "Преподаватель неактивен.")
         same_organization = (
-            instructor.university_id == interaction.university_id
+            instructor.organization_id == interaction.organization_id
             and instructor.b2c_client_id == interaction.b2c_client_id
         )
         if not same_organization:

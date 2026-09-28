@@ -8,15 +8,15 @@ from django.utils import timezone
 from sova.reports.services.presentation import build_report_presentation
 
 
-def row(*, interaction_id, created_at, university, responsible_id=None):
+def row(*, interaction_id, created_at, organization, responsible_id=None):
     return SimpleNamespace(
         interaction_id=interaction_id,
         interaction_program_id=None,
         interaction_product_id=None,
         responsible_ids=[] if responsible_id is None else [responsible_id],
         responsible=[] if responsible_id is None else [f"Manager {responsible_id}"],
-        university_id=uuid4(),
-        university=university,
+        organization_id=uuid4(),
+        organization=organization,
         process_statuses=[],
         active_stages=[],
         created_at=created_at,
@@ -27,7 +27,7 @@ class ReportPresentationTest(SimpleTestCase):
     def test_returns_ready_metrics_charts_and_other_group(self):
         generated = timezone.make_aware(datetime(2026, 9, 1, 12))
         rows = [
-            row(interaction_id=uuid4(), created_at=generated, university=f"University {i}", responsible_id=i)
+            row(interaction_id=uuid4(), created_at=generated, organization=f"Organization {i}", responsible_id=i)
             for i in range(10)
         ]
 
@@ -37,7 +37,7 @@ class ReportPresentationTest(SimpleTestCase):
         self.assertEqual([chart["id"] for chart in result["charts"]], [
             "interactions_over_time",
             "by_responsible",
-            "by_university",
+            "by_organization",
             "by_process_status",
             "by_active_stage",
         ])
@@ -50,7 +50,7 @@ class ReportPresentationTest(SimpleTestCase):
         first = timezone.make_aware(datetime(2026, 9, 1, 12))
         last = timezone.make_aware(datetime(2026, 9, 3, 12))
         result = build_report_presentation(
-            [row(interaction_id=uuid4(), created_at=first, university="A")],
+            [row(interaction_id=uuid4(), created_at=first, organization="A")],
             date_from=first.date(),
             date_to=last.date(),
             locale="en",

@@ -44,7 +44,7 @@ class TrainingStreamViewSet(ReadWriteUpdateModelMixin, mixins.DestroyModelMixin,
             visible_streams(self.request.user)
             .select_related(
                 "interaction_program__program",
-                "interaction_program__interaction__university",
+                "interaction_program__interaction__organization",
                 "interaction_program__interaction__b2c_client",
             )
             .prefetch_related("instructors")

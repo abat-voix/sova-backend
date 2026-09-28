@@ -5,12 +5,12 @@ from django.db import IntegrityError, transaction
 from django.forms import modelform_factory
 from django.test import TestCase
 
-from sova.catalog.models import ContactPerson, Product, Program, University, Vendor
+from sova.catalog.models import ContactPerson, Product, Program, Organization, Vendor
 from sova.catalog.tests.factories import (
     ContactPersonFactory,
-    UniversityContactFactory,
+    OrganizationContactFactory,
     DirectionFactory,
-    UniversityFactory,
+    OrganizationFactory,
     VendorFactory,
 )
 from sova.core.text import normalize_text
@@ -38,13 +38,13 @@ class ModelTextNormalizationTestCase(TestCase):
         self.assertEqual((vendor.name, vendor.external_code), ("мОсква Софт", "code-1"))
 
     def test_other_catalog_fields_are_normalized_on_save(self) -> None:
-        university = UniversityFactory(name="МГУ ", short_name=" МГУ ")
+        organization = OrganizationFactory(name="МГУ ", short_name=" МГУ ")
         program = Program.objects.create(name="DevOps  инженер", direction=DirectionFactory())
         product = Product.objects.create(name="Docker​", external_code="p 1")
         contact = ContactPersonFactory(full_name="Иванов  Иван")
-        link = UniversityContactFactory(contact=contact, university=university, position=" Проректор  по  науке ")
+        link = OrganizationContactFactory(contact=contact, organization=organization, position=" Проректор  по  науке ")
 
-        self.assertEqual((university.name, university.short_name), ("МГУ", "МГУ"))
+        self.assertEqual((organization.name, organization.short_name), ("МГУ", "МГУ"))
         self.assertEqual(program.name, "DevOps инженер")
         self.assertEqual((product.name, product.external_code), ("Docker", "p 1"))
         self.assertEqual(contact.full_name, "Иванов Иван")
@@ -64,10 +64,10 @@ class CaseInsensitiveUniquenessTestCase(TestCase):
         self._assert_integrity_error(lambda: VendorFactory(name="ЯНДЕКС"))
         self._assert_integrity_error(lambda: VendorFactory(external_code="ya"))
 
-    def test_university_name(self) -> None:
-        UniversityFactory(name="МГУ")
+    def test_organization_name(self) -> None:
+        OrganizationFactory(name="МГУ")
 
-        self._assert_integrity_error(lambda: UniversityFactory(name="мгу"))
+        self._assert_integrity_error(lambda: OrganizationFactory(name="мгу"))
 
     def test_product_name_per_vendor_and_without_vendor(self) -> None:
         vendor = VendorFactory()
@@ -90,17 +90,26 @@ class CaseInsensitiveUniquenessTestCase(TestCase):
         self.assertEqual(form.non_field_errors(), ["Вендор с таким названием уже существует."])
 
 
-class UniversityNameLookupTestCase(TestCase):
+class OrganizationNameLookupTestCase(TestCase):
     """Смена регистра у самой записи — не конфликт с собой."""
 
     def test_record_can_change_own_case(self) -> None:
-        university = UniversityFactory(name="мгу")
+        organization = OrganizationFactory(name="мгу")
 
-        university.name = "МГУ"
-        university.full_clean()
-        university.save()
+        organization.name = "МГУ"
+        organization.full_clean()
+        organization.save()
 
-        self.assertEqual(University.objects.get().name, "МГУ")
+        self.assertEqual(Organization.objects.get().name, "МГУ")
+
+
+class RenamedModelsApps:
+    """Текущий реестр моделей под именами, которые знала миграция 0007: `University` теперь `Organization`."""
+
+    renames = {"University": "Organization"}
+
+    def get_model(self, app_label: str, model_name: str):
+        return django_apps.get_model(app_label, self.renames.get(model_name, model_name))
 
 
 class NormalizeExistingValuesMigrationTestCase(TestCase):
@@ -113,7 +122,7 @@ class NormalizeExistingValuesMigrationTestCase(TestCase):
         # QuerySet.update идёт в обход нормализации модели — так в БД могли попасть старые значения.
         Vendor.objects.filter(pk=vendor.pk).update(name="Софт  Плюс")
 
-        self.migration.normalize_existing_values(django_apps, schema_editor=None)
+        self.migration.normalize_existing_values(RenamedModelsApps(), schema_editor=None)
 
         vendor.refresh_from_db()
         self.assertEqual(vendor.name, "Софт Плюс")
@@ -126,7 +135,7 @@ class NormalizeExistingValuesMigrationTestCase(TestCase):
         Program.objects.filter(pk=renamed.pk).update(name="Курс  1")
 
         with self.assertRaises(RuntimeError) as context:
-            self.migration.normalize_existing_values(django_apps, schema_editor=None)
+            self.migration.normalize_existing_values(RenamedModelsApps(), schema_editor=None)
 
         self.assertIn("«яндекс»", str(context.exception))
         self.assertIn(str(other.pk), str(context.exception))

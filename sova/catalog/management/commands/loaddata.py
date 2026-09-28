@@ -51,7 +51,7 @@ class Command(DjangoLoadDataCommand):
     def _loaders(self) -> dict:
         """Справочники в порядке зависимостей: продукты ссылаются на вендоров и программы."""
         return {
-            "universities.xlsx": self._load_universities,
+            "organizations.xlsx": self._load_organizations,
             "vendors.xlsx": self._load_vendors,
             "directions.xlsx": self._load_directions,
             "programs.xlsx": self._load_programs,
@@ -90,8 +90,8 @@ class Command(DjangoLoadDataCommand):
 
         raise CommandError(f"Файл справочника не найден: {fixture_labels[0]}")
 
-    def _load_universities(self, source: Path) -> None:
-        self._run_loader(source, CatalogType.UNIVERSITY, "вузов")
+    def _load_organizations(self, source: Path) -> None:
+        self._run_loader(source, CatalogType.ORGANIZATION, "организаций")
 
     def _load_vendors(self, source: Path) -> None:
         self._run_loader(source, CatalogType.VENDOR, "вендоров")

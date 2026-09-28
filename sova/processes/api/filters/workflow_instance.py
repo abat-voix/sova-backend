@@ -19,10 +19,10 @@ class WorkflowInstanceFilter(SearchFilterMixin):
         label=_("Взаимодействия"),
         help_text=_("Фильтр по списку ID взаимодействий через запятую"),
     )
-    university__ids = UUIDInFilter(
-        field_name="interaction__university",
-        label=_("Вузы"),
-        help_text=_("Фильтр по списку ID вузов через запятую; вуз определяется по взаимодействию"),
+    organization__ids = UUIDInFilter(
+        field_name="interaction__organization",
+        label=_("Организации"),
+        help_text=_("Фильтр по списку ID организаций через запятую; организация определяется по взаимодействию"),
     )
     created_by__ids = NumberInFilter(
         field_name="created_by",

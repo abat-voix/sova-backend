@@ -3,13 +3,13 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
-from sova.catalog.models import ContactPerson, UniversityContact
+from sova.catalog.models import ContactPerson, OrganizationContact
 from sova.catalog.tests.factories import (
     B2CClientContactFactory,
     ContactPersonFactory,
     ProductFactory,
-    UniversityContactFactory,
-    UniversityFactory,
+    OrganizationContactFactory,
+    OrganizationFactory,
     VendorContactFactory,
     VendorFactory,
 )
@@ -27,7 +27,7 @@ class ContactPersonApiTestCase(BaseApiTestMixin, APITestCase):
 
     def create_instance(self, **kwargs) -> ContactPerson:
         """Создаёт контактное лицо со связью с вузом."""
-        return UniversityContactFactory(contact=ContactPersonFactory(**kwargs), position="Проректор").contact
+        return OrganizationContactFactory(contact=ContactPersonFactory(**kwargs), position="Проректор").contact
 
     def get_expected_data(self, instance: ContactPerson) -> dict:
         """Поля read-представления: человек и его связи."""
@@ -41,13 +41,13 @@ class ContactPersonApiTestCase(BaseApiTestMixin, APITestCase):
             "affiliations": [
                 {
                     "id": str(link.pk),
-                    "type": "university",
-                    "organization": {"id": str(link.university_id), "name": link.university.name},
+                    "type": "organization",
+                    "organization": {"id": str(link.organization_id), "name": link.organization.name},
                     "position": link.position,
                     "preferred_channels": link.preferred_channels,
                     "products": [],
                 }
-                for link in instance.university_links.all()
+                for link in instance.organization_links.all()
             ],
         }
 
@@ -86,7 +86,7 @@ class ContactPersonApiTestCase(BaseApiTestMixin, APITestCase):
     def test_person_with_several_affiliations(self) -> None:
         """В ответе все связи человека: разные организации — разные должности."""
         contact = ContactPersonFactory()
-        UniversityContactFactory(contact=contact, position="Проректор")
+        OrganizationContactFactory(contact=contact, position="Проректор")
         product = ProductFactory()
         VendorContactFactory(contact=contact, vendor=product.vendor, position="Консультант", products=[product])
 
@@ -94,22 +94,22 @@ class ContactPersonApiTestCase(BaseApiTestMixin, APITestCase):
 
         # Проверяем типы, должности и продукты связей
         affiliations = {item["type"]: item for item in response.data["affiliations"]}
-        self.assertEqual(affiliations["university"]["position"], "Проректор")
+        self.assertEqual(affiliations["organization"]["position"], "Проректор")
         self.assertEqual(affiliations["vendor"]["position"], "Консультант")
         self.assertEqual(affiliations["vendor"]["products"], [{"id": str(product.pk), "name": product.name}])
 
     def test_filters_by_organizations_without_duplicates(self) -> None:
         """Фильтры по вузам, B2C-клиентам, вендорам и продуктам; человек с двумя подходящими связями — один раз."""
         contact = ContactPersonFactory()
-        first = UniversityContactFactory(contact=contact).university
-        second = UniversityContactFactory(contact=contact).university
+        first = OrganizationContactFactory(contact=contact).organization
+        second = OrganizationContactFactory(contact=contact).organization
         client_link = B2CClientContactFactory()
         product = ProductFactory()
         vendor_link = VendorContactFactory(vendor=product.vendor, products=[product])
-        UniversityContactFactory()
+        OrganizationContactFactory()
 
         cases = {
-            "university__ids": (f"{first.pk},{second.pk}", contact),
+            "organization__ids": (f"{first.pk},{second.pk}", contact),
             "b2c_client__ids": (str(client_link.b2c_client_id), client_link.contact),
             "vendor__ids": (str(vendor_link.vendor_id), vendor_link.contact),
             "product__ids": (str(product.pk), vendor_link.contact),
@@ -123,7 +123,7 @@ class ContactPersonApiTestCase(BaseApiTestMixin, APITestCase):
     def test_search_by_position(self) -> None:
         """Поиск находит человека по должности в любой из связей."""
         target = VendorContactFactory(position="Архитектор решений").contact
-        UniversityContactFactory(position="Проректор")
+        OrganizationContactFactory(position="Проректор")
 
         response = self.client.get(path=self.list_url, data={"search": "Архитектор"})
 
@@ -132,25 +132,25 @@ class ContactPersonApiTestCase(BaseApiTestMixin, APITestCase):
 
     def test_delete_removes_affiliations(self) -> None:
         """Удаление человека удаляет и его связи."""
-        link = UniversityContactFactory()
+        link = OrganizationContactFactory()
 
         response = self.client.delete(path=self.detail_url(link.contact))
 
         # Проверяем, что связи удалены вместе с человеком
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(UniversityContact.objects.exists())
+        self.assertFalse(OrganizationContact.objects.exists())
 
     def test_delete_linked_to_interaction_returns_409(self) -> None:
         """Человек, привязанный к идущему взаимодействию, не удаляется."""
-        link = UniversityContactFactory()
-        interaction = InteractionFactory(university=link.university)
+        link = OrganizationContactFactory()
+        interaction = InteractionFactory(organization=link.organization)
         InteractionContact.objects.create(interaction=interaction, contact_person=link.contact)
 
         response = self.client.delete(path=self.detail_url(link.contact))
 
         # Проверяем конфликт и что ничего не удалено
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
-        self.assertTrue(UniversityContact.objects.exists())
+        self.assertTrue(OrganizationContact.objects.exists())
 
 
 class PossibleDuplicatesApiTestCase(APITestCase):
@@ -164,7 +164,7 @@ class PossibleDuplicatesApiTestCase(APITestCase):
 
     def test_returns_namesakes_with_affiliations(self) -> None:
         """Тёзки из других организаций показываются со связями — «это он?»."""
-        link = UniversityContactFactory(contact__full_name="Иванов Иван", position="Проректор")
+        link = OrganizationContactFactory(contact__full_name="Иванов Иван", position="Проректор")
         ContactPersonFactory(full_name="Петров Пётр")
 
         response = self.client.get(path=self.url, data={"full_name": "иванов иван"})
@@ -189,23 +189,23 @@ class PossibleDuplicatesApiTestCase(APITestCase):
 
 
 class ContactAffiliationApiTestCase(APITestCase):
-    """Тесты /api/catalog/university-contacts/ и /api/catalog/vendor-contacts/."""
+    """Тесты /api/catalog/organization-contacts/ и /api/catalog/vendor-contacts/."""
 
     def setUp(self) -> None:
         user = UserFactory()
         UserRole.objects.create(user=user, role=SystemRole.PLATFORM_ADMIN)
         self.client.force_authenticate(user=user)
 
-    def test_create_university_contact(self) -> None:
+    def test_create_organization_contact(self) -> None:
         """Связь создаётся с должностью и способами связи."""
         contact = ContactPersonFactory()
-        university = UniversityFactory()
+        organization = OrganizationFactory()
 
         response = self.client.post(
-            path=reverse("catalog:university-contact-list"),
+            path=reverse("catalog:organization-contact-list"),
             data={
                 "contact": str(contact.pk),
-                "university": str(university.pk),
+                "organization": str(organization.pk),
                 "position": "Проректор",
                 "preferred_channels": ["email", "telegram"],
             },
@@ -214,16 +214,16 @@ class ContactAffiliationApiTestCase(APITestCase):
 
         # Проверяем ответ read-сериализатором
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
-        self.assertEqual(response.data["university"]["id"], str(university.pk))
+        self.assertEqual(response.data["organization"]["id"], str(organization.pk))
         self.assertEqual(response.data["preferred_channels"], ["email", "telegram"])
 
     def test_duplicate_pair_returns_400(self) -> None:
         """Повтор пары «человек + вуз» — 400."""
-        link = UniversityContactFactory()
+        link = OrganizationContactFactory()
 
         response = self.client.post(
-            path=reverse("catalog:university-contact-list"),
-            data={"contact": str(link.contact_id), "university": str(link.university_id)},
+            path=reverse("catalog:organization-contact-list"),
+            data={"contact": str(link.contact_id), "organization": str(link.organization_id)},
             format="json",
         )
 
@@ -232,17 +232,17 @@ class ContactAffiliationApiTestCase(APITestCase):
 
     def test_organization_cannot_be_changed(self) -> None:
         """Сменить организацию связи нельзя — это другая связь."""
-        link = UniversityContactFactory()
+        link = OrganizationContactFactory()
 
         response = self.client.patch(
-            path=reverse("catalog:university-contact-detail", args=[link.pk]),
-            data={"university": str(UniversityFactory().pk)},
+            path=reverse("catalog:organization-contact-detail", args=[link.pk]),
+            data={"organization": str(OrganizationFactory().pk)},
             format="json",
         )
 
-        # Проверяем ошибку по полю university
+        # Проверяем ошибку по полю organization
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("university", response.data)
+        self.assertIn("organization", response.data)
 
     def test_vendor_contact_rejects_foreign_products(self) -> None:
         """Продукты связи с вендором — только продукты этого вендора."""
@@ -264,15 +264,15 @@ class ContactAffiliationApiTestCase(APITestCase):
 
     def test_delete_used_affiliation_unlinks(self) -> None:
         """Удаление связи — уход из организации: человек отвязывается от активного взаимодействия вуза."""
-        link = UniversityContactFactory()
-        interaction = InteractionFactory(university=link.university)
+        link = OrganizationContactFactory()
+        interaction = InteractionFactory(organization=link.organization)
         InteractionContact.objects.create(interaction=interaction, contact_person=link.contact)
 
-        response = self.client.delete(path=reverse("catalog:university-contact-detail", args=[link.pk]))
+        response = self.client.delete(path=reverse("catalog:organization-contact-detail", args=[link.pk]))
 
         # Проверяем удаление и отвязку
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(UniversityContact.objects.exists())
+        self.assertFalse(OrganizationContact.objects.exists())
         self.assertFalse(InteractionContact.objects.filter(unlinked_at__isnull=True).exists())
 
 
@@ -286,11 +286,11 @@ class ContactObserverApiTestCase(APITestCase):
 
     def test_observer_reads_contacts_and_affiliations(self) -> None:
         """Список людей, связей и поиск дублей доступны наблюдателю."""
-        UniversityContactFactory()
+        OrganizationContactFactory()
 
         responses = [
             self.client.get(path=reverse("catalog:contact-person-list")),
-            self.client.get(path=reverse("catalog:university-contact-list")),
+            self.client.get(path=reverse("catalog:organization-contact-list")),
             self.client.get(path=reverse("catalog:contact-person-possible-duplicates"), data={"full_name": "Иванов"}),
         ]
 
@@ -299,14 +299,14 @@ class ContactObserverApiTestCase(APITestCase):
 
     def test_observer_cannot_change_contacts_and_affiliations(self) -> None:
         """Создание и удаление людей и связей наблюдателю запрещены."""
-        link = UniversityContactFactory()
+        link = OrganizationContactFactory()
 
         responses = [
             self.client.post(path=reverse("catalog:contact-person-list"), data={"full_name": "Петров Пётр"}),
             self.client.delete(path=reverse("catalog:contact-person-detail", args=[link.contact_id])),
-            self.client.delete(path=reverse("catalog:university-contact-detail", args=[link.pk])),
+            self.client.delete(path=reverse("catalog:organization-contact-detail", args=[link.pk])),
         ]
 
         # Проверяем запрет и что связь осталась
         self.assertEqual([response.status_code for response in responses], [status.HTTP_403_FORBIDDEN] * 3)
-        self.assertTrue(UniversityContact.objects.filter(pk=link.pk).exists())
+        self.assertTrue(OrganizationContact.objects.filter(pk=link.pk).exists())

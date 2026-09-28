@@ -30,7 +30,7 @@ class WorkflowInstanceViewSet(VisibleInteractionMixin, ReadWriteCreateModelMixin
     interaction_lookup = "interaction"
     queryset = WorkflowInstance.objects.select_related(
         "workflow",
-        "interaction__university",
+        "interaction__organization",
         "interaction__b2c_client",
         "created_by",
     )
@@ -38,7 +38,7 @@ class WorkflowInstanceViewSet(VisibleInteractionMixin, ReadWriteCreateModelMixin
     search_fields = (
         "status",
         "workflow__name",
-        "interaction__university__name",
+        "interaction__organization__name",
         "interaction__b2c_client__full_name",
     )
     filterset_class = filters.WorkflowInstanceFilter

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole
-from sova.catalog.tests.factories import UniversityFactory
+from sova.catalog.tests.factories import OrganizationFactory
 from sova.core.tests.base import BaseApiTestMixin
 from sova.core.tests.factories import UserFactory
 from sova.interactions.models import Responsible
@@ -92,7 +92,7 @@ class ResponsibleApiTestCase(BaseApiTestMixin, APITestCase):
 
     def test_filter_by_contract_ids(self) -> None:
         """Фильтр contract__ids возвращает назначения договора."""
-        contract = ContractFactory(interaction=None, university=UniversityFactory())
+        contract = ContractFactory(interaction=None, organization=OrganizationFactory())
         target = Responsible.objects.create(contract=contract, manager=UserFactory())
         ResponsibleFactory()
 

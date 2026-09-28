@@ -50,7 +50,7 @@ class DocumentTemplateFieldsApiTestCase(APITestCase):
         )
         context = SimpleNamespace(
             interaction=interaction,
-            university=interaction.university,
+            organization=interaction.organization,
             b2c_client=interaction.b2c_client,
         )
         document = CreateContractHandler().initial(context=context, settings={})["document"]

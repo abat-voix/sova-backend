@@ -3,10 +3,8 @@ import datetime
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from django.db.models import Q
 
-from sova.catalog.enum import ClientKind
-from sova.catalog.models import B2CClient, Program, University
+from sova.catalog.models import B2CClient, Organization, Program
 from sova.interactions.models import (
     Contract,
     Interaction,
@@ -32,7 +30,7 @@ MANAGER_EMAIL = "kam@kam.ru"
 # Программы берутся из каталога по индексу в списке активных программ, упорядоченном по направлению и названию.
 # У каждой программы контрагента: (индекс программы, оплативших, не оплативших). Суммы оплативших подобраны так,
 # чтобы в рейтинге были и дележи мест (1, 2, 2, 4), и контрагент без места (только не оплатившие).
-UNIVERSITY_PLAN: tuple[tuple[str, tuple[tuple[int, int, int], ...]], ...] = (
+ORGANIZATION_PLAN: tuple[tuple[str, tuple[tuple[int, int, int], ...]], ...] = (
     ("Ломоносова", ((5, 6, 1), (8, 4, 0), (1, 2, 0))),
     ("Санкт-Петербургский государственный университет", ((5, 5, 0), (6, 4, 1))),
     ("Высшая школа экономики", ((1, 5, 0), (0, 4, 1))),
@@ -43,12 +41,12 @@ UNIVERSITY_PLAN: tuple[tuple[str, tuple[tuple[int, int, int], ...]], ...] = (
     ("Новосибирский государственный университет", ((11, 1, 0),)),
     ("Тюменский государственный университет", ((9, 0, 3),)),
 )
-B2C_PLAN: tuple[tuple[str, str, str, tuple[tuple[int, int, int], ...]], ...] = (
-    ("ООО «Цифровые решения»", ClientKind.LEGAL_ENTITY, "7701000001", ((5, 5, 0), (8, 3, 0))),
-    ("ООО «Альфа Консалтинг»", ClientKind.LEGAL_ENTITY, "7701000002", ((11, 4, 1),)),
-    ("Иванов Пётр Сергеевич", ClientKind.INDIVIDUAL, "", ((6, 1, 0),)),
-    ("Смирнова Анна Игоревна", ClientKind.INDIVIDUAL, "", ((9, 1, 0),)),
-    ("Кузнецов Дмитрий Олегович", ClientKind.INDIVIDUAL, "", ((7, 0, 2),)),
+B2C_PLAN: tuple[tuple[str, tuple[tuple[int, int, int], ...]], ...] = (
+    ("Орлов Сергей Викторович", ((5, 1, 0), (8, 1, 0))),
+    ("Белова Ирина Андреевна", ((11, 1, 1),)),
+    ("Иванов Пётр Сергеевич", ((6, 1, 0),)),
+    ("Смирнова Анна Игоревна", ((9, 1, 0),)),
+    ("Кузнецов Дмитрий Олегович", ((7, 0, 2),)),
 )
 LAST_NAMES = ("Иванов", "Петров", "Сидоров", "Кузнецов", "Смирнов", "Попов", "Волков", "Соколов", "Лебедев", "Козлов")
 FIRST_NAMES = ("Алексей", "Мария", "Дмитрий", "Анна", "Сергей", "Елена", "Илья", "Ольга", "Никита", "Татьяна")
@@ -57,8 +55,8 @@ FEMALE_FIRST_NAMES = {"Мария", "Анна", "Елена", "Ольга", "Т�
 
 class Command(BaseCommand):
     help = (
-        "Демо-данные для проверки рейтинга каталога: базовые workflow для вузов и B2C (B2C — копия вузовского), "
-        "взаимодействия с вузами и B2C-клиентами по разным программам и направлениям с подписанным договором и "
+        "Демо-данные для проверки рейтинга каталога: базовые workflow для организаций и B2C (B2C — копия B2B), "
+        "взаимодействия с вузами и B2C-клиентами (физлицами) по разным программам и направлениям с подписанным договором и "
         "запущенным процессом, потоки обучения и обучающиеся — оплатившие (зачисленные) и нет. "
         "Повторный запуск ничего не создаёт, если демо-данные уже есть."
     )
@@ -81,16 +79,16 @@ class Command(BaseCommand):
         workflows = {audience: self._workflow(audience) for audience in (Audience.B2B, Audience.B2C)}
 
         used = set()
-        for keyword, plan in UNIVERSITY_PLAN:
-            university = self._university(keyword, used)
-            used.add(university.pk)
-            self._interaction(workflows[Audience.B2B], plan, university=university)
-        for full_name, kind, inn, plan in B2C_PLAN:
-            client, _ = B2CClient.objects.get_or_create(full_name=full_name, defaults={"kind": kind, "inn": inn or None})
+        for keyword, plan in ORGANIZATION_PLAN:
+            organization = self._organization(keyword, used)
+            used.add(organization.pk)
+            self._interaction(workflows[Audience.B2B], plan, organization=organization)
+        for full_name, plan in B2C_PLAN:
+            client, _ = B2CClient.objects.get_or_create(full_name=full_name)
             self._interaction(workflows[Audience.B2C], plan, b2c_client=client)
 
         self.stdout.write(self.style.SUCCESS(
-            f"Взаимодействий: {len(UNIVERSITY_PLAN)} с вузами и {len(B2C_PLAN)} с B2C-клиентами, "
+            f"Взаимодействий: {len(ORGANIZATION_PLAN)} с вузами и {len(B2C_PLAN)} с B2C-клиентами, "
             f"обучающихся: {self.learner_number}. Ответственный: {self.manager}."
         ))
 
@@ -103,7 +101,7 @@ class Command(BaseCommand):
         return manager
 
     def _workflow(self, audience: str) -> Workflow:
-        """Базовый workflow аудитории; если его нет — собирается по пресету (для B2C — копия вузовского)."""
+        """Базовый workflow аудитории; если его нет — собирается по пресету (для B2C — копия B2B)."""
         workflow = Workflow.objects.filter(audience=audience, is_base=True, is_active=True).first()
         if workflow is not None:
             return workflow
@@ -115,23 +113,23 @@ class Command(BaseCommand):
         return workflow
 
     @staticmethod
-    def _university(keyword: str, used: set) -> University:
-        """Вуз по части названия; если такого нет — любой активный вуз с координатами (он виден на карте)."""
-        active = University.objects.filter(is_active=True).exclude(pk__in=used)
-        university = (
+    def _organization(keyword: str, used: set) -> Organization:
+        """Вуз по части названия; если такого нет — любая активная организация с координатами (видна на карте)."""
+        active = Organization.objects.filter(is_active=True).exclude(pk__in=used)
+        organization = (
             active.filter(name__icontains=keyword).order_by("name").first()
-            or active.filter(~Q(lat=None), ~Q(lon=None)).order_by("name").first()
+            or active.filter(addresses__lat__isnull=False).order_by("name").first()
         )
-        if university is None:
-            raise CommandError("В каталоге не хватает активных вузов.")
-        return university
+        if organization is None:
+            raise CommandError("В каталоге не хватает активных организаций.")
+        return organization
 
-    def _interaction(self, workflow: Workflow, plan, university=None, b2c_client=None) -> None:
+    def _interaction(self, workflow: Workflow, plan, organization=None, b2c_client=None) -> None:
         """Взаимодействие с подписанным договором и программами, запущенный процесс, потоки и обучающиеся."""
-        counterparty = university or b2c_client
+        counterparty = organization or b2c_client
         interaction = Interaction.objects.create(
             comment=f"{DEMO_PREFIX} {counterparty}",
-            university=university,
+            organization=organization,
             b2c_client=b2c_client,
         )
         Responsible.objects.create(interaction=interaction, manager=self.manager)

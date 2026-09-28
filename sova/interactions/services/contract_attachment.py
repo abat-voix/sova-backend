@@ -37,7 +37,7 @@ class ContractAttachmentService:
         """
         self._check_headless(contract=contract)
         interaction = Interaction.objects.create(
-            university=contract.university,
+            organization=contract.organization,
             b2c_client=contract.b2c_client,
             comment=contract.draft_comment,
         )

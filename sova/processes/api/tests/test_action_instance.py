@@ -53,7 +53,7 @@ class ActionInstanceApiTestCase(BaseApiTestMixin, APITestCase):
             "interaction": {
                 "id": str(interaction.pk),
                 "number": interaction.display_number,
-                "university": {"id": str(interaction.university_id), "name": interaction.university.name},
+                "organization": {"id": str(interaction.organization_id), "name": interaction.organization.name},
                 "b2c_client": None,
             },
             "action": {"id": str(instance.action_id), "name": instance.action.name},

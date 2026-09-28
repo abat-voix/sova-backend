@@ -73,11 +73,11 @@ class TrainingInstructorQualificationInline(admin.TabularInline):
 class TrainingInstructorAdmin(AbstractBaseModelAdmin[TrainingInstructor]):
     """Админка преподавателей."""
 
-    list_display = ("id", "last_name", "first_name", "middle_name", "university", "b2c_client", "is_active")
-    list_select_related = ("university", "b2c_client")
+    list_display = ("id", "last_name", "first_name", "middle_name", "organization", "b2c_client", "is_active")
+    list_select_related = ("organization", "b2c_client")
     list_filter = ("is_active", "academic_degree", "academic_title")
     search_fields = ("id", "last_name", "first_name", "email", "lms_external_id")
-    autocomplete_fields = ("university", "b2c_client", "directions", "programs")
+    autocomplete_fields = ("organization", "b2c_client", "directions", "programs")
     inlines = (TrainingInstructorQualificationInline,)
 
 

@@ -4,7 +4,7 @@ from django.db.models import TextChoices
 class ReportType(TextChoices):
     """Тип отчёта. B2C подключается отдельным типом на том же механизме."""
 
-    INTERACTIONS = "interactions", "Взаимодействия с вузами"
+    INTERACTIONS = "interactions", "Взаимодействия с организациями"
 
 
 class ReportFormat(TextChoices):
@@ -30,5 +30,5 @@ class ReportOrdering(TextChoices):
 
     CREATED_AT = "created_at", "По дате создания (старые сначала)"
     CREATED_AT_DESC = "-created_at", "По дате создания (новые сначала)"
-    UNIVERSITY = "university", "По названию вуза"
+    ORGANIZATION = "organization", "По названию организации"
     RESPONSIBLE = "responsible", "По ответственному"

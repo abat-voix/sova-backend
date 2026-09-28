@@ -8,7 +8,7 @@ from sova.catalog.enum import CatalogType
 from sova.catalog.exceptions import CatalogImportRowsError
 from sova.catalog.models import CatalogImportMapping, ContactPerson, Product, Vendor, VendorContact
 from sova.catalog.services import catalog_import_service
-from sova.catalog.tests.factories import ProductFactory, UniversityContactFactory, VendorContactFactory, VendorFactory
+from sova.catalog.tests.factories import ProductFactory, OrganizationContactFactory, VendorContactFactory, VendorFactory
 
 # Строки docs/Хакатон/Вендоры.xlsx: Компания · Продукт · ФИО · Телефон · Почта · Способ связи.
 _HEADERS = ("Компания", "Продукт", "ФИО", "Телефон", "Почта", "Способ связи")
@@ -148,17 +148,17 @@ class VendorRowsImportTestCase(TestCase):
         self.assertEqual(sorted(link.products.values_list("name", flat=True)), ["Web3Gate", "Аврора SDK"])
 
     def test_person_found_by_email_in_other_organization(self) -> None:
-        university_link = UniversityContactFactory(contact__full_name="Иванов И. И.", contact__email="ivanov@example.ru")
+        organization_link = OrganizationContactFactory(contact__full_name="Иванов И. И.", contact__email="ivanov@example.ru")
 
         self._load(_row("ООО «Базис»", full_name="Иванов Иван Иванович", email="IVANOV@example.ru"))
 
         self.assertEqual(ContactPerson.objects.count(), 1)
-        self.assertEqual(VendorContact.objects.get().contact_id, university_link.contact_id)
-        university_link.contact.refresh_from_db()
-        self.assertEqual(university_link.contact.full_name, "Иванов И. И.")
+        self.assertEqual(VendorContact.objects.get().contact_id, organization_link.contact_id)
+        organization_link.contact.refresh_from_db()
+        self.assertEqual(organization_link.contact.full_name, "Иванов И. И.")
 
     def test_namesake_of_other_organization_is_new_person_with_warning(self) -> None:
-        UniversityContactFactory(contact__full_name="Иванов Иван")
+        OrganizationContactFactory(contact__full_name="Иванов Иван")
         warnings: list = []
 
         self._load(_row("ООО «Базис»", full_name="Иванов Иван"), warnings=warnings)
@@ -221,7 +221,7 @@ class VendorRowsImportTestCase(TestCase):
         self.assertEqual(list(link.products.values_list("name", flat=True)), ["Базис Dynamix"])
 
     def test_inactive_person_found_by_email_gets_new_affiliation_and_is_turned_on(self) -> None:
-        other = UniversityContactFactory(contact__email="ivanov@example.ru", contact__is_active=False)
+        other = OrganizationContactFactory(contact__email="ivanov@example.ru", contact__is_active=False)
 
         self._load(_row("ООО «Базис»", full_name="Иванов Иван", email="ivanov@example.ru"))
 

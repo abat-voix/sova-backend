@@ -3,7 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import Supervision, SystemRole, UserRole
-from sova.catalog.tests.factories import UniversityFactory
+from sova.catalog.tests.factories import OrganizationFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.services import responsible_service
 from sova.interactions.services.contract_attachment import contract_attachment_service
@@ -29,7 +29,7 @@ class AssignableManagersApiTestCase(APITestCase):
         Supervision.objects.create(kam=self.mine, head=self.head)
         Supervision.objects.create(kam=self.foreign, head=create_user(SystemRole.HEAD, "Другой"))
 
-        contract = ContractFactory(interaction=None, university=UniversityFactory())
+        contract = ContractFactory(interaction=None, organization=OrganizationFactory())
         responsible_service.sync_contract_responsibles(
             contract=contract, managers=[self.foreign, self.mine], assigned_by=None
         )
@@ -75,7 +75,7 @@ class AssignableManagersApiTestCase(APITestCase):
 
     def test_interaction_without_contracts_has_no_registry_kams(self) -> None:
         self.interaction = contract_attachment_service.attach_to_new_interaction(
-            contract=ContractFactory(interaction=None, university=UniversityFactory()), author=self.head
+            contract=ContractFactory(interaction=None, organization=OrganizationFactory()), author=self.head
         )
 
         # Проверяем: без КАМов реестра — только те, кого руководитель может назначить

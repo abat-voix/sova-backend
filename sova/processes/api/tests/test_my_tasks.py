@@ -40,7 +40,7 @@ class ActionInstanceCardTestCase(EngineApiTestCase):
         self.assertEqual(card["stage_name_snapshot"], stage.name)
         self.assertEqual(card["workflow_instance"], str(process.pk))
         self.assertEqual(card["interaction"]["id"], str(self.interaction.pk))
-        self.assertEqual(card["interaction"]["university"]["id"], str(self.interaction.university_id))
+        self.assertEqual(card["interaction"]["organization"]["id"], str(self.interaction.organization_id))
         self.assertEqual(card["attachments_count"], 0)
         self.assertFalse(card["is_optional"])
         self.assertFalse(card["is_trigger_only"])

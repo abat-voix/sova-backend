@@ -5,7 +5,7 @@ from sova.catalog.api.serializers import (
     B2CClientShortSerializer,
     DirectionShortSerializer,
     ProgramShortSerializer,
-    UniversityShortSerializer,
+    OrganizationShortSerializer,
 )
 from sova.training.models import TrainingInstructor
 
@@ -21,7 +21,7 @@ class TrainingInstructorShortSerializer(serializers.ModelSerializer):
 class TrainingInstructorSerializer(serializers.ModelSerializer):
     """Преподаватель — представление для чтения (list/retrieve)."""
 
-    university = UniversityShortSerializer(read_only=True, label=_("Вуз"))
+    organization = OrganizationShortSerializer(read_only=True, label=_("Организация"))
     b2c_client = B2CClientShortSerializer(read_only=True, label=_("B2C-клиент"))
     directions = DirectionShortSerializer(many=True, read_only=True, label=_("Направления"))
     programs = ProgramShortSerializer(many=True, read_only=True, label=_("Программы"))
@@ -37,7 +37,7 @@ class TrainingInstructorSerializer(serializers.ModelSerializer):
             "email",
             "phone",
             "telegram",
-            "university",
+            "organization",
             "b2c_client",
             "department",
             "position",
@@ -56,7 +56,7 @@ class TrainingInstructorSerializer(serializers.ModelSerializer):
 
 
 class WriteTrainingInstructorSerializer(serializers.ModelSerializer):
-    """Преподаватель — валидация входных данных; организация ровно одна: вуз или B2C-клиент."""
+    """Преподаватель — валидация входных данных; место работы ровно одно: организация или B2C-клиент."""
 
     class Meta:
         model = TrainingInstructor
@@ -68,7 +68,7 @@ class WriteTrainingInstructorSerializer(serializers.ModelSerializer):
             "email",
             "phone",
             "telegram",
-            "university",
+            "organization",
             "b2c_client",
             "department",
             "position",
@@ -84,10 +84,10 @@ class WriteTrainingInstructorSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs):
-        university = attrs.get("university", getattr(self.instance, "university", None))
+        organization = attrs.get("organization", getattr(self.instance, "organization", None))
         b2c_client = attrs.get("b2c_client", getattr(self.instance, "b2c_client", None))
-        if (university is None) == (b2c_client is None):
+        if (organization is None) == (b2c_client is None):
             raise serializers.ValidationError(
-                {"university": [_("Укажите ровно одну организацию: вуз или B2C-клиента.")]}
+                {"organization": [_("Укажите ровно одно место работы: организацию или B2C-клиента.")]}
             )
         return attrs

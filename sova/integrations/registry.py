@@ -5,10 +5,10 @@ from rest_framework import serializers
 from sova.catalog.api.serializers import (
     B2CClientSerializer,
     ContactPersonSerializer,
-    UniversitySerializer,
+    OrganizationSerializer,
     WriteB2CClientSerializer,
     WriteContactPersonSerializer,
-    WriteUniversitySerializer,
+    WriteOrganizationSerializer,
 )
 from sova.interactions.api.serializers import InteractionSerializer, WriteInteractionSerializer
 from sova.processes.api.serializers import WorkflowInstanceSerializer
@@ -30,7 +30,7 @@ ENTITIES = {
         IntegrationEntity("b2c_client", "B2C-клиент", B2CClientSerializer, WriteB2CClientSerializer),
         IntegrationEntity("contact_person", "Контактное лицо", ContactPersonSerializer, WriteContactPersonSerializer),
         IntegrationEntity("interaction", "Взаимодействие", InteractionSerializer, WriteInteractionSerializer),
-        IntegrationEntity("university", "Университет", UniversitySerializer, WriteUniversitySerializer),
+        IntegrationEntity("organization", "Организация", OrganizationSerializer, WriteOrganizationSerializer),
         IntegrationEntity("workflow_instance", "Экземпляр процесса", WorkflowInstanceSerializer),
         IntegrationEntity("training_payment", "Оплата обучения", TrainingPaymentSerializer, TrainingPaymentSerializer),
     )

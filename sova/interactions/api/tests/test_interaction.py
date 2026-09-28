@@ -12,7 +12,7 @@ from sova.catalog.tests.factories import (
     DirectionFactory,
     ProductFactory,
     ProgramFactory,
-    UniversityFactory,
+    OrganizationFactory,
 )
 from sova.core.tests.factories import UserFactory
 from sova.core.tests.base import BaseApiTestMixin
@@ -47,14 +47,14 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
 
     def get_expected_data(self, instance: Interaction) -> dict:
         """Поля read-представления взаимодействия."""
-        university = instance.university
+        organization = instance.organization
         return {
             "id": str(instance.pk),
             "comment": instance.comment,
             "is_active": instance.is_active,
-            "university": (
-                {"id": str(university.pk), "name": university.name}
-                if university
+            "organization": (
+                {"id": str(organization.pk), "name": organization.name}
+                if organization
                 else None
             ),
             "b2c_client": None,
@@ -66,7 +66,7 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
 
     def get_post_data(self) -> dict:
         """Данные создания взаимодействия (вуз — по id)."""
-        return {"comment": "Первичный контакт", "university": str(UniversityFactory().pk)}
+        return {"comment": "Первичный контакт", "organization": str(OrganizationFactory().pk)}
 
     def get_change_data(self) -> dict:
         """Данные обновления взаимодействия."""
@@ -74,7 +74,7 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
 
     def get_search_term(self, instance: Interaction) -> str:
         """Поиск по названию вуза."""
-        return instance.university.name
+        return instance.organization.name
 
     def test_add_for_b2c_client_creates_interaction(self) -> None:
         """Взаимодействие с B2C-клиентом создаётся без вуза."""
@@ -88,7 +88,7 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
 
         # Проверяем, что контрагентом выбран клиент
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
-        self.assertIsNone(response.data["university"])
+        self.assertIsNone(response.data["organization"])
         self.assertEqual(response.data["b2c_client"]["id"], str(client.pk))
 
     def test_add_returns_400_without_counterparty(self) -> None:
@@ -103,7 +103,7 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
         response = self.client.post(
             path=self.list_url,
             data={
-                "university": str(UniversityFactory().pk),
+                "organization": str(OrganizationFactory().pk),
                 "b2c_client": str(B2CClientFactory().pk),
             },
             format="json",
@@ -191,20 +191,20 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
             sorted(str(interaction.pk) for interaction in expected),
         )
 
-    def test_filter_by_university_ids(self) -> None:
-        """Фильтр university__ids возвращает взаимодействия указанных вузов."""
+    def test_filter_by_organization_ids(self) -> None:
+        """Фильтр organization__ids возвращает взаимодействия указанных вузов."""
         target = InteractionFactory()
         InteractionFactory()
 
         self.assert_filter_returns(
-            params={"university__ids": str(target.university_id)},
+            params={"organization__ids": str(target.organization_id)},
             expected=[target],
         )
 
     def test_filter_by_b2c_client_ids(self) -> None:
         """Фильтр b2c_client__ids возвращает взаимодействия указанных клиентов."""
         client = B2CClientFactory()
-        target = InteractionFactory(university=None, b2c_client=client)
+        target = InteractionFactory(organization=None, b2c_client=client)
         InteractionFactory()
 
         self.assert_filter_returns(
@@ -625,7 +625,7 @@ class ResponsibleRulesApiTestCase(APITestCase):
         self.client.force_authenticate(user=actor)
         return self.client.post(
             reverse("interactions:interaction-list"),
-            {"university": str(UniversityFactory().pk)},
+            {"organization": str(OrganizationFactory().pk)},
             format="json",
         )
 

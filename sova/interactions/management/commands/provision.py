@@ -7,7 +7,7 @@ class Command(BaseCommand):
     """Наполняет базу данными для разработки — тем, чего нет в справочниках."""
 
     help = (
-        "Создаёт тестовые взаимодействия с вузами и B2C-клиентами из справочников "
+        "Создаёт тестовые взаимодействия с организациями и B2C-клиентами из справочников "
         "и назначает им действующего ответственного. Справочники загружает `loaddata --reference-data`."
     )
 
@@ -38,7 +38,7 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Тестовые взаимодействия: создано {result.created} "
-                f"(с вузами {result.with_universities}, с B2C-клиентами {result.with_b2c_clients}), "
+                f"(с организациями {result.with_organizations}, с B2C-клиентами {result.with_b2c_clients}), "
                 f"уже было {result.existing}. Ответственный: {result.manager}.",
             )
         )

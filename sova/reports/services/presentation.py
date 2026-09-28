@@ -26,7 +26,7 @@ TEXT = {
         "programs": "Программы",
         "products": "Продукты",
         "by_responsible": "По ответственным",
-        "by_university": "По вузам",
+        "by_organization": "По организациям",
         "by_process_status": "По статусу процесса",
         "by_active_stage": "По актуальному этапу",
         "interactions_over_time": "Динамика взаимодействий",
@@ -44,7 +44,7 @@ TEXT = {
         "programs": "Programs",
         "products": "Products",
         "by_responsible": "By manager",
-        "by_university": "By university",
+        "by_organization": "By organization",
         "by_process_status": "By process status",
         "by_active_stage": "By current stage",
         "interactions_over_time": "Interactions over time",
@@ -172,8 +172,8 @@ def build_report_presentation(
     products: set = set()
     by_responsible = defaultdict(set)
     responsible_names: dict = {}
-    by_university = defaultdict(set)
-    university_names: dict = {}
+    by_organization = defaultdict(set)
+    organization_names: dict = {}
     by_process_status = defaultdict(set)
     process_labels: dict = {}
     by_stage = defaultdict(set)
@@ -196,8 +196,8 @@ def build_report_presentation(
         else:
             by_responsible[None].add(row.interaction_id)
             responsible_names[None] = NO_RESPONSIBLE
-        by_university[row.university_id].add(row.interaction_id)
-        university_names[row.university_id] = row.university
+        by_organization[row.organization_id].add(row.interaction_id)
+        organization_names[row.organization_id] = row.organization
 
         if row.process_statuses:
             for item in row.process_statuses:
@@ -252,7 +252,7 @@ def build_report_presentation(
     ]
     for chart_id, title_key, groups, labels, note in (
         ("by_responsible", "by_responsible", by_responsible, responsible_names, True),
-        ("by_university", "by_university", by_university, university_names, False),
+        ("by_organization", "by_organization", by_organization, organization_names, False),
         ("by_process_status", "by_process_status", by_process_status, process_labels, True),
         ("by_active_stage", "by_active_stage", by_stage, {None: NO_ACTIVE_STAGE, **{key: key for key in by_stage if key is not None}}, True),
     ):
@@ -280,7 +280,7 @@ def build_report_presentation(
         "programs_count": len(programs),
         "products_count": len(products),
         "by_responsible": raw_distribution(by_responsible, responsible_names, "id"),
-        "by_university": raw_distribution(by_university, university_names, "id"),
+        "by_organization": raw_distribution(by_organization, organization_names, "id"),
         "by_process_status": raw_distribution(by_process_status, process_labels, "status"),
         "by_active_stage": raw_distribution(by_stage, {None: NO_ACTIVE_STAGE, **{key: key for key in by_stage if key is not None}}, "stage"),
         "metrics": [

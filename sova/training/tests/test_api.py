@@ -2,7 +2,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
-from sova.catalog.tests.factories import ProgramFactory, UniversityFactory
+from sova.catalog.tests.factories import ProgramFactory, OrganizationFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.services import responsible_service
 from sova.interactions.tests.factories import InteractionFactory, InteractionProgramFactory
@@ -67,9 +67,9 @@ class StreamApiTestCase(TrainingApiTestCase):
     def test_shows_counterparty_and_interaction_number(self) -> None:
         response = self.client.get(f"{BASE}/streams/{self.stream.pk}/")
 
-        university = self.interaction.university
-        self.assertEqual((response.data["university"], response.data["b2c_client"]), (str(university.pk), None))
-        self.assertEqual(response.data["counterparty_name"], university.name)
+        organization = self.interaction.organization
+        self.assertEqual((response.data["organization"], response.data["b2c_client"]), (str(organization.pk), None))
+        self.assertEqual(response.data["counterparty_name"], organization.name)
         self.assertEqual(response.data["interaction_number"], self.interaction.display_number)
 
     def test_filter_by_interaction(self) -> None:
@@ -89,12 +89,12 @@ class StreamApiTestCase(TrainingApiTestCase):
         self.assertEqual(response.data["name"], "Новое")
 
     def test_assign_and_unassign_instructor(self) -> None:
-        instructor = TrainingInstructorFactory(university=self.interaction.university)
+        instructor = TrainingInstructorFactory(organization=self.interaction.organization)
         url = f"{BASE}/streams/{self.stream.pk}/instructors/"
 
         assigned = self.client.post(url, {"instructor": str(instructor.pk)}, format="json")
         foreign = self.client.post(
-            url, {"instructor": str(TrainingInstructorFactory(university=UniversityFactory()).pk)}, format="json"
+            url, {"instructor": str(TrainingInstructorFactory(organization=OrganizationFactory()).pk)}, format="json"
         )
         removed = self.client.delete(f"{url}{instructor.pk}/")
 
@@ -324,7 +324,7 @@ class InstructorApiTestCase(TrainingApiTestCase):
             {
                 "last_name": "Петров",
                 "first_name": "Пётр",
-                "university": str(self.interaction.university.pk),
+                "organization": str(self.interaction.organization.pk),
                 "academic_degree": "candidate",
                 "programs": [str(program.pk)],
             },

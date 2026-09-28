@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
-from sova.catalog.tests.factories import DirectionFactory, UniversityFactory
+from sova.catalog.tests.factories import DirectionFactory, OrganizationFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.models import Interaction, InteractionDirection
 from sova.interactions.services import responsible_service
@@ -49,7 +49,7 @@ class InteractionPermissionsTestCase(APITestCase):
     def write_requests(self) -> dict[str, tuple[str, str, dict]]:
         """Все запросы, меняющие взаимодействие: имя -> (метод, URL, тело)."""
         return {
-            "create": ("post", self.list_url, {"university": str(UniversityFactory().pk)}),
+            "create": ("post", self.list_url, {"organization": str(OrganizationFactory().pk)}),
             "update": ("patch", self.url("detail"), {"comment": "изменено"}),
             "delete": ("delete", self.url("detail"), {}),
             "assignable_managers": ("get", self.url("assignable-managers"), {}),

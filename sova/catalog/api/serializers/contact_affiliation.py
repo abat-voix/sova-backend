@@ -5,9 +5,9 @@ from rest_framework import serializers
 from sova.catalog.api.serializers.b2c_client import B2CClientShortSerializer
 from sova.catalog.api.serializers.contact_person import ContactPersonShortSerializer
 from sova.catalog.api.serializers.product import ProductShortSerializer
-from sova.catalog.api.serializers.university import UniversityShortSerializer
+from sova.catalog.api.serializers.organization import OrganizationShortSerializer
 from sova.catalog.api.serializers.vendor import VendorShortSerializer
-from sova.catalog.models import B2CClientContact, UniversityContact, VendorContact
+from sova.catalog.models import B2CClientContact, OrganizationContact, VendorContact
 from sova.catalog.services import contact_affiliation_service
 from sova.core.api.validators import validate_model_constraints
 
@@ -43,25 +43,25 @@ class _WriteAffiliationSerializer(serializers.ModelSerializer):
         return instance
 
 
-class UniversityContactSerializer(serializers.ModelSerializer):
-    """Связь контактного лица с вузом (list/retrieve)."""
+class OrganizationContactSerializer(serializers.ModelSerializer):
+    """Связь контактного лица с организацией (list/retrieve)."""
 
     contact = ContactPersonShortSerializer(read_only=True)
-    university = UniversityShortSerializer(read_only=True)
+    organization = OrganizationShortSerializer(read_only=True)
 
     class Meta:
-        model = UniversityContact
-        fields = (*_READ_FIELDS, "university")
+        model = OrganizationContact
+        fields = (*_READ_FIELDS, "organization")
 
 
-class WriteUniversityContactSerializer(_WriteAffiliationSerializer):
-    """Связь контактного лица с вузом (create/update)."""
+class WriteOrganizationContactSerializer(_WriteAffiliationSerializer):
+    """Связь контактного лица с организацией (create/update)."""
 
-    organization_field = "university"
+    organization_field = "organization"
 
     class Meta:
-        model = UniversityContact
-        fields = (*_WRITE_FIELDS, "university")
+        model = OrganizationContact
+        fields = (*_WRITE_FIELDS, "organization")
 
 
 class B2CClientContactSerializer(serializers.ModelSerializer):
