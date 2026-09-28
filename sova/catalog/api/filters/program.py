@@ -2,11 +2,12 @@ from django.db.models import Exists, OuterRef, QuerySet
 from django.utils.translation import gettext_lazy as _
 from django_filters import rest_framework as filters
 
+from sova.catalog.api.filters.rank import RankFilterMixin
 from sova.catalog.models import Product, Program
-from sova.core.api.filters import SearchFilterMixin, UUIDInFilter
+from sova.core.api.filters import UUIDInFilter
 
 
-class ProgramFilter(SearchFilterMixin):
+class ProgramFilter(RankFilterMixin):
     """Фильтр программ."""
 
     direction__ids = UUIDInFilter(

@@ -1,11 +1,12 @@
 from django.utils.translation import gettext_lazy as _
 from django_filters import rest_framework as filters
 
+from sova.catalog.api.filters.rank import RankFilterMixin
 from sova.catalog.models import Product
-from sova.core.api.filters import SearchFilterMixin, UUIDInFilter
+from sova.core.api.filters import UUIDInFilter
 
 
-class ProductFilter(SearchFilterMixin):
+class ProductFilter(RankFilterMixin):
     """
     Фильтр продуктов.
 

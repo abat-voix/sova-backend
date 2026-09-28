@@ -1,3 +1,4 @@
+from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 from sova.catalog.models import Direction
@@ -15,6 +16,13 @@ class DirectionShortSerializer(serializers.ModelSerializer):
 class DirectionSerializer(serializers.ModelSerializer):
     """Направление — представление для чтения (list/retrieve)."""
 
+    rank = serializers.IntegerField(
+        read_only=True,
+        allow_null=True,
+        label=_("Место в рейтинге"),
+        help_text=_("По числу зачисленных (оплативших обучение) людей; при равенстве место делится. Null — места нет"),
+    )
+
     class Meta:
         model = Direction
         fields = (
@@ -24,6 +32,7 @@ class DirectionSerializer(serializers.ModelSerializer):
             "is_active",
             "created_at",
             "updated_at",
+            "rank",
         )
 
 

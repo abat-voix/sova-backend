@@ -12,11 +12,13 @@ from sova.catalog.services.import_mapping import (
     MappingField,
     catalog_import_mapping_service,
 )
+from sova.catalog.services.ranking import CatalogRankingService, catalog_ranking_service
 
 __all__ = [
     "CatalogImportMappingService",
     "CatalogImportService",
     "CatalogLookupService",
+    "CatalogRankingService",
     "ContactAffiliationService",
     "ContactMatch",
     "ContactMatchingService",
@@ -26,6 +28,7 @@ __all__ = [
     "catalog_import_mapping_service",
     "catalog_import_service",
     "catalog_lookup_service",
+    "catalog_ranking_service",
     "contact_affiliation_service",
     "contact_matching_service",
     "contract_registry_import_service",

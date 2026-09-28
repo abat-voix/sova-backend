@@ -4,13 +4,13 @@ from rest_framework.response import Response
 
 from accounts.policy import Action
 from sova.catalog.api import filters, serializers
-from sova.catalog.api.views.mixins import CatalogPolicyMixin
+from sova.catalog.api.views.mixins import CatalogPolicyMixin, CatalogRankMixin
 from sova.catalog.models import University
 from sova.core.api.views import SovaBaseViewSet
 from sova.interactions.models import Interaction
 
 
-class UniversityViewSet(CatalogPolicyMixin, SovaBaseViewSet):
+class UniversityViewSet(CatalogPolicyMixin, CatalogRankMixin, SovaBaseViewSet):
     """Вузы. Доступны CRUD операции."""
 
     read_serializer_class = serializers.UniversitySerializer
@@ -29,11 +29,6 @@ class UniversityViewSet(CatalogPolicyMixin, SovaBaseViewSet):
             "-has_interactions",
             "name",
         )
-
-    def perform_create(self, serializer: serializers.WriteUniversitySerializer) -> None:
-        """Пересоздание инстанса через аннотированный queryset для read-ответа."""
-        super().perform_create(serializer)
-        serializer.instance = self.get_queryset().get(pk=serializer.instance.pk)
 
     @action(
         detail=False,

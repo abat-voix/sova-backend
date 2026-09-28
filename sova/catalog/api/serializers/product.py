@@ -18,6 +18,12 @@ class ProductShortSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     """Продукт — представление для чтения (list/retrieve)."""
 
+    rank = serializers.IntegerField(
+        read_only=True,
+        allow_null=True,
+        label=_("Место в рейтинге"),
+        help_text=_("По числу взаимодействий, где продукт активен; при равенстве место делится. Null — места нет"),
+    )
     vendor = VendorShortSerializer(
         read_only=True,
         label=_("Вендор"),
@@ -41,6 +47,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "programs",
             "created_at",
             "updated_at",
+            "rank",
         )
 
 

@@ -2,12 +2,12 @@ from django.db.models import Exists, OuterRef, QuerySet
 from django.utils.translation import gettext_lazy as _
 from django_filters import rest_framework as filters
 
+from sova.catalog.api.filters.rank import RankFilterMixin
 from sova.catalog.models import University
-from sova.core.api.filters import SearchFilterMixin
 from sova.interactions.models import Interaction
 
 
-class UniversityFilter(SearchFilterMixin):
+class UniversityFilter(RankFilterMixin):
     """Фильтр вузов."""
 
     has_interactions = filters.BooleanFilter(

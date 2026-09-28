@@ -16,6 +16,12 @@ class UniversityShortSerializer(serializers.ModelSerializer):
 class UniversitySerializer(serializers.ModelSerializer):
     """Вуз — представление для чтения (list/retrieve)."""
 
+    rank = serializers.IntegerField(
+        read_only=True,
+        allow_null=True,
+        label=_("Место в рейтинге"),
+        help_text=_("По числу зачисленных (оплативших обучение) людей; при равенстве место делится. Null — места нет"),
+    )
     has_interactions = serializers.BooleanField(
         read_only=True,
         label=_("Наличие взаимодействий"),
@@ -35,6 +41,7 @@ class UniversitySerializer(serializers.ModelSerializer):
             "has_interactions",
             "created_at",
             "updated_at",
+            "rank",
             "lat",
             "lon",
             "city",

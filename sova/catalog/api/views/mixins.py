@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from typing import TypeVar
 
+from django.db.models import QuerySet
 from rest_framework import status
 from rest_framework.response import Response
 
@@ -8,6 +9,7 @@ from accounts.policy import Action
 from sova.catalog.api.serializers import CatalogImportErrorSerializer
 from sova.catalog.exceptions import CatalogImportError, CatalogImportRowsError
 from sova.catalog.schemas import ImportRowWarning
+from sova.catalog.services import catalog_ranking_service
 
 ImportResult = TypeVar("ImportResult")
 
@@ -23,6 +25,19 @@ class CatalogPolicyMixin:
         "partial_update": Action.CATALOG_UPDATE,
         "destroy": Action.CATALOG_DELETE,
     }
+
+
+class CatalogRankMixin:
+    """Место в рейтинге (`rank`) в ответах справочника, см. `CatalogRankingService`."""
+
+    def get_queryset(self) -> QuerySet:
+        """Аннотирует queryset местом в рейтинге."""
+        return catalog_ranking_service.annotate_rank(super().get_queryset())
+
+    def perform_create(self, serializer) -> None:
+        """Пересоздание инстанса через аннотированный queryset для read-ответа."""
+        super().perform_create(serializer)
+        serializer.instance = self.get_queryset().get(pk=serializer.instance.pk)
 
 
 class ImportResponseMixin:

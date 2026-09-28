@@ -6,6 +6,8 @@
 заданы по минимуму — их включают на исходах под свой процесс.
 """
 
+from dataclasses import replace
+
 from sova.processes.enum import StageInstanceContextType
 from sova.workflows.enum import Audience
 from sova.workflows.schemas import ActionSpec, FeatureSpec, OutcomeSpec, StageSpec, WorkflowSpec
@@ -146,5 +148,17 @@ BASE_B2B_PRESET = WorkflowSpec(
                 ),
             ),
         ),
+    ),
+)
+
+# B2C-процесс повторяет вузовский: отдельного пути для физ/юрлиц пока нет, базовый шаблон нужен аудитории B2C
+BASE_B2C_PRESET = replace(
+    BASE_B2B_PRESET,
+    code="base-b2c",
+    name="Базовый процесс работы с B2C-клиентом",
+    audience=Audience.B2C,
+    description=(
+        "Копия процесса работы с вузом для B2C-клиентов. "
+        "Поставка ПО идёт по каждому продукту взаимодействия, обучение — по каждой программе."
     ),
 )
