@@ -5,3 +5,4 @@ class NotificationsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "sova.notifications"
     label = "notifications"
+    verbose_name = "Уведомления"
