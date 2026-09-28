@@ -4,7 +4,7 @@ from sova.catalog.tests.factories import (
     DirectionFactory,
     ProductFactory,
     ProgramFactory,
-    UniversityFactory,
+    OrganizationFactory,
 )
 from sova.core.tests.factories import UserFactory
 from sova.interactions.models import (
@@ -24,7 +24,7 @@ class InteractionFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Interaction
 
-    university = factory.SubFactory(UniversityFactory)
+    organization = factory.SubFactory(OrganizationFactory)
 
 
 class ContractFactory(factory.django.DjangoModelFactory):

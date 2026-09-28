@@ -226,7 +226,7 @@ class StartTest(EngineTestCase):
         builder = WorkflowBuilder(audience=Audience.B2C)
         stage = builder.stage("Первый")
         builder.action(stage, "А")
-        interaction = InteractionFactory(university=None, b2c_client=B2CClientFactory())
+        interaction = InteractionFactory(organization=None, b2c_client=B2CClientFactory())
 
         process = engine.start(workflow=builder.workflow, interaction=interaction, started_by=self.user)
 

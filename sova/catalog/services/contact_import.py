@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from sova.catalog.models import ContactPerson
-from sova.catalog.services.contact_affiliation import Affiliation, Organization, contact_affiliation_service
+from sova.catalog.services.contact_affiliation import Affiliation, ContactOwner, contact_affiliation_service
 from sova.catalog.services.contact_matching import contact_matching_service
 from sova.catalog.services.import_file import import_file_service
 from sova.core.text import normalize_telegram, text_key
@@ -77,7 +77,7 @@ class ContactImportService:
             channels=None if values["channels"] is None else import_file_service.to_contact_channels(values["channels"]),
         )
 
-    def import_contact(self, organization: Organization, contact_row: ContactRow) -> ContactImportResult:
+    def import_contact(self, organization: ContactOwner, contact_row: ContactRow) -> ContactImportResult:
         """Находит или создаёт человека и его связь с организацией, записывает данные строки."""
         match = contact_matching_service.match_for_import(
             organization=organization,

@@ -20,11 +20,11 @@ class TrainingStreamSerializer(serializers.ModelSerializer):
         read_only=True,
         label=_("Номер взаимодействия"),
     )
-    university = serializers.UUIDField(
-        source="interaction_program.interaction.university_id",
+    organization = serializers.UUIDField(
+        source="interaction_program.interaction.organization_id",
         read_only=True,
         allow_null=True,
-        label=_("Вуз"),
+        label=_("Организация"),
         help_text=_("Контрагент взаимодействия; преподаватели назначаются только из его организации"),
     )
     b2c_client = serializers.UUIDField(
@@ -57,7 +57,7 @@ class TrainingStreamSerializer(serializers.ModelSerializer):
             "interaction_program",
             "interaction",
             "interaction_number",
-            "university",
+            "organization",
             "b2c_client",
             "counterparty_name",
             "program",
@@ -76,7 +76,7 @@ class TrainingStreamSerializer(serializers.ModelSerializer):
 
     def get_counterparty_name(self, obj: TrainingStream) -> str:
         interaction = obj.interaction_program.interaction
-        counterparty = interaction.university or interaction.b2c_client
+        counterparty = interaction.organization or interaction.b2c_client
         return getattr(counterparty, "name", None) or getattr(counterparty, "full_name", "")
 
 

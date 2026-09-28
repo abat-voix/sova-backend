@@ -80,7 +80,6 @@ class IntegrationMappingProcessApiTest(APITestCase):
                 {"sourcePath": "$.student.name", "targetField": "full_name", "required": True, "defaultValue": None},
                 {"sourcePath": "$.student.mail", "targetField": "email", "required": False, "defaultValue": None},
                 {"sourcePath": "$.student.phone", "targetField": "phone", "required": False, "defaultValue": None},
-                {"sourcePath": "", "targetField": "kind", "required": True, "defaultValue": "individual"},
             ],
         )
         self.url = reverse("integrations:mapping-process", args=[self.mapping.pk])
@@ -140,6 +139,6 @@ class IntegrationMappingProcessApiTest(APITestCase):
         self.client.force_authenticate(self.admin)
         response = self.client.get(reverse("integrations:entity-metadata"))
         by_code = {item["code"]: {field["name"]: field for field in item["fields"]} for item in response.data}
-        self.assertFalse(by_code["interaction"]["university"]["read_only"])
-        self.assertTrue(by_code["university"]["lat"]["read_only"])
+        self.assertFalse(by_code["interaction"]["organization"]["read_only"])
+        self.assertTrue(by_code["organization"]["has_interactions"]["read_only"])
         self.assertTrue(all(field["read_only"] for field in by_code["workflow_instance"].values()))

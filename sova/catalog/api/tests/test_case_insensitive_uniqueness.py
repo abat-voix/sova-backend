@@ -7,7 +7,7 @@ from sova.catalog.models import Vendor
 from sova.catalog.tests.factories import (
     ContactPersonFactory,
     ProductFactory,
-    UniversityFactory,
+    OrganizationFactory,
     VendorFactory,
 )
 from sova.core.tests.factories import UserFactory
@@ -76,12 +76,12 @@ class CaseInsensitiveUniquenessApiTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
         self.assertEqual(response.data["name"], "мОсква Софт")
 
-    def test_university_name_duplicate_in_other_case_returns_400(self) -> None:
+    def test_organization_name_duplicate_in_other_case_returns_400(self) -> None:
         """Вуз «мгу» при существующем «МГУ» отклоняется."""
-        UniversityFactory(name="МГУ")
+        OrganizationFactory(name="МГУ")
 
         response = self.client.post(
-            path=reverse("catalog:university-list"),
+            path=reverse("catalog:organization-list"),
             data={"name": "мгу"},
             format="json",
         )

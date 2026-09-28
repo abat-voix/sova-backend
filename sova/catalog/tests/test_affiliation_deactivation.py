@@ -6,9 +6,9 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
-from sova.catalog.models import ContactPerson, UniversityContact, VendorContact
+from sova.catalog.models import ContactPerson, OrganizationContact, VendorContact
 from sova.catalog.services import contact_affiliation_service
-from sova.catalog.tests.factories import UniversityContactFactory, UniversityFactory, VendorContactFactory
+from sova.catalog.tests.factories import OrganizationContactFactory, OrganizationFactory, VendorContactFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.models import InteractionContact
 from sova.interactions.tests.factories import InteractionFactory, ResponsibleFactory
@@ -25,8 +25,8 @@ class AffiliationDeletionTestCase(TestCase):
     """Человек ушёл из вуза: связь удаляется, привязки к активным взаимодействиям вуза закрываются, КАМы уведомлены."""
 
     def setUp(self) -> None:
-        self.link = UniversityContactFactory(contact__full_name="Иванов Иван", position="Проректор")
-        self.interaction = InteractionFactory(university=self.link.university)
+        self.link = OrganizationContactFactory(contact__full_name="Иванов Иван", position="Проректор")
+        self.interaction = InteractionFactory(organization=self.link.organization)
         self.kams = ResponsibleFactory.create_batch(2, interaction=self.interaction)
         self.actor = UserFactory()
         InteractionContact.objects.create(interaction=self.interaction, contact_person=self.link.contact)
@@ -38,7 +38,7 @@ class AffiliationDeletionTestCase(TestCase):
     def test_delete_unlinks_and_notifies_active_kams(self, task) -> None:
         closed = self._delete()
 
-        self.assertFalse(UniversityContact.objects.exists())
+        self.assertFalse(OrganizationContact.objects.exists())
         self.assertEqual(len(closed), 1)
         link = InteractionContact.objects.get()
         self.assertIsNotNone(link.unlinked_at)
@@ -50,7 +50,7 @@ class AffiliationDeletionTestCase(TestCase):
 
     def test_inactive_interaction_is_left_as_is(self, task) -> None:
         """Завершённое (неактивное) взаимодействие хранит своих контактов: отвязки и уведомления нет."""
-        finished = InteractionFactory(university=self.link.university, is_active=False)
+        finished = InteractionFactory(organization=self.link.organization, is_active=False)
         ResponsibleFactory(interaction=finished)
         InteractionContact.objects.create(interaction=finished, contact_person=self.link.contact)
 
@@ -60,8 +60,8 @@ class AffiliationDeletionTestCase(TestCase):
         self.assertEqual(len(_system_calls(task)), len(self.kams))
 
     def test_other_organization_links_are_kept(self, task) -> None:
-        other = UniversityContactFactory(contact=self.link.contact)
-        other_interaction = InteractionFactory(university=other.university)
+        other = OrganizationContactFactory(contact=self.link.contact)
+        other_interaction = InteractionFactory(organization=other.organization)
         InteractionContact.objects.create(interaction=other_interaction, contact_person=self.link.contact)
 
         self._delete()
@@ -85,12 +85,12 @@ class ContactDeactivationServiceTestCase(TestCase):
     """Выключение человека — ушёл отовсюду: привязки ко всем активным взаимодействиям закрыты, связи удалены."""
 
     def setUp(self) -> None:
-        self.first = UniversityContactFactory()
+        self.first = OrganizationContactFactory()
         self.contact = self.first.contact
-        self.second = UniversityContactFactory(contact=self.contact)
+        self.second = OrganizationContactFactory(contact=self.contact)
         VendorContactFactory(contact=self.contact)
         for link in (self.first, self.second):
-            interaction = InteractionFactory(university=link.university)
+            interaction = InteractionFactory(organization=link.organization)
             ResponsibleFactory(interaction=interaction)
             InteractionContact.objects.create(interaction=interaction, contact_person=self.contact)
 
@@ -101,7 +101,7 @@ class ContactDeactivationServiceTestCase(TestCase):
         self.contact.refresh_from_db()
         self.assertFalse(self.contact.is_active)
         self.assertEqual(len(closed), 2)
-        self.assertFalse(UniversityContact.objects.filter(contact=self.contact).exists())
+        self.assertFalse(OrganizationContact.objects.filter(contact=self.contact).exists())
         self.assertFalse(VendorContact.objects.filter(contact=self.contact).exists())
         self.assertFalse(InteractionContact.objects.filter(unlinked_at__isnull=True).exists())
         self.assertEqual(len(_system_calls(task)), 2)
@@ -116,7 +116,7 @@ class ContactDeactivationServiceTestCase(TestCase):
         self.assertEqual(contact_affiliation_service.links_of(contact=contact), [])
 
     def test_deactivate_contact_skips_inactive_interactions(self, task) -> None:
-        finished = InteractionFactory(university=self.first.university, is_active=False)
+        finished = InteractionFactory(organization=self.first.organization, is_active=False)
         InteractionContact.objects.create(interaction=finished, contact_person=self.contact)
 
         contact_affiliation_service.deactivate_contact(contact=self.contact)
@@ -130,7 +130,7 @@ class ContactDeactivationServiceTestCase(TestCase):
 
         self.contact.refresh_from_db()
         self.assertTrue(self.contact.is_active)
-        self.assertFalse(UniversityContact.objects.filter(contact=self.contact).exists())
+        self.assertFalse(OrganizationContact.objects.filter(contact=self.contact).exists())
         # Закрытые привязки не восстанавливаются
         self.assertFalse(InteractionContact.objects.filter(unlinked_at__isnull=True).exists())
 
@@ -143,18 +143,18 @@ class AffiliationApiTestCase(APITestCase):
         self.user = UserFactory()
         UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
         self.client.force_authenticate(user=self.user)
-        self.link = UniversityContactFactory(position="Проректор")
-        interaction = InteractionFactory(university=self.link.university)
+        self.link = OrganizationContactFactory(position="Проректор")
+        interaction = InteractionFactory(organization=self.link.organization)
         ResponsibleFactory(interaction=interaction)
         InteractionContact.objects.create(interaction=interaction, contact_person=self.link.contact)
-        self.url = reverse("catalog:university-contact-detail", args=[self.link.pk])
+        self.url = reverse("catalog:organization-contact-detail", args=[self.link.pk])
 
     def test_delete_unlinks_and_returns_204(self, task) -> None:
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.delete(self.url)
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(UniversityContact.objects.exists())
+        self.assertFalse(OrganizationContact.objects.exists())
         self.assertEqual(InteractionContact.objects.get().unlinked_by, self.user)
         self.assertEqual(len(_system_calls(task)), 1)
 
@@ -173,12 +173,12 @@ class AffiliationApiTestCase(APITestCase):
         self.assertFalse({"is_active", "started_at", "ended_at"} & set(response.data))
 
     def test_create_affiliation_for_inactive_contact_turns_it_on(self, task) -> None:
-        contact = UniversityContactFactory(contact__is_active=False).contact
-        university = UniversityContactFactory().university
+        contact = OrganizationContactFactory(contact__is_active=False).contact
+        organization = OrganizationContactFactory().organization
 
         response = self.client.post(
-            reverse("catalog:university-contact-list"),
-            {"contact": str(contact.pk), "university": str(university.pk), "position": "Доцент"},
+            reverse("catalog:organization-contact-list"),
+            {"contact": str(contact.pk), "organization": str(organization.pk), "position": "Доцент"},
             format="json",
         )
 
@@ -188,26 +188,26 @@ class AffiliationApiTestCase(APITestCase):
 
     def test_second_affiliation_of_pair_returns_400(self, task) -> None:
         response = self.client.post(
-            reverse("catalog:university-contact-list"),
-            {"contact": str(self.link.contact_id), "university": str(self.link.university_id)},
+            reverse("catalog:organization-contact-list"),
+            {"contact": str(self.link.contact_id), "organization": str(self.link.organization_id)},
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_filter_by_contact_activity(self, task) -> None:
-        UniversityContactFactory(university=self.link.university, contact__is_active=False)
+        OrganizationContactFactory(organization=self.link.organization, contact__is_active=False)
 
         response = self.client.get(
-            reverse("catalog:university-contact-list"),
-            {"university__ids": str(self.link.university_id), "contact__is_active": "true"},
+            reverse("catalog:organization-contact-list"),
+            {"organization__ids": str(self.link.organization_id), "contact__is_active": "true"},
         )
 
         self.assertEqual([item["id"] for item in response.data["results"]], [str(self.link.pk)])
 
     def test_restore_endpoint_is_removed(self, task) -> None:
         with self.assertRaises(NoReverseMatch):
-            reverse("catalog:university-contact-restore", args=[self.link.pk])
+            reverse("catalog:organization-contact-restore", args=[self.link.pk])
 
 
 @patch("sova.notifications.services.event_notification.send_event_notification")
@@ -218,10 +218,10 @@ class ContactDeactivationApiTestCase(APITestCase):
         self.user = UserFactory()
         UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
         self.client.force_authenticate(user=self.user)
-        self.link = UniversityContactFactory()
+        self.link = OrganizationContactFactory()
         self.contact = self.link.contact
         self.vendor_link = VendorContactFactory(contact=self.contact)
-        self.interaction = InteractionFactory(university=self.link.university)
+        self.interaction = InteractionFactory(organization=self.link.organization)
         ResponsibleFactory(interaction=self.interaction)
         InteractionContact.objects.create(interaction=self.interaction, contact_person=self.contact)
         self.url = reverse("catalog:contact-person-detail", args=[self.contact.pk])
@@ -233,7 +233,7 @@ class ContactDeactivationApiTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
         self.assertFalse(response.data["is_active"])
         self.assertEqual(response.data["affiliations"], [])
-        self.assertFalse(UniversityContact.objects.exists())
+        self.assertFalse(OrganizationContact.objects.exists())
         self.assertFalse(VendorContact.objects.exists())
         self.assertEqual(InteractionContact.objects.get().unlinked_by, self.user)
         self.assertEqual(len(_system_calls(task)), 1)
@@ -246,8 +246,8 @@ class ContactDeactivationApiTestCase(APITestCase):
 
         without_affiliation = self.client.post(link_url, {"contact_person": str(self.contact.pk)}, format="json")
         self.client.post(
-            reverse("catalog:university-contact-list"),
-            {"contact": str(self.contact.pk), "university": str(self.interaction.university_id)},
+            reverse("catalog:organization-contact-list"),
+            {"contact": str(self.contact.pk), "organization": str(self.interaction.organization_id)},
             format="json",
         )
         with_affiliation = self.client.post(link_url, {"contact_person": str(self.contact.pk)}, format="json")
@@ -262,19 +262,19 @@ class AffiliationAdminTestCase(TestCase):
 
     def setUp(self) -> None:
         self.client.force_login(UserFactory(is_staff=True, is_superuser=True))
-        self.link = UniversityContactFactory(position="Проректор")
-        interaction = InteractionFactory(university=self.link.university)
+        self.link = OrganizationContactFactory(position="Проректор")
+        interaction = InteractionFactory(organization=self.link.organization)
         InteractionContact.objects.create(interaction=interaction, contact_person=self.link.contact)
         self.url = reverse("admin:catalog_contactperson_change", args=[self.link.contact_id])
 
     def _post(self, contact_active: bool = True, extra: dict | None = None, **link_fields) -> None:
         contact = self.link.contact
-        prefix = "university_links"
+        prefix = "organization_links"
         forms = [
             {
                 "id": str(self.link.pk),
                 "contact": str(contact.pk),
-                "university": str(self.link.university_id),
+                "organization": str(self.link.organization_id),
                 "position": "Проректор",
                 "preferred_channels": "",
                 **link_fields,
@@ -303,29 +303,29 @@ class AffiliationAdminTestCase(TestCase):
     def test_inline_delete_unlinks(self, task) -> None:
         self._post(DELETE="on")
 
-        self.assertFalse(UniversityContact.objects.exists())
+        self.assertFalse(OrganizationContact.objects.exists())
         self.assertFalse(InteractionContact.objects.filter(unlinked_at__isnull=True).exists())
 
     def test_inline_new_affiliation_turns_contact_on(self, task) -> None:
         ContactPerson.objects.filter(pk=self.link.contact_id).update(is_active=False)
 
-        self._post(contact_active=False, extra={"university": str(UniversityFactory().pk), "position": "Доцент"})
+        self._post(contact_active=False, extra={"organization": str(OrganizationFactory().pk), "position": "Доцент"})
 
         self.assertTrue(ContactPerson.objects.get(pk=self.link.contact_id).is_active)
-        self.assertEqual(UniversityContact.objects.filter(contact_id=self.link.contact_id).count(), 2)
+        self.assertEqual(OrganizationContact.objects.filter(contact_id=self.link.contact_id).count(), 2)
 
     def test_contact_off_and_new_affiliation_in_one_form_leaves_contact_off(self, task) -> None:
-        self._post(contact_active=False, extra={"university": str(UniversityFactory().pk), "position": "Доцент"})
+        self._post(contact_active=False, extra={"organization": str(OrganizationFactory().pk), "position": "Доцент"})
 
         self.assertFalse(ContactPerson.objects.get(pk=self.link.contact_id).is_active)
-        self.assertFalse(UniversityContact.objects.filter(contact_id=self.link.contact_id).exists())
+        self.assertFalse(OrganizationContact.objects.filter(contact_id=self.link.contact_id).exists())
         self.assertFalse(InteractionContact.objects.filter(unlinked_at__isnull=True).exists())
 
     def test_inline_cannot_move_affiliation_to_other_organization(self, task) -> None:
         """Другая организация — другая связь: у существующей строки вуз не меняется, привязки не повисают."""
-        university = self.link.university
+        organization = self.link.organization
 
-        self._post(university=str(UniversityFactory().pk))
+        self._post(organization=str(OrganizationFactory().pk))
 
         self.link.refresh_from_db()
-        self.assertEqual(self.link.university_id, university.pk)
+        self.assertEqual(self.link.organization_id, organization.pk)

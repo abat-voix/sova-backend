@@ -21,10 +21,10 @@ class InteractionFilter(SearchFilterMixin):
     которые задваивали бы строки и счётчики в списке.
     """
 
-    university__ids = UUIDInFilter(
-        field_name="university",
-        label=_("Вузы"),
-        help_text=_("Фильтр по списку ID вузов через запятую"),
+    organization__ids = UUIDInFilter(
+        field_name="organization",
+        label=_("Организации"),
+        help_text=_("Фильтр по списку ID организаций через запятую"),
     )
     b2c_client__ids = UUIDInFilter(
         field_name="b2c_client",

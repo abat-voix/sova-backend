@@ -1,3 +1,8 @@
+from sova.catalog.api.serializers.address import (
+    B2CClientOpenAddressSerializer,
+    B2CClientRegistrationAddressSerializer,
+    OrganizationAddressSerializer,
+)
 from sova.catalog.api.serializers.b2c_client import (
     B2CClientSerializer,
     B2CClientShortSerializer,
@@ -14,10 +19,10 @@ from sova.catalog.api.serializers.catalog_import import (
 )
 from sova.catalog.api.serializers.contact_affiliation import (
     B2CClientContactSerializer,
-    UniversityContactSerializer,
+    OrganizationContactSerializer,
     VendorContactSerializer,
     WriteB2CClientContactSerializer,
-    WriteUniversityContactSerializer,
+    WriteOrganizationContactSerializer,
     WriteVendorContactSerializer,
 )
 from sova.catalog.api.serializers.contact_person import (
@@ -49,11 +54,11 @@ from sova.catalog.api.serializers.program import (
     ProgramShortSerializer,
     WriteProgramSerializer,
 )
-from sova.catalog.api.serializers.university import (
-    UniversityMapPointSerializer,
-    UniversitySerializer,
-    UniversityShortSerializer,
-    WriteUniversitySerializer,
+from sova.catalog.api.serializers.organization import (
+    OrganizationMapPointSerializer,
+    OrganizationSerializer,
+    OrganizationShortSerializer,
+    WriteOrganizationSerializer,
 )
 from sova.catalog.api.serializers.vendor import (
     VendorSerializer,
@@ -62,6 +67,9 @@ from sova.catalog.api.serializers.vendor import (
 )
 
 __all__ = [
+    "B2CClientOpenAddressSerializer",
+    "B2CClientRegistrationAddressSerializer",
+    "OrganizationAddressSerializer",
     "B2CClientContactSerializer",
     "B2CClientSerializer",
     "B2CClientShortSerializer",
@@ -86,10 +94,10 @@ __all__ = [
     "ProductShortSerializer",
     "ProgramSerializer",
     "ProgramShortSerializer",
-    "UniversityContactSerializer",
-    "UniversityMapPointSerializer",
-    "UniversitySerializer",
-    "UniversityShortSerializer",
+    "OrganizationContactSerializer",
+    "OrganizationMapPointSerializer",
+    "OrganizationSerializer",
+    "OrganizationShortSerializer",
     "VendorContactSerializer",
     "VendorSerializer",
     "VendorShortSerializer",
@@ -100,8 +108,8 @@ __all__ = [
     "WriteDirectionSerializer",
     "WriteProductSerializer",
     "WriteProgramSerializer",
-    "WriteUniversityContactSerializer",
-    "WriteUniversitySerializer",
+    "WriteOrganizationContactSerializer",
+    "WriteOrganizationSerializer",
     "WriteVendorContactSerializer",
     "WriteVendorSerializer",
 ]

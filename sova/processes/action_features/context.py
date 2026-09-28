@@ -9,7 +9,7 @@ from sova.processes.models import ActionInstance
 class ActionFeatureContext:
     action_instance: ActionInstance
     interaction: object
-    university: object | None
+    organization: object | None
     b2c_client: object | None
     interaction_product: InteractionProduct | None
     interaction_program: InteractionProgram | None
@@ -33,7 +33,7 @@ def build_context(*, action_instance: ActionInstance, user) -> ActionFeatureCont
     return ActionFeatureContext(
         action_instance=action_instance,
         interaction=interaction,
-        university=interaction.university,
+        organization=interaction.organization,
         b2c_client=interaction.b2c_client,
         interaction_product=product,
         interaction_program=program,

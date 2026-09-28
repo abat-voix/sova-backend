@@ -57,9 +57,9 @@ class WorkflowInstanceApiTestCase(BaseApiTestMixin, APITestCase):
             "interaction": {
                 "id": str(instance.interaction_id),
                 "number": instance.interaction.display_number,
-                "university": {
-                    "id": str(instance.interaction.university_id),
-                    "name": instance.interaction.university.name,
+                "organization": {
+                    "id": str(instance.interaction.organization_id),
+                    "name": instance.interaction.organization.name,
                 },
                 "b2c_client": None,
             },
@@ -123,7 +123,7 @@ class WorkflowInstanceApiTestCase(BaseApiTestMixin, APITestCase):
 
     def test_add_for_b2c_client_requires_b2c_workflow(self) -> None:
         """Для взаимодействия с B2C-клиентом подходит только B2C-workflow."""
-        interaction = InteractionFactory(university=None, b2c_client=B2CClientFactory())
+        interaction = InteractionFactory(organization=None, b2c_client=B2CClientFactory())
 
         wrong = self.post(startable_workflow(audience=Audience.B2B), interaction)
         right = self.post(startable_workflow(audience=Audience.B2C), interaction)
@@ -133,7 +133,7 @@ class WorkflowInstanceApiTestCase(BaseApiTestMixin, APITestCase):
         self.assertEqual(wrong.data["code"], "audience_mismatch")
         self.assertEqual(right.status_code, status.HTTP_201_CREATED, msg=right.data)
 
-    def test_add_returns_400_for_audience_mismatch_with_university(self) -> None:
+    def test_add_returns_400_for_audience_mismatch_with_organization(self) -> None:
         """B2C-workflow для взаимодействия с вузом отклоняется."""
         response = self.post(startable_workflow(audience=Audience.B2C), InteractionFactory())
 
@@ -194,7 +194,7 @@ class WorkflowInstanceApiTestCase(BaseApiTestMixin, APITestCase):
         )
 
     def test_filters_select_matching_processes(self) -> None:
-        """Фильтры workflow, interaction, university, status, автор выбирают нужные процессы."""
+        """Фильтры workflow, interaction, organization, status, автор выбирают нужные процессы."""
         author = UserFactory()
         target = WorkflowInstanceFactory(status="completed", created_by=author)
         WorkflowInstanceFactory()
@@ -202,7 +202,7 @@ class WorkflowInstanceApiTestCase(BaseApiTestMixin, APITestCase):
         self.assert_filter_returns({"workflow__ids": str(target.workflow_id)}, [target])
         self.assert_filter_returns({"interaction__ids": str(target.interaction_id)}, [target])
         self.assert_filter_returns(
-            {"university__ids": str(target.interaction.university_id)},
+            {"organization__ids": str(target.interaction.organization_id)},
             [target],
         )
         self.assert_filter_returns({"status": "completed"}, [target])

@@ -38,7 +38,7 @@ def _programs(context):
 def _instructors(context):
     """Активные преподаватели организации-контрагента взаимодействия."""
     return TrainingInstructor.objects.filter(
-        university=context.university,
+        organization=context.organization,
         b2c_client=context.b2c_client,
         is_active=True,
     )

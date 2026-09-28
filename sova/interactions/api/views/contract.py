@@ -55,7 +55,7 @@ class ContractViewSet(SovaBaseViewSet):
     read_serializer_class = serializers.ContractSerializer
     serializer_class = serializers.WriteContractSerializer
     queryset = Contract.objects.select_related(
-        "interaction__university",
+        "interaction__organization",
         "interaction__b2c_client",
     )
     ordering_fields = "__all__"

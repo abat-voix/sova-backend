@@ -16,18 +16,18 @@ def validate_exactly_one_counterparty(
     instance: Model | None,
 ) -> None:
     """
-    Проверяет, что задан ровно один контрагент: вуз или B2C-клиент.
+    Проверяет, что задан ровно один контрагент: организация или B2C-клиент.
 
     Правило дублирует CheckConstraint модели, чтобы клиент получал 400 с
     понятным сообщением, а не ошибку БД. При частичном обновлении (PATCH)
     недостающие в `attrs` значения берутся из `instance`.
     """
-    university = attrs.get("university", getattr(instance, "university", None))
+    organization = attrs.get("organization", getattr(instance, "organization", None))
     b2c_client = attrs.get("b2c_client", getattr(instance, "b2c_client", None))
 
-    if (university is None) == (b2c_client is None):
+    if (organization is None) == (b2c_client is None):
         raise serializers.ValidationError(
-            _("Необходимо указать ровно одного контрагента: вуз или B2C-клиента."),
+            _("Необходимо указать ровно одного контрагента: организацию или B2C-клиента."),
         )
 
 

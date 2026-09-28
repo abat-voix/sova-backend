@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
-from sova.catalog.tests.factories import UniversityContactFactory, UniversityFactory
+from sova.catalog.tests.factories import OrganizationContactFactory, OrganizationFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.models import InteractionContact
 from sova.interactions.tests.factories import InteractionFactory
@@ -18,14 +18,14 @@ class InteractionContactsApiTestCase(APITestCase):
         self.user = UserFactory()
         UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
         self.client.force_authenticate(user=self.user)
-        self.interaction = InteractionFactory(university=UniversityFactory())
+        self.interaction = InteractionFactory(organization=OrganizationFactory())
         self.url = reverse("interactions:interaction-contacts", args=[self.interaction.pk])
 
     def test_list_shows_position_at_interaction_counterparty_without_n_plus_one(self) -> None:
         """Каждый контакт — с должностью именно в вузе взаимодействия; число запросов не зависит от числа контактов."""
         for index in range(3):
-            link = UniversityContactFactory(university=self.interaction.university, position=f"Должность {index}")
-            UniversityContactFactory(contact=link.contact, position="В другом вузе")
+            link = OrganizationContactFactory(organization=self.interaction.organization, position=f"Должность {index}")
+            OrganizationContactFactory(contact=link.contact, position="В другом вузе")
             InteractionContact.objects.create(interaction=self.interaction, contact_person=link.contact)
 
         with self.assertNumQueries(self._list_queries()):
@@ -38,9 +38,9 @@ class InteractionContactsApiTestCase(APITestCase):
             ["Должность 0", "Должность 1", "Должность 2"],
         )
 
-    def test_link_contact_of_other_university_returns_409(self) -> None:
+    def test_link_contact_of_other_organization_returns_409(self) -> None:
         """Человек без связи с вузом взаимодействия не привязывается."""
-        link = UniversityContactFactory()
+        link = OrganizationContactFactory()
 
         response = self.client.post(self.url, {"contact_person": str(link.contact_id)}, format="json")
 
@@ -49,7 +49,7 @@ class InteractionContactsApiTestCase(APITestCase):
 
     def test_link_returns_position(self) -> None:
         """Ответ привязки содержит должность в вузе взаимодействия."""
-        link = UniversityContactFactory(university=self.interaction.university, position="Проректор")
+        link = OrganizationContactFactory(organization=self.interaction.organization, position="Проректор")
 
         response = self.client.post(self.url, {"contact_person": str(link.contact_id)}, format="json")
 
@@ -59,7 +59,7 @@ class InteractionContactsApiTestCase(APITestCase):
 
     def _list_queries(self) -> int:
         """Число запросов списка с одним контактом — эталон для списка с несколькими."""
-        link = UniversityContactFactory(university=self.interaction.university)
+        link = OrganizationContactFactory(organization=self.interaction.organization)
         contact = InteractionContact.objects.create(interaction=self.interaction, contact_person=link.contact)
         with CaptureQueriesContext(connection) as context:
             self.client.get(self.url)

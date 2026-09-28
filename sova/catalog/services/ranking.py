@@ -1,13 +1,13 @@
 from django.db.models import Case, Count, IntegerField, Model, QuerySet, Value, When
 
-from sova.catalog.models import B2CClient, Direction, Product, Program, University
+from sova.catalog.models import B2CClient, Direction, Product, Program, Organization
 from sova.interactions.models import InteractionProduct
 from sova.training.services.enrollment import training_enrollment_service
 
 # Путь от участника заявки к объекту каталога. Поток создаётся только по программе взаимодействия
 # (см. `TrainingStreamService.check_can_create`), поэтому контрагент всегда берётся из взаимодействия.
 ENROLLED_PATHS: dict[type[Model], str] = {
-    University: "application__stream__interaction_program__interaction__university",
+    Organization: "application__stream__interaction_program__interaction__organization",
     B2CClient: "application__stream__interaction_program__interaction__b2c_client",
     Program: "application__stream__interaction_program__program",
     Direction: "application__stream__interaction_program__program__direction",
@@ -18,7 +18,7 @@ class CatalogRankingService:
     """
     Место объекта каталога в рейтинге (`rank`).
 
-    Вузы, B2C-клиенты, программы и направления ранжируются по числу зачисленных людей (оплативших обучение, см.
+    Организации, B2C-клиенты, программы и направления ранжируются по числу зачисленных людей (оплативших обучение, см.
     `training_enrollment_service`); человек на нескольких потоках считается один раз. Продукты — по числу
     взаимодействий, где продукт активен. Места спортивные: при равенстве делят место, следующее пропускается
     (1, 2, 2, 4). Рейтинг общий — не зависит от того, кто смотрит, и от фильтров списка. Без зачисленных

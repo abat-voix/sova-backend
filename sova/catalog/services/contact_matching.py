@@ -4,7 +4,7 @@ from django.db.models import F, Func, Q, Value
 
 from sova.catalog.exceptions import CatalogImportError
 from sova.catalog.models import ContactPerson
-from sova.catalog.services.contact_affiliation import Organization, contact_affiliation_service
+from sova.catalog.services.contact_affiliation import ContactOwner, contact_affiliation_service
 from sova.core.text import phone_key
 
 # Сколько возможных дублей показывать: подсказка, а не поиск.
@@ -30,7 +30,7 @@ class ContactMatchingService:
 
     def match_for_import(
         self,
-        organization: Organization,
+        organization: ContactOwner,
         full_name: str,
         email: str = "",
         phone: str = "",

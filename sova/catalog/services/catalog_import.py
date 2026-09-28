@@ -1,22 +1,24 @@
 from collections.abc import Callable
 
 from django.contrib.auth.models import AbstractBaseUser
+from django.core.exceptions import ValidationError
 from django.db import models, transaction
 
 from sova.catalog.enum import CatalogType
-from sova.catalog.models import Direction, Product, Program, University
-from sova.catalog.models.university import InstitutionType
+from sova.catalog.models import Direction, Product, Program, Organization
+from sova.catalog.models.organization import OrganizationType
 from sova.catalog.schemas import CATALOG_IMPORT_FIELDS, CatalogImportResult, ImportRowWarning
 from sova.catalog.services.catalog_lookup import catalog_lookup_service
 from sova.catalog.services.contact_import import contact_import_service
 from sova.catalog.services.contract_registry_import import contract_registry_import_service
 from sova.catalog.services.import_file import ImportSource, Rows, import_file_service
+from sova.catalog.services.organization_address import organization_address_service
 from sova.catalog.services.vendor_import import vendor_import_service
 
 
 class CatalogImportService:
     """
-    Импорт каталогов из xlsx: вузы, вендоры, направления, программы, продукты, ответственные от вуза.
+    Импорт каталогов из xlsx: организации, вендоры, направления, программы, продукты, ответственные от организации.
 
     Точка входа для любого catalog_type, включая реестр договоров (его обрабатывает
     `ContractRegistryImportService`). Простой каталог: одна строка — одна запись, апсерт по
@@ -52,9 +54,9 @@ class CatalogImportService:
         return self._run_loader(catalog_type=catalog_type, rows=rows)
 
     @transaction.atomic
-    def load_universities(self, rows: Rows) -> tuple[int, int]:
-        """Вузы: апсерт по ror (или id), иначе по name."""
-        return self._count(import_file_service.process_rows(rows=rows, handler=self._load_university))
+    def load_organizations(self, rows: Rows) -> tuple[int, int]:
+        """Организации: апсерт по ror (или id), иначе по name."""
+        return self._count(import_file_service.process_rows(rows=rows, handler=self._load_organization))
 
     def load_vendors(self, rows: Rows, warnings: list[ImportRowWarning] | None = None) -> tuple[int, int]:
         """Вендоры (и их продукты и контакты, если колонки есть): см. `VendorImportService`."""
@@ -80,9 +82,9 @@ class CatalogImportService:
     @transaction.atomic
     def load_contact_persons(self, rows: Rows, warnings: list[ImportRowWarning] | None = None) -> tuple[int, int]:
         """
-        Ответственные от вуза: человек и его связь с вузом (`ContactImportService`).
+        Ответственные от организации: человек и его связь с организацией (`ContactImportService`).
 
-        Создано/обновлено — по связям человека с вузом. Предупреждения (возможные дубли) — в `warnings`.
+        Создано/обновлено — по связям человека с организацией. Предупреждения (возможные дубли) — в `warnings`.
         """
 
         def _handle_row(row_number: int, row: dict) -> bool:
@@ -107,7 +109,7 @@ class CatalogImportService:
     ) -> Callable[[Rows], tuple[int, int]]:
         """Обработчик строк для catalog_type; реестр договоров группирует строки по номеру договора."""
         return {
-            CatalogType.UNIVERSITY: self.load_universities,
+            CatalogType.ORGANIZATION: self.load_organizations,
             CatalogType.VENDOR: lambda rows: self.load_vendors(rows=rows, warnings=warnings),
             CatalogType.DIRECTION: self.load_directions,
             CatalogType.PROGRAM: self.load_programs,
@@ -123,8 +125,8 @@ class CatalogImportService:
         created = sum(results)
         return created, len(results) - created
 
-    def _load_university(self, row: dict) -> bool:
-        """Апсерт вуза из строки; True — создан."""
+    def _load_organization(self, row: dict) -> bool:
+        """Апсерт организации из строки; True — создан."""
         name = import_file_service.to_text(row["name"])
         if not name:
             raise ValueError("поле name обязательно")
@@ -133,26 +135,37 @@ class CatalogImportService:
         if not external_code:
             raise ValueError("должно быть заполнено поле ror или id")
 
-        allowed_types = {value for value, _label in InstitutionType.choices}
-        institution_type = import_file_service.to_text(row["type"]).lower() or InstitutionType.EDUCATION
-        if institution_type not in allowed_types:
-            raise ValueError(f"неизвестный type: {institution_type}")
+        allowed_types = {value for value, _label in OrganizationType.choices}
+        organization_type = import_file_service.to_text(row["type"]).lower() or OrganizationType.EDUCATION
+        if organization_type not in allowed_types:
+            raise ValueError(f"неизвестный type: {organization_type}")
 
         defaults = {
             "name": name,
             "name_en": import_file_service.to_text(row["name_en"]),
             "short_name": import_file_service.to_text(row["short_name"]),
-            "institution_type": institution_type,
-            "country_code": import_file_service.to_text(row["country_code"]).upper(),
-            "region": import_file_service.to_text(row["region"]),
-            "city": import_file_service.to_text(row["city"]),
-            "lat": import_file_service.to_decimal(row["lat"]),
-            "lon": import_file_service.to_decimal(row["lon"]),
+            "organization_type": organization_type,
             "works_count": import_file_service.to_positive_int(row["works_count"]),
             "cited_by_count": import_file_service.to_positive_int(row["cited_by_count"]),
             "homepage_url": import_file_service.to_text(row["homepage_url"]),
         }
-        _, was_created = self._upsert(model=University, external_code=external_code, name=name, defaults=defaults)
+        organization, was_created = self._upsert(
+            model=Organization, external_code=external_code, name=name, defaults=defaults
+        )
+        # Справочник знает местоположение кампуса — это фактический адрес; улица и дом, внесённые вручную, остаются
+        try:
+            organization_address_service.update_location(
+                organization,
+                {
+                    "country_code": import_file_service.to_text(row["country_code"]).upper(),
+                    "region": import_file_service.to_text(row["region"]),
+                    "city": import_file_service.to_text(row["city"]),
+                    "lat": import_file_service.to_decimal(row["lat"]),
+                    "lon": import_file_service.to_decimal(row["lon"]),
+                },
+            )
+        except ValidationError as error:
+            raise ValueError("; ".join(error.messages)) from error
         return was_created
 
     def _load_simple_named(self, row: dict, model: type[models.Model]) -> bool:
@@ -215,12 +228,12 @@ class CatalogImportService:
         return was_created
 
     def _load_contact_person(self, row: dict) -> tuple[bool, list[str]]:
-        """Человек и его связь с вузом из строки; (связь создана, предупреждения)."""
-        university = catalog_lookup_service.find_university(raw_value=row["university"])
+        """Человек и его связь с организацией из строки; (связь создана, предупреждения)."""
+        organization = catalog_lookup_service.find_organization(raw_value=row["organization"])
         contact_row = contact_import_service.parse(row=row)
         if contact_row is None:
             raise ValueError("поле full_name обязательно")
-        result = contact_import_service.import_contact(organization=university, contact_row=contact_row)
+        result = contact_import_service.import_contact(organization=organization, contact_row=contact_row)
         return result.created, result.warnings
 
     def _upsert(

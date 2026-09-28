@@ -78,7 +78,7 @@ class ContractAttachmentApiTestCase(EngineApiTestCase):
     def setUp(self) -> None:
         """Безголовый договор с одним безголовым продуктом."""
         super().setUp()
-        self.contract = ContractFactory(interaction=None, university=self.interaction.university)
+        self.contract = ContractFactory(interaction=None, organization=self.interaction.organization)
         self.item = InteractionProductFactory(contract=self.contract, interaction=None)
 
     def attach_new_url(self, contract: Contract) -> str:
@@ -101,7 +101,7 @@ class ContractAttachmentApiTestCase(EngineApiTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
         interaction = Interaction.objects.get(pk=response.data["interaction"]["id"])
         self.assertNotEqual(interaction.pk, self.interaction.pk)
-        self.assertEqual(interaction.university_id, self.contract.university_id)
+        self.assertEqual(interaction.organization_id, self.contract.organization_id)
         self.assertEqual(InteractionProduct.objects.get(pk=self.item.pk).interaction_id, interaction.pk)
 
     def test_attach_contract_without_kams_creates_interaction_without_responsible(self) -> None:

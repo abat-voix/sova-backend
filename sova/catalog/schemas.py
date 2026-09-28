@@ -49,7 +49,7 @@ class CatalogImportFields:
 
 # Ключи, которые понимают обработчики импорта в sova/catalog/services/ (по значению CatalogType).
 CATALOG_IMPORT_FIELDS = {
-    CatalogType.UNIVERSITY: CatalogImportFields(
+    CatalogType.ORGANIZATION: CatalogImportFields(
         required=frozenset({
             "id", "ror", "name_en", "name", "short_name", "country_code", "type",
             "works_count", "cited_by_count", "city", "region", "lat", "lon", "homepage_url",
@@ -77,13 +77,13 @@ CATALOG_IMPORT_FIELDS = {
         optional=frozenset({"is_active", "programs"}),
     ),
     CatalogType.CONTACT_PERSON: CatalogImportFields(
-        required=frozenset({"full_name", "university"}),
+        required=frozenset({"full_name", "organization"}),
         optional=frozenset({"position", "email", "phone", "telegram", "channels"}),
     ),
     CatalogType.CONTRACT_REGISTRY: CatalogImportFields(
-        required=frozenset({"university", "vendor", "product", "contract_number"}),
+        required=frozenset({"organization", "vendor", "product", "contract_number"}),
         optional=frozenset({
-            "direction", "program", "license_signed", "license_valid_until_year", "university_contact",
+            "direction", "program", "license_signed", "license_valid_until_year", "organization_contact",
             "manager_full_name", "draft_status", "draft_comment",
         }),
     ),
@@ -131,7 +131,7 @@ CATALOG_IMPORT_FIELD_LABELS: dict[str, str] = {
     "vendor": "Вендор",
     "programs": "Программы",
     "full_name": "ФИО",
-    "university": "Вуз",
+    "organization": "Организация",
     "position": "Должность",
     "email": "E-mail",
     "phone": "Телефон",
@@ -142,7 +142,7 @@ CATALOG_IMPORT_FIELD_LABELS: dict[str, str] = {
     "program": "Программа",
     "license_signed": "Лицензия подписана",
     "license_valid_until_year": "Лицензия действует до (год)",
-    "university_contact": "Ответственный от вуза",
+    "organization_contact": "Ответственный от организации",
     "manager_full_name": "ФИО менеджера",
     "draft_status": "Статус проекта договора",
     "draft_comment": "Комментарий к проекту договора",

@@ -7,14 +7,14 @@ from django.test.utils import CaptureQueriesContext
 from accounts.models import SystemRole, UserRole
 
 from sova.catalog.exceptions import CatalogImportError, CatalogImportRowsError
-from sova.catalog.models import ContactPerson, UniversityContact
+from sova.catalog.models import ContactPerson, OrganizationContact
 from sova.catalog.services import contract_registry_import_service
 from sova.catalog.tests.factories import (
     DirectionFactory,
     ProductFactory,
     ProgramFactory,
-    UniversityContactFactory,
-    UniversityFactory,
+    OrganizationContactFactory,
+    OrganizationFactory,
     VendorFactory,
 )
 from sova.core.tests.factories import UserFactory
@@ -26,13 +26,13 @@ class ImportContractRegistryTestCase(TestCase):
     """Импорт реестра создаёт headless Contract + продукты/лицензии, группируя строки по номеру договора."""
 
     def setUp(self) -> None:
-        self.university = UniversityFactory(name="МГУ")
+        self.organization = OrganizationFactory(name="МГУ")
         self.vendor = VendorFactory(name="1С")
         self.product = ProductFactory(name="1С:Предприятие", vendor=self.vendor)
 
     def _row(self, **overrides) -> dict:
         row = {
-            "university": "МГУ",
+            "organization": "МГУ",
             "vendor": "1С",
             "product": "1С:Предприятие",
             "contract_number": "Д-1",
@@ -40,7 +40,7 @@ class ImportContractRegistryTestCase(TestCase):
             "license_valid_until_year": "2027",
             "draft_status": "В работе",
             "manager_full_name": "Иванов Иван",
-            "university_contact": "Петров Пётр",
+            "organization_contact": "Петров Пётр",
             "draft_comment": "Первичный контакт",
         }
         row.update(overrides)
@@ -54,7 +54,7 @@ class ImportContractRegistryTestCase(TestCase):
         self.assertEqual((created, updated), (1, 0))
         contract = Contract.objects.get(contract_number="Д-1")
         self.assertIsNone(contract.interaction_id)
-        self.assertEqual(contract.university_id, self.university.id)
+        self.assertEqual(contract.organization_id, self.organization.id)
         self.assertEqual(contract.draft_status, "В работе")
 
         item = InteractionProduct.objects.get(contract=contract, product=self.product)
@@ -127,7 +127,7 @@ class ImportContractRegistryTestCase(TestCase):
         contract_registry_import_service.import_rows(iter([(2, self._row(contract_number="Д-15/2026"))]))
 
         created, updated = contract_registry_import_service.import_rows(
-            iter([(2, self._row(contract_number="д-15/2026", university="мгу", university_contact="ПЕТРОВ ПЁТР"))])
+            iter([(2, self._row(contract_number="д-15/2026", organization="мгу", organization_contact="ПЕТРОВ ПЁТР"))])
         )
 
         self.assertEqual((created, updated), (0, 1))
@@ -200,59 +200,59 @@ class ImportContractRegistryTestCase(TestCase):
         with self.assertRaises(CatalogImportError):
             contract_registry_import_service.import_rows(rows)
 
-    def test_creates_contact_persons_from_university_contact_column(self) -> None:
-        rows = iter([(2, self._row(university_contact="Петров Пётр; Сидорова Анна"))])
+    def test_creates_contact_persons_from_organization_contact_column(self) -> None:
+        rows = iter([(2, self._row(organization_contact="Петров Пётр; Сидорова Анна"))])
 
         contract_registry_import_service.import_rows(rows)
 
         self.assertEqual(
             set(
-                UniversityContact.objects.filter(university=self.university).values_list(
+                OrganizationContact.objects.filter(organization=self.organization).values_list(
                     "contact__full_name", flat=True
                 )
             ),
             {"Петров Пётр", "Сидорова Анна"},
         )
 
-    def test_existing_university_contact_is_not_duplicated(self) -> None:
-        UniversityContactFactory(university=self.university, contact__full_name="Петров Пётр")
-        rows = iter([(2, self._row(university_contact="ПЕТРОВ ПЁТР"))])
+    def test_existing_organization_contact_is_not_duplicated(self) -> None:
+        OrganizationContactFactory(organization=self.organization, contact__full_name="Петров Пётр")
+        rows = iter([(2, self._row(organization_contact="ПЕТРОВ ПЁТР"))])
 
         contract_registry_import_service.import_rows(rows)
 
-        self.assertEqual(UniversityContact.objects.filter(university=self.university).count(), 1)
+        self.assertEqual(OrganizationContact.objects.filter(organization=self.organization).count(), 1)
 
-    def test_inactive_university_contact_is_left_as_is(self) -> None:
-        link = UniversityContactFactory(
-            university=self.university, contact__full_name="Петров Пётр", contact__is_active=False
+    def test_inactive_organization_contact_is_left_as_is(self) -> None:
+        link = OrganizationContactFactory(
+            organization=self.organization, contact__full_name="Петров Пётр", contact__is_active=False
         )
-        rows = iter([(2, self._row(university_contact="Петров Пётр"))])
+        rows = iter([(2, self._row(organization_contact="Петров Пётр"))])
 
         contract_registry_import_service.import_rows(rows)
 
         link.contact.refresh_from_db()
         self.assertFalse(link.contact.is_active)
-        self.assertEqual(UniversityContact.objects.filter(university=self.university).count(), 1)
+        self.assertEqual(OrganizationContact.objects.filter(organization=self.organization).count(), 1)
 
 
 class ContractRegistryDraftFieldsTestCase(TestCase):
     """Черновые поля договора собираются по всем его строкам файла."""
 
     def setUp(self) -> None:
-        self.university = UniversityFactory(name="МГУ")
+        self.organization = OrganizationFactory(name="МГУ")
         vendor = VendorFactory(name="1С")
         ProductFactory(name="IDE", vendor=vendor)
         ProductFactory(name="СУБД", vendor=vendor)
         ProductFactory(name="ML", vendor=vendor)
         Contract.objects.create(
             contract_number="Д-1",
-            university=self.university,
+            organization=self.organization,
             draft_status="Черновик",
             draft_comment="Старый комментарий",
         )
 
     def _row(self, product: str, **drafts) -> dict:
-        return {"university": "МГУ", "vendor": "1С", "product": product, "contract_number": "Д-1", **drafts}
+        return {"organization": "МГУ", "vendor": "1С", "product": product, "contract_number": "Д-1", **drafts}
 
     def _drafts(self) -> tuple[str, str]:
         contract = Contract.objects.get(contract_number="Д-1")
@@ -307,20 +307,20 @@ class ContractRegistryDraftFieldsTestCase(TestCase):
         )
         self.assertEqual(self._drafts(), ("Черновик", "Старый комментарий"))
 
-    def test_contracts_are_grouped_by_university_and_number_case(self) -> None:
-        UniversityFactory(name="МФТИ", external_code="R-2")
+    def test_contracts_are_grouped_by_organization_and_number_case(self) -> None:
+        OrganizationFactory(name="МФТИ", external_code="R-2")
         rows = [
             (2, self._row("IDE", draft_status="Подписан")),
-            (3, {**self._row("СУБД", draft_status=""), "contract_number": "д-1", "university": "мгу"}),
-            (4, {**self._row("IDE", draft_status=""), "university": "R-2"}),
+            (3, {**self._row("СУБД", draft_status=""), "contract_number": "д-1", "organization": "мгу"}),
+            (4, {**self._row("IDE", draft_status=""), "organization": "R-2"}),
         ]
 
         created, updated = contract_registry_import_service.import_rows(iter(rows))
 
         # Проверяем: МГУ/Д-1 — один договор со статусом, МФТИ/Д-1 — новый договор без статуса
         self.assertEqual((created, updated), (1, 1))
-        self.assertEqual(Contract.objects.get(university=self.university).draft_status, "Подписан")
-        self.assertEqual(Contract.objects.get(university__name="МФТИ").draft_status, "")
+        self.assertEqual(Contract.objects.get(organization=self.organization).draft_status, "Подписан")
+        self.assertEqual(Contract.objects.get(organization__name="МФТИ").draft_status, "")
 
     def test_new_contract_takes_value_from_any_row(self) -> None:
         rows = [
@@ -338,7 +338,7 @@ class ContractRegistryManagersTestCase(TestCase):
     """«ФИО Менеджера» назначает КАМов договора; файл — источник правды, ненайденное ФИО — предупреждение."""
 
     def setUp(self) -> None:
-        self.university = UniversityFactory(name="МГУ")
+        self.organization = OrganizationFactory(name="МГУ")
         vendor = VendorFactory(name="1С")
         ProductFactory(name="IDE", vendor=vendor)
         ProductFactory(name="СУБД", vendor=vendor)
@@ -354,7 +354,7 @@ class ContractRegistryManagersTestCase(TestCase):
         return user
 
     def _row(self, product: str = "IDE", **extra) -> dict:
-        return {"university": "МГУ", "vendor": "1С", "product": product, "contract_number": "Д-1", **extra}
+        return {"organization": "МГУ", "vendor": "1С", "product": product, "contract_number": "Д-1", **extra}
 
     def _import(self, *rows: dict) -> list:
         warnings: list = []

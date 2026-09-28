@@ -64,7 +64,7 @@ class ActionDeadlineTest(DeadlineServiceTestCase):
         self.assertEqual(items[0].deadline, instance.planned_end)
         self.assertEqual(items[0].recipients, (self.kam,))
         # Проверяем описание пункта
-        self.assertEqual(items[0].counterparty, str(self.interaction.university))
+        self.assertEqual(items[0].counterparty, str(self.interaction.organization))
         self.assertEqual(items[0].stage_name, self.stage.stage.name)
         self.assertEqual(items[0].action_name, instance.action_name_snapshot)
         # Проверяем id взаимодействия и процесса — из них строится ссылка в колокольчике

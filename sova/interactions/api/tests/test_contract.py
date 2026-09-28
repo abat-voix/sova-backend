@@ -7,7 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
-from sova.catalog.tests.factories import UniversityFactory
+from sova.catalog.tests.factories import OrganizationFactory
 from sova.core.tests.base import BaseApiTestMixin
 from sova.core.tests.factories import UserFactory
 from sova.core.tests.media import TemporaryMediaMixin
@@ -42,9 +42,9 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
             "interaction": {
                 "id": str(instance.interaction_id),
                 "number": instance.interaction.display_number,
-                "university": {
-                    "id": str(instance.interaction.university_id),
-                    "name": instance.interaction.university.name,
+                "organization": {
+                    "id": str(instance.interaction.organization_id),
+                    "name": instance.interaction.organization.name,
                 },
                 "b2c_client": None,
             },
@@ -257,7 +257,7 @@ class ContractCurrentResponsiblesApiTestCase(APITestCase):
         UserRole.objects.create(user=user, role=SystemRole.PLATFORM_ADMIN)
         self.client.force_authenticate(user=user)
         self.kam = UserFactory(first_name="Максим", last_name="Менеджеров")
-        self.university = UniversityFactory()
+        self.organization = OrganizationFactory()
 
     def _get(self, contract: Contract) -> dict:
         response = self.client.get(path=reverse("interactions:contract-detail", args=[contract.pk]))
@@ -265,7 +265,7 @@ class ContractCurrentResponsiblesApiTestCase(APITestCase):
         return response.data
 
     def test_headless_contract_shows_its_kams(self) -> None:
-        contract = ContractFactory(interaction=None, university=self.university)
+        contract = ContractFactory(interaction=None, organization=self.organization)
         Responsible.objects.create(contract=contract, manager=self.kam)
 
         data = self._get(contract)
@@ -276,14 +276,14 @@ class ContractCurrentResponsiblesApiTestCase(APITestCase):
         self.assertNotIn("draft_manager_full_name", data)
 
     def test_closed_kam_is_not_shown(self) -> None:
-        contract = ContractFactory(interaction=None, university=self.university)
+        contract = ContractFactory(interaction=None, organization=self.organization)
         Responsible.objects.create(contract=contract, manager=self.kam, unassigned_at=timezone.now())
 
         # Проверяем, что снятый КАМ не показывается
         self.assertEqual(self._get(contract)["current_responsibles"], [])
 
     def test_attached_contract_keeps_registry_kams(self) -> None:
-        contract = ContractFactory(interaction=None, university=self.university)
+        contract = ContractFactory(interaction=None, organization=self.organization)
         Responsible.objects.create(contract=contract, manager=self.kam)
         contract_attachment_service.attach_to_new_interaction(contract=contract, author=None)
 

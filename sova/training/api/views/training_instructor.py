@@ -5,11 +5,11 @@ from sova.training.models import TrainingInstructor
 
 
 class TrainingInstructorViewSet(SovaBaseViewSet):
-    """Преподаватели вузов и B2C-организаций — справочник, права как у каталога."""
+    """Преподаватели организаций и B2C-клиентов — справочник, права как у каталога."""
 
     read_serializer_class = serializers.TrainingInstructorSerializer
     serializer_class = serializers.WriteTrainingInstructorSerializer
-    queryset = TrainingInstructor.objects.select_related("university", "b2c_client").prefetch_related(
+    queryset = TrainingInstructor.objects.select_related("organization", "b2c_client").prefetch_related(
         "directions",
         "programs",
     )

@@ -18,8 +18,8 @@ class ContactPersonShortSerializer(serializers.ModelSerializer):
         fields = ("id", "full_name", "email", "phone", "telegram", "is_active")
 
 
-class OrganizationShortSerializer(serializers.Serializer):
-    """Организация связи — вуз, B2C-клиент или вендор."""
+class ContactOwnerSerializer(serializers.Serializer):
+    """Владелец связи — организация, B2C-клиент или вендор."""
 
     id = serializers.UUIDField(read_only=True)
     name = serializers.CharField(read_only=True)
@@ -29,22 +29,22 @@ class ContactAffiliationSerializer(serializers.Serializer):
     """Связь человека с организацией любого типа — в составе контактного лица."""
 
     id = serializers.UUIDField(read_only=True)
-    type = serializers.SerializerMethodField(help_text=_("university, b2c_client или vendor"))
+    type = serializers.SerializerMethodField(help_text=_("organization, b2c_client или vendor"))
     organization = serializers.SerializerMethodField()
     position = serializers.CharField(read_only=True)
     preferred_channels = serializers.ListField(
         child=serializers.ChoiceField(choices=ContactChannel.choices),
         read_only=True,
     )
-    products = serializers.SerializerMethodField(help_text=_("Продукты вендора; у вуза и B2C-клиента — пусто"))
+    products = serializers.SerializerMethodField(help_text=_("Продукты вендора; у организации и B2C-клиента — пусто"))
 
-    @extend_schema_field(serializers.ChoiceField(choices=("university", "b2c_client", "vendor")))
+    @extend_schema_field(serializers.ChoiceField(choices=("organization", "b2c_client", "vendor")))
     def get_type(self, affiliation) -> str:
         return contact_affiliation_service.type_code(
             organization=contact_affiliation_service.organization_of(affiliation=affiliation)
         )
 
-    @extend_schema_field(OrganizationShortSerializer)
+    @extend_schema_field(ContactOwnerSerializer)
     def get_organization(self, affiliation) -> dict:
         organization = contact_affiliation_service.organization_of(affiliation=affiliation)
         return {"id": organization.pk, "name": str(organization)}
@@ -86,7 +86,7 @@ class WriteContactPersonSerializer(serializers.ModelSerializer):
     """
     Контактное лицо — данные человека (create/update).
 
-    Связь с организацией создаётся отдельно: `/university-contacts/`, `/b2c-client-contacts/`, `/vendor-contacts/`.
+    Связь с организацией создаётся отдельно: `/organization-contacts/`, `/b2c-client-contacts/`, `/vendor-contacts/`.
     """
 
     class Meta:

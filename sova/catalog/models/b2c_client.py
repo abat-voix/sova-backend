@@ -1,15 +1,14 @@
 from django.db import models
 
-from sova.catalog.enum import ClientKind
 from sova.core.models import TimeStampedModel
 
 
 class B2CClient(TimeStampedModel):
-    """Физ/юрлицо вне вузовской сети (B2C-ветка)."""
+    """B2C-клиент — физическое лицо. Компании и вузы — это организации (`Organization`)."""
 
     full_name = models.CharField(
         max_length=255,
-        verbose_name="ФИО / наименование",
+        verbose_name="ФИО",
     )
     inn = models.CharField(
         max_length=12,
@@ -25,11 +24,6 @@ class B2CClient(TimeStampedModel):
         max_length=50,
         blank=True,
         verbose_name="Телефон",
-    )
-    kind = models.CharField(
-        max_length=20,
-        choices=ClientKind.choices,
-        verbose_name="Тип клиента",
     )
     is_active = models.BooleanField(
         default=True,

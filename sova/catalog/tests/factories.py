@@ -1,7 +1,8 @@
 import factory
 
-from sova.catalog.enum import CatalogType, ClientKind
+from sova.catalog.enum import AddressKind, CatalogType
 from sova.catalog.models import (
+    OrganizationAddress,
     B2CClient,
     B2CClientContact,
     CatalogImportMapping,
@@ -9,8 +10,8 @@ from sova.catalog.models import (
     Direction,
     Product,
     Program,
-    University,
-    UniversityContact,
+    Organization,
+    OrganizationContact,
     Vendor,
     VendorContact,
 )
@@ -60,13 +61,27 @@ class ProductFactory(factory.django.DjangoModelFactory):
             self.programs.set(extracted)
 
 
-class UniversityFactory(factory.django.DjangoModelFactory):
-    """Фабрика вуза."""
+class OrganizationFactory(factory.django.DjangoModelFactory):
+    """
+    Фабрика организации (по умолчанию — вуз). Местоположение (`country_code`, `region`, `city`, `lat`, `lon`)
+    передаётся как отдельные параметры — из него создаётся фактический адрес.
+    """
 
     class Meta:
-        model = University
+        model = Organization
 
     name = factory.Sequence(lambda n: f"Вуз {n}")
+
+    @classmethod
+    def _create(cls, model_class, *args, **kwargs):
+        location = {field: kwargs.pop(field) for field in LOCATION_FIELDS if field in kwargs}
+        organization = super()._create(model_class, *args, **kwargs)
+        if any(value not in ("", None) for value in location.values()):
+            OrganizationAddress.objects.create(organization=organization, kind=AddressKind.ACTUAL, **location)
+        return organization
+
+
+LOCATION_FIELDS = ("country_code", "region", "city", "lat", "lon")
 
 
 class B2CClientFactory(factory.django.DjangoModelFactory):
@@ -76,7 +91,6 @@ class B2CClientFactory(factory.django.DjangoModelFactory):
         model = B2CClient
 
     full_name = factory.Sequence(lambda n: f"Клиент {n}")
-    kind = ClientKind.INDIVIDUAL
 
 
 class ContactPersonFactory(factory.django.DjangoModelFactory):
@@ -88,14 +102,14 @@ class ContactPersonFactory(factory.django.DjangoModelFactory):
     full_name = factory.Sequence(lambda n: f"Контакт {n}")
 
 
-class UniversityContactFactory(factory.django.DjangoModelFactory):
+class OrganizationContactFactory(factory.django.DjangoModelFactory):
     """Фабрика связи контактного лица с вузом."""
 
     class Meta:
-        model = UniversityContact
+        model = OrganizationContact
 
     contact = factory.SubFactory(ContactPersonFactory)
-    university = factory.SubFactory(UniversityFactory)
+    organization = factory.SubFactory(OrganizationFactory)
 
 
 class B2CClientContactFactory(factory.django.DjangoModelFactory):

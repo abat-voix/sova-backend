@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
-from sova.catalog.tests.factories import UniversityFactory
+from sova.catalog.tests.factories import OrganizationFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.tests.factories import ContractFactory, InteractionFactory, InteractionProgramFactory
 from sova.processes.enum import StageInstanceContextType
@@ -27,8 +27,8 @@ class CreateTrainingStreamFeatureTestCase(APITestCase):
         self.program = InteractionProgramFactory(interaction=self.interaction)
         self.other_program = InteractionProgramFactory(interaction=self.interaction)
         InteractionProgramFactory(interaction=self.interaction, is_active=False)
-        self.instructor = TrainingInstructorFactory(university=self.interaction.university)
-        TrainingInstructorFactory(university=UniversityFactory())
+        self.instructor = TrainingInstructorFactory(organization=self.interaction.organization)
+        TrainingInstructorFactory(organization=OrganizationFactory())
         self.use_stage()
 
     def use_stage(self, **stage) -> None:
@@ -104,7 +104,7 @@ class CreateTrainingStreamFeatureTestCase(APITestCase):
             {
                 "interaction_program": str(self.program.pk),
                 "name": "1",
-                "instructors": [str(TrainingInstructorFactory(university=UniversityFactory()).pk)],
+                "instructors": [str(TrainingInstructorFactory(organization=OrganizationFactory()).pk)],
             },
             format="json",
         )

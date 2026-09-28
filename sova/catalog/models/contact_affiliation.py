@@ -12,7 +12,7 @@ class AbstractContactAffiliation(NormalizedTextFieldsMixin, TimeStampedModel):
     У пары одна связь, и она либо есть, либо её нет: активность — только у человека (`ContactPerson.is_active`).
     Человек ушёл из организации — связь удаляют (`ContactAffiliationService.delete`), вернулся — создают заново.
 
-    Конкретные связи — `UniversityContact`, `B2CClientContact`, `VendorContact`; выбирать модель по типу
+    Конкретные связи — `OrganizationContact`, `B2CClientContact`, `VendorContact`; выбирать модель по типу
     организации — задача `ContactAffiliationService`, а не вызывающего кода.
     """
 

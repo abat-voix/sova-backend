@@ -1,18 +1,18 @@
 from django.utils.translation import gettext_lazy as _
 from django_filters import rest_framework as filters
 
-from sova.catalog.models import B2CClientContact, UniversityContact, VendorContact
+from sova.catalog.models import B2CClientContact, OrganizationContact, VendorContact
 from sova.core.api.filters import UUIDInFilter
 
 
-class UniversityContactFilter(filters.FilterSet):
-    """Фильтр связей с вузами."""
+class OrganizationContactFilter(filters.FilterSet):
+    """Фильтр связей с организациями."""
 
-    university__ids = UUIDInFilter(field_name="university", label=_("Вузы"))
+    organization__ids = UUIDInFilter(field_name="organization", label=_("Организации"))
     contact__is_active = filters.BooleanFilter(field_name="contact__is_active", label=_("Контактное лицо активно"))
 
     class Meta:
-        model = UniversityContact
+        model = OrganizationContact
         fields = ("contact",)
 
 

@@ -1,6 +1,6 @@
 from sova.catalog.api import filters, serializers
 from sova.catalog.api.views.mixins import CatalogPolicyMixin
-from sova.catalog.models import B2CClientContact, UniversityContact, VendorContact
+from sova.catalog.models import B2CClientContact, OrganizationContact, VendorContact
 from sova.catalog.services import contact_affiliation_service
 from sova.core.api.views import SovaBaseViewSet
 
@@ -15,14 +15,14 @@ class _ContactAffiliationViewSet(CatalogPolicyMixin, SovaBaseViewSet):
         contact_affiliation_service.delete(affiliation=instance, actor=self.request.user)
 
 
-class UniversityContactViewSet(_ContactAffiliationViewSet):
-    """Связи контактных лиц с вузами: должность и способы связи. Доступны CRUD операции."""
+class OrganizationContactViewSet(_ContactAffiliationViewSet):
+    """Связи контактных лиц с организациями: должность и способы связи. Доступны CRUD операции."""
 
-    read_serializer_class = serializers.UniversityContactSerializer
-    serializer_class = serializers.WriteUniversityContactSerializer
-    queryset = UniversityContact.objects.select_related("contact", "university")
-    search_fields = ("contact__full_name", "position", "university__name")
-    filterset_class = filters.UniversityContactFilter
+    read_serializer_class = serializers.OrganizationContactSerializer
+    serializer_class = serializers.WriteOrganizationContactSerializer
+    queryset = OrganizationContact.objects.select_related("contact", "organization")
+    search_fields = ("contact__full_name", "position", "organization__name")
+    filterset_class = filters.OrganizationContactFilter
 
 
 class B2CClientContactViewSet(_ContactAffiliationViewSet):

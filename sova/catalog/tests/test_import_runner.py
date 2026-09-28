@@ -14,7 +14,7 @@ from sova.catalog.exceptions import CatalogImportError
 from sova.catalog.enum import CatalogType
 from sova.catalog.models import CatalogImportMapping, Vendor
 from sova.catalog.services import catalog_import_service, import_file_service
-from sova.catalog.tests.factories import ProductFactory, UniversityFactory, VendorFactory
+from sova.catalog.tests.factories import ProductFactory, OrganizationFactory, VendorFactory
 from sova.interactions.models import Contract, License
 
 
@@ -101,9 +101,9 @@ class CatalogImportFileTestCase(TestCase):
                 catalog_import_service.import_file(CatalogType.DIRECTION, source)
 
     def test_dispatches_contract_registry(self) -> None:
-        UniversityFactory(name="МГУ")
+        OrganizationFactory(name="МГУ")
         ProductFactory(name="1С:Предприятие", vendor=VendorFactory(name="1С"))
-        columns = {"Вуз": "university", "Вендор": "vendor", "Продукт": "product", "№ договора": "contract_number"}
+        columns = {"Вуз": "organization", "Вендор": "vendor", "Продукт": "product", "№ договора": "contract_number"}
         for source_column, target_field in columns.items():
             CatalogImportMapping.objects.create(
                 catalog_type=CatalogType.CONTRACT_REGISTRY, source_column=source_column, target_field=target_field
@@ -143,10 +143,10 @@ class CatalogImportSourceFormatTestCase(TestCase):
         self.assertEqual(Vendor.objects.get(name="JetBrains").external_code, "1001")
 
     def test_xls_date_cell_is_read_as_date(self) -> None:
-        UniversityFactory(name="МГУ")
+        OrganizationFactory(name="МГУ")
         ProductFactory(name="1С:Предприятие", vendor=VendorFactory(name="1С"))
         columns = {
-            "Вуз": "university",
+            "Вуз": "organization",
             "Вендор": "vendor",
             "Продукт": "product",
             "№ договора": "contract_number",
@@ -229,10 +229,10 @@ class CatalogImportDisguisedFormatTestCase(TestCase):
         self.assertTrue(Vendor.objects.filter(name="Ростелеком").exists())
 
     def test_html_date_text_is_read_as_date(self) -> None:
-        UniversityFactory(name="МГУ")
+        OrganizationFactory(name="МГУ")
         ProductFactory(name="1С:Предприятие", vendor=VendorFactory(name="1С"))
         columns = {
-            "Вуз": "university",
+            "Вуз": "organization",
             "Вендор": "vendor",
             "Продукт": "product",
             "№ договора": "contract_number",

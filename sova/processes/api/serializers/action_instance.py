@@ -54,7 +54,7 @@ class ActionInstanceSerializer(serializers.ModelSerializer):
         source="stage_instance.workflow_instance.interaction",
         read_only=True,
         label=_("Взаимодействие"),
-        help_text=_("Вуз или клиент, с которым ведётся работа"),
+        help_text=_("Организация или клиент, с которым ведётся работа"),
     )
     workflow_instance = serializers.UUIDField(
         source="stage_instance.workflow_instance_id",

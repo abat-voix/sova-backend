@@ -2,8 +2,8 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
-from sova.catalog.models import ContactPerson, UniversityContact
-from sova.catalog.tests.factories import UniversityContactFactory, UniversityFactory
+from sova.catalog.models import ContactPerson, OrganizationContact
+from sova.catalog.tests.factories import OrganizationContactFactory, OrganizationFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.models import InteractionContact
 from sova.interactions.tests.factories import InteractionFactory
@@ -19,7 +19,7 @@ class ContactPersonFeatureApiTestCase(APITestCase):
         UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
         self.client.force_authenticate(user=self.user)
 
-        self.interaction = InteractionFactory(university=UniversityFactory())
+        self.interaction = InteractionFactory(organization=OrganizationFactory())
         self.action_instance = ActionInstanceFactory(
             stage_instance__workflow_instance__interaction=self.interaction,
         )
@@ -46,8 +46,8 @@ class ContactPersonFeatureApiTestCase(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
-        link = UniversityContact.objects.select_related("contact").get()
-        self.assertEqual((link.university_id, link.position), (self.interaction.university_id, "Проректор"))
+        link = OrganizationContact.objects.select_related("contact").get()
+        self.assertEqual((link.organization_id, link.position), (self.interaction.organization_id, "Проректор"))
         self.assertEqual(link.contact.telegram, "ivanov_ii")
         self.assertTrue(InteractionContact.objects.filter(interaction=self.interaction, contact_person=link.contact).exists())
         self.assertEqual(response.data["target"]["data"]["position"], "Проректор")
@@ -61,8 +61,8 @@ class ContactPersonFeatureApiTestCase(APITestCase):
 
     def test_link_returns_position_of_interaction_counterparty(self) -> None:
         """При привязке должность — из связи с вузом взаимодействия, а не из другой связи человека."""
-        link = UniversityContactFactory(university=self.interaction.university, position="Проректор")
-        UniversityContactFactory(contact=link.contact, position="Доцент")
+        link = OrganizationContactFactory(organization=self.interaction.organization, position="Проректор")
+        OrganizationContactFactory(contact=link.contact, position="Доцент")
 
         response = self._execute("contact_person.link", {"contact_person": str(link.contact_id)})
 
@@ -71,7 +71,7 @@ class ContactPersonFeatureApiTestCase(APITestCase):
 
     def test_link_contact_of_other_organization_returns_409(self) -> None:
         """Человек без связи с контрагентом взаимодействия не привязывается."""
-        link = UniversityContactFactory()
+        link = OrganizationContactFactory()
 
         response = self._execute("contact_person.link", {"contact_person": str(link.contact_id)})
 
@@ -80,7 +80,7 @@ class ContactPersonFeatureApiTestCase(APITestCase):
 
     def test_link_inactive_contact_returns_400(self) -> None:
         """Выключенного человека нельзя привязать, даже если связь с контрагентом есть."""
-        link = UniversityContactFactory(university=self.interaction.university, contact__is_active=False)
+        link = OrganizationContactFactory(organization=self.interaction.organization, contact__is_active=False)
 
         response = self._execute("contact_person.link", {"contact_person": str(link.contact_id)})
 
@@ -89,12 +89,12 @@ class ContactPersonFeatureApiTestCase(APITestCase):
 
     def test_update_changes_person_and_position_for_interaction_counterparty(self) -> None:
         """Общие данные меняются у человека, должность — только в связи с текущим вузом."""
-        affiliation = UniversityContactFactory(
-            university=self.interaction.university,
+        affiliation = OrganizationContactFactory(
+            organization=self.interaction.organization,
             position="Менеджер",
             contact__telegram="old_name",
         )
-        other_affiliation = UniversityContactFactory(contact=affiliation.contact, position="Доцент")
+        other_affiliation = OrganizationContactFactory(contact=affiliation.contact, position="Доцент")
         InteractionContact.objects.create(interaction=self.interaction, contact_person=affiliation.contact)
 
         response = self._execute(
@@ -119,8 +119,8 @@ class ContactPersonFeatureApiTestCase(APITestCase):
 
     def test_deactivate_unlinks_contact_and_deletes_all_affiliations(self) -> None:
         """Деактивация из feature означает уход человека из всех организаций."""
-        affiliation = UniversityContactFactory(university=self.interaction.university, position="Проректор")
-        UniversityContactFactory(contact=affiliation.contact)
+        affiliation = OrganizationContactFactory(organization=self.interaction.organization, position="Проректор")
+        OrganizationContactFactory(contact=affiliation.contact)
         interaction_link = InteractionContact.objects.create(
             interaction=self.interaction,
             contact_person=affiliation.contact,
@@ -136,5 +136,5 @@ class ContactPersonFeatureApiTestCase(APITestCase):
         interaction_link.refresh_from_db()
         self.assertFalse(affiliation.contact.is_active)
         self.assertIsNotNone(interaction_link.unlinked_at)
-        self.assertFalse(UniversityContact.objects.filter(contact=affiliation.contact).exists())
+        self.assertFalse(OrganizationContact.objects.filter(contact=affiliation.contact).exists())
         self.assertEqual(response.data["target"]["data"]["position"], "Проректор")

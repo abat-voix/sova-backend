@@ -60,7 +60,7 @@ def _active_count(model: type) -> Coalesce:
 
 class InteractionViewSet(SovaBaseViewSet):
     """
-    Взаимодействия с вузами и B2C-клиентами. Доступны CRUD операции.
+    Взаимодействия с организациями и B2C-клиентами. Доступны CRUD операции.
 
     Состав выборки зависит от роли запрашивающего: КАМ видит взаимодействия, где он
     действующий ответственный, руководитель — свои, КАМов своей команды и КАМов без руководителя, администратор
@@ -97,8 +97,8 @@ class InteractionViewSet(SovaBaseViewSet):
     ordering_fields = "__all__"
     search_fields = (
         "comment",
-        "university__name",
-        "university__short_name",
+        "organization__name",
+        "organization__short_name",
         "b2c_client__full_name",
     )
     filterset_class = filters.InteractionFilter
@@ -111,7 +111,7 @@ class InteractionViewSet(SovaBaseViewSet):
         """Дополняет выборку счётчиками состава и действующим ответственным."""
         return (
             queryset
-            .select_related("university", "b2c_client")
+            .select_related("organization", "b2c_client")
             .prefetch_related(
                 Prefetch(
                     "responsibles",
@@ -353,7 +353,7 @@ class InteractionViewSet(SovaBaseViewSet):
                 "participants",
                 queryset=ConversationParticipant.objects.select_related("user"),
             ),
-        ).select_related("interaction__university", "interaction__b2c_client")
+        ).select_related("interaction__organization", "interaction__b2c_client")
 
     @extend_schema(
         methods=["GET"],

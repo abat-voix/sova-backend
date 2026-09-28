@@ -116,7 +116,7 @@ class ContactLinkService:
         """
         Закрывает привязки человека к активным взаимодействиям организации — он ушёл из неё.
 
-        `organization_field` — FK взаимодействия на контрагента (university / b2c_client). Неактивные (завершённые)
+        `organization_field` — FK взаимодействия на контрагента (organization / b2c_client). Неактивные (завершённые)
         взаимодействия не трогаются: их контакты остаются в истории.
         """
         return self._close_links(
@@ -142,7 +142,7 @@ class ContactLinkService:
         closing = list(
             links.select_for_update(of=("self",))
             .filter(unlinked_at__isnull=True, interaction__is_active=True)
-            .select_related("interaction__university", "interaction__b2c_client")
+            .select_related("interaction__organization", "interaction__b2c_client")
         )
         now = timezone.now()
         for link in closing:
@@ -155,7 +155,7 @@ class ContactLinkService:
     def _notify_unlinked(self, link: InteractionContact, actor=None) -> None:
         """Уведомляет действующих КАМов взаимодействия; без оставшихся контактов — отдельной строкой."""
         interaction = link.interaction
-        counterparty = interaction.university or interaction.b2c_client
+        counterparty = interaction.organization or interaction.b2c_client
         text = (
             f"Контактное лицо {link.contact_person.full_name} больше не работает в «{counterparty}» "
             "и отвязано от взаимодействия"

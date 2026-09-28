@@ -362,7 +362,7 @@ class WorkflowEngineService:
         if not workflow.is_active:
             raise RuleViolationError("Workflow неактивен.", code="workflow_inactive")
         has_counterparty = (
-            interaction.university_id is not None
+            interaction.organization_id is not None
             if workflow.audience == Audience.B2B
             else interaction.b2c_client_id is not None
         )

@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from accounts.models import SystemRole, UserRole
-from sova.catalog.tests.factories import UniversityFactory
+from sova.catalog.tests.factories import OrganizationFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.exceptions import AmbiguousManagerError, ManagerNotFoundError
 from sova.interactions.models import InteractionProduct, Responsible
@@ -15,12 +15,12 @@ class AttachToNewInteractionTestCase(TestCase):
     """Привязка headless-договора создаёт Interaction и перекладывает на него безголовые записи."""
 
     def setUp(self) -> None:
-        self.university = UniversityFactory()
+        self.organization = OrganizationFactory()
         self.kam = self._user(SystemRole.KAM)
         self.registry_kam = self._user(SystemRole.KAM)
         self.contract = ContractFactory(
             interaction=None,
-            university=self.university,
+            organization=self.organization,
             draft_comment="Первичный контакт",
         )
         InteractionProductFactory(contract=self.contract, interaction=None)
@@ -47,7 +47,7 @@ class AttachToNewInteractionTestCase(TestCase):
 
         self.contract.refresh_from_db()
         self.assertEqual(self.contract.interaction_id, interaction.id)
-        self.assertEqual(interaction.university_id, self.university.id)
+        self.assertEqual(interaction.organization_id, self.organization.id)
         self.assertEqual(interaction.comment, "Первичный контакт")
 
         item = InteractionProduct.objects.get(contract=self.contract)
@@ -112,10 +112,10 @@ class AttachToExistingInteractionTestCase(TestCase):
     """Привязка договора к уже существующему Interaction не трогает comment/Responsible."""
 
     def test_attaches_products_without_touching_comment_or_responsible(self) -> None:
-        interaction = InteractionFactory(university=UniversityFactory(), comment="Исходный комментарий")
+        interaction = InteractionFactory(organization=OrganizationFactory(), comment="Исходный комментарий")
         contract = ContractFactory(
             interaction=None,
-            university=interaction.university,
+            organization=interaction.organization,
             draft_comment="Комментарий из второго договора",
         )
         InteractionProductFactory(contract=contract, interaction=None)
@@ -130,8 +130,8 @@ class AttachToExistingInteractionTestCase(TestCase):
         self.assertTrue(InteractionProduct.objects.filter(contract=contract, interaction=interaction).exists())
 
     def test_rejects_interaction_with_another_counterparty(self) -> None:
-        interaction = InteractionFactory(university=UniversityFactory())
-        contract = ContractFactory(interaction=None, university=UniversityFactory())
+        interaction = InteractionFactory(organization=OrganizationFactory())
+        contract = ContractFactory(interaction=None, organization=OrganizationFactory())
 
         with self.assertRaises(ValidationError):
             contract_attachment_service.attach_to_existing_interaction(contract=contract, interaction=interaction)

@@ -18,7 +18,7 @@
 
 | Файл | Справочник | Обязательные колонки |
 |---|---|---|
-| `universities.xlsx` | Вузы (`University`) | `id`, `ror`, `name_en`, `name`, `short_name`, `country_code`, `type`, `works_count`, `cited_by_count`, `city`, `region`, `lat`, `lon`, `homepage_url` |
+| `organizations.xlsx` | Вузы (`Organization`) | `id`, `ror`, `name_en`, `name`, `short_name`, `country_code`, `type`, `works_count`, `cited_by_count`, `city`, `region`, `lat`, `lon`, `homepage_url` |
 | `vendors.xlsx` | Вендоры (`Vendor`) | `name`, `external_code` |
 | `directions.xlsx` | Направления (`Direction`) | `name`, `external_code` |
 | `programs.xlsx` | Программы (`Program`) | `name`, `direction` (название или `external_code` направления — должно уже быть загружено) |
@@ -29,7 +29,7 @@
 
 - один справочник — один файл;
 - первая строка содержит названия колонок; лишние колонки игнорируются, порядок не важен;
-- необязательная колонка `is_active` (да/нет, true/false, 1/0) есть у всех справочников, кроме `universities.xlsx`;
+- необязательная колонка `is_active` (да/нет, true/false, 1/0) есть у всех справочников, кроме `organizations.xlsx`;
   по умолчанию `true`;
 - апсерт идёт по `external_code`, если он заполнен, иначе по естественному ключу (обычно `name`; для `products.xlsx` —
   пара `name`+`vendor`; у `Program` нет поля `external_code`, поэтому `programs.xlsx` апсертится всегда по паре
@@ -37,7 +37,7 @@
 - персональные данные, пароли и другие секреты сюда не добавляются;
 - историю изменений файлов хранит Git, поэтому даты и версии в имени файла не нужны.
 
-`universities.xlsx` содержит 834 строки выгрузки вузов.
+`organizations.xlsx` содержит 834 строки выгрузки вузов.
 
 `vendors.xlsx`, `directions.xlsx`, `products.xlsx`, `programs.xlsx` заполнены данными, собранными с каталога курсов
 edu-rt.ru/course:

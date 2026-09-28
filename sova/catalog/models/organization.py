@@ -4,7 +4,7 @@ from django.db.models.functions import Lower
 from sova.core.models import NormalizedTextFieldsMixin, TimeStampedModel
 
 
-class InstitutionType(models.TextChoices):
+class OrganizationType(models.TextChoices):
     EDUCATION = "education", "Образование"
     HEALTHCARE = "healthcare", "Здравоохранение"
     COMPANY = "company", "Компания"
@@ -16,12 +16,15 @@ class InstitutionType(models.TextChoices):
     OTHER = "other", "Другое"
 
 
-class University(NormalizedTextFieldsMixin, TimeStampedModel):
-    """Вуз — учебное заведение, с которым взаимодействует ИТ Школа."""
+class Organization(NormalizedTextFieldsMixin, TimeStampedModel):
+    """
+    Организация, с которой взаимодействует ИТ Школа. Вид задаёт `organization_type`: вуз — это организация
+    с типом «Образование».
+    """
 
     name = models.CharField(
         max_length=255,
-        verbose_name="Название вуза",
+        verbose_name="Название организации",
     )
     name_en = models.CharField(
         max_length=255,
@@ -46,22 +49,22 @@ class University(NormalizedTextFieldsMixin, TimeStampedModel):
         blank=True,
         verbose_name="Внешний идентификатор",
     )
-    institution_type = models.CharField(
+    organization_type = models.CharField(
         max_length=20,
-        choices=InstitutionType.choices,
-        default=InstitutionType.EDUCATION,
+        choices=OrganizationType.choices,
+        default=OrganizationType.EDUCATION,
         verbose_name="Тип организации",
     )
 
     # Контакты
     email = models.EmailField(
         blank=True,
-        verbose_name="Email вуза",
+        verbose_name="Email организации",
     )
     phone = models.CharField(
         max_length=50,
         blank=True,
-        verbose_name="Телефон вуза",
+        verbose_name="Телефон организации",
     )
     homepage_url = models.URLField(
         max_length=500,
@@ -69,37 +72,10 @@ class University(NormalizedTextFieldsMixin, TimeStampedModel):
         verbose_name="Сайт",
     )
 
-    # География
-    country_code = models.CharField(
-        max_length=2,
-        blank=True,
-        db_index=True,
-        verbose_name="Код страны (ISO 3166-1 alpha-2)",
-    )
-    region = models.CharField(
-        max_length=255,
-        blank=True,
-        verbose_name="Регион",
-    )
-    city = models.CharField(
-        max_length=255,
-        blank=True,
-        db_index=True,
-        verbose_name="Город",
-    )
-    lat = models.DecimalField(
-        max_digits=9,
-        decimal_places=6,
-        null=True,
-        blank=True,
-        verbose_name="Широта",
-    )
-    lon = models.DecimalField(
-        max_digits=9,
-        decimal_places=6,
-        null=True,
-        blank=True,
-        verbose_name="Долгота",
+    actual_same_as_legal = models.BooleanField(
+        default=False,
+        verbose_name="Фактический адрес совпадает с юридическим",
+        help_text="Фактический адрес не хранится отдельно — берётся юридический.",
     )
 
     # Наукометрия
@@ -120,20 +96,20 @@ class University(NormalizedTextFieldsMixin, TimeStampedModel):
     normalized_text_fields = ("name", "name_en", "short_name", "external_code")
 
     class Meta:
-        verbose_name = "Вуз"
-        verbose_name_plural = "Вузы"
+        verbose_name = "Организация"
+        verbose_name_plural = "Организации"
         ordering = ["name"]
         # Название и код уникальны без учёта регистра: импорт сопоставляет их через iexact.
         constraints = [
             models.UniqueConstraint(
                 Lower("name"),
-                name="unique_university_name_ci",
-                violation_error_message="Вуз с таким названием уже существует.",
+                name="unique_organization_name_ci",
+                violation_error_message="Организация с таким названием уже существует.",
             ),
             models.UniqueConstraint(
                 Lower("external_code"),
-                name="unique_university_external_code_ci",
-                violation_error_message="Вуз с таким внешним идентификатором уже существует.",
+                name="unique_organization_external_code_ci",
+                violation_error_message="Организация с таким внешним идентификатором уже существует.",
             ),
         ]
 

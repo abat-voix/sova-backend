@@ -16,7 +16,7 @@ from sova.processes.services.deadline_recipients import DeadlineRecipientResolve
 
 logger = logging.getLogger("django")
 
-_INTERACTION_RELATED = ("interaction__university", "interaction__b2c_client")
+_INTERACTION_RELATED = ("interaction__organization", "interaction__b2c_client")
 
 
 @dataclass(frozen=True)
@@ -126,8 +126,8 @@ class DeadlineService:
         return None
 
     def _counterparty(self, interaction: Interaction) -> str:
-        """Вуз или B2C-клиент взаимодействия — str(interaction) содержит UUID и для письма не годится."""
-        return str(interaction.university or interaction.b2c_client)
+        """Организация или B2C-клиент взаимодействия — str(interaction) содержит UUID и для письма не годится."""
+        return str(interaction.organization or interaction.b2c_client)
 
     def _action_candidates(self, horizon: datetime) -> list[_Candidate]:
         """Незавершённые контролируемые действия со сроком до горизонта."""

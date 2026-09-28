@@ -4,7 +4,7 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from sova.catalog.models import Direction, Product, Program, University
+from sova.catalog.models import Direction, Product, Program, Organization
 from sova.reports.enum import ReportFormat, ReportJobStatus, ReportOrdering
 from sova.reports.models import ReportJob
 from sova.reports.spec import INTERACTION_COLUMN_KEYS, ReportSpec
@@ -12,7 +12,7 @@ from sova.reports.spec import INTERACTION_COLUMN_KEYS, ReportSpec
 
 class ReportSpecSerializer(serializers.Serializer):
     """
-    Параметры отчёта по взаимодействиям с вузами.
+    Параметры отчёта по взаимодействиям с организациями.
 
     Период — даты создания взаимодействия. Статус, этапы, ответственный
     и состав — состояние на момент построения. Пустой список фильтра — без ограничения.
@@ -26,7 +26,7 @@ class ReportSpecSerializer(serializers.Serializer):
 
     date_from = serializers.DateField(required=False, allow_null=True)
     date_to = serializers.DateField(required=False, allow_null=True)
-    universities = serializers.ListField(child=serializers.UUIDField(), required=False, default=list)
+    organizations = serializers.ListField(child=serializers.UUIDField(), required=False, default=list)
     directions = serializers.ListField(child=serializers.UUIDField(), required=False, default=list)
     programs = serializers.ListField(child=serializers.UUIDField(), required=False, default=list)
     products = serializers.ListField(child=serializers.UUIDField(), required=False, default=list)
@@ -48,7 +48,7 @@ class ReportSpecSerializer(serializers.Serializer):
     )
 
     list_models = {
-        "universities": University,
+        "organizations": Organization,
         "directions": Direction,
         "programs": Program,
         "products": Product,
@@ -87,7 +87,7 @@ class ReportSpecSerializer(serializers.Serializer):
         return ReportSpec(
             date_from=data.get("date_from"),
             date_to=data.get("date_to"),
-            universities=tuple(data["universities"]),
+            organizations=tuple(data["organizations"]),
             directions=tuple(data["directions"]),
             programs=tuple(data["programs"]),
             products=tuple(data["products"]),
@@ -155,7 +155,7 @@ class ReportRowSerializer(serializers.Serializer):
     """Строка отчёта. Отображаемые поля присутствуют, только если выбраны в `columns`."""
 
     interaction_id = serializers.UUIDField()
-    university_id = serializers.UUIDField(allow_null=True)
+    organization_id = serializers.UUIDField(allow_null=True)
     direction_id = serializers.UUIDField(allow_null=True)
     interaction_direction_id = serializers.UUIDField(allow_null=True)
     program_id = serializers.UUIDField(allow_null=True)
@@ -165,7 +165,7 @@ class ReportRowSerializer(serializers.Serializer):
     responsible_ids = serializers.ListField(
         child=serializers.IntegerField(), help_text="Действующие КАМы взаимодействия по алфавиту."
     )
-    university = serializers.CharField(required=False)
+    organization = serializers.CharField(required=False)
     direction = serializers.CharField(required=False)
     program = serializers.CharField(required=False)
     product = serializers.CharField(required=False)
@@ -234,7 +234,7 @@ class ReportSummarySerializer(serializers.Serializer):
     programs_count = serializers.IntegerField()
     products_count = serializers.IntegerField()
     by_responsible = DistributionItemSerializer(many=True)
-    by_university = DistributionItemSerializer(many=True)
+    by_organization = DistributionItemSerializer(many=True)
     by_process_status = DistributionItemSerializer(many=True)
     by_active_stage = DistributionItemSerializer(many=True)
     metrics = ReportMetricSerializer(many=True)

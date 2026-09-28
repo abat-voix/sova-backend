@@ -19,7 +19,7 @@ class Column:
 
 # Порядок колонок в файлах фиксирован этим списком, а не порядком в запросе клиента
 INTERACTION_COLUMNS: tuple[Column, ...] = (
-    Column("university", "Вуз"),
+    Column("organization", "Организация"),
     Column("direction", "Направление"),
     Column("program", "Программа"),
     Column("product", "Продукт"),
@@ -39,7 +39,7 @@ COLUMN_TITLES: dict[str, str] = {column.key: column.title for column in INTERACT
 # Идентификаторы и связи есть в каждой строке API и JSON-выгрузки независимо от выбора колонок
 ID_FIELDS: tuple[str, ...] = (
     "interaction_id",
-    "university_id",
+    "organization_id",
     "direction_id",
     "interaction_direction_id",
     "program_id",
@@ -62,7 +62,7 @@ class ReportSpec:
 
     date_from: datetime.date | None = None
     date_to: datetime.date | None = None
-    universities: tuple[uuid.UUID, ...] = ()
+    organizations: tuple[uuid.UUID, ...] = ()
     directions: tuple[uuid.UUID, ...] = ()
     programs: tuple[uuid.UUID, ...] = ()
     products: tuple[uuid.UUID, ...] = ()
@@ -82,7 +82,7 @@ class ReportSpec:
         data = asdict(self)
         data["date_from"] = self.date_from.isoformat() if self.date_from else None
         data["date_to"] = self.date_to.isoformat() if self.date_to else None
-        for name in ("universities", "directions", "programs", "products"):
+        for name in ("organizations", "directions", "programs", "products"):
             data[name] = [str(value) for value in data[name]]
         data["responsibles"] = list(self.responsibles)
         data["columns"] = [column.key for column in self.selected_columns]
@@ -98,7 +98,7 @@ class ReportSpec:
         return cls(
             date_from=parse_date(data.get("date_from")),
             date_to=parse_date(data.get("date_to")),
-            universities=tuple(uuid.UUID(str(v)) for v in data.get("universities", ())),
+            organizations=tuple(uuid.UUID(str(v)) for v in data.get("organizations", ())),
             directions=tuple(uuid.UUID(str(v)) for v in data.get("directions", ())),
             programs=tuple(uuid.UUID(str(v)) for v in data.get("programs", ())),
             products=tuple(uuid.UUID(str(v)) for v in data.get("products", ())),

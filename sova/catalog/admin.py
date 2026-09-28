@@ -3,30 +3,67 @@ from django.contrib import admin, messages
 
 from sova.catalog.models import (
     B2CClient,
+    B2CClientAddress,
+    B2CClientAddressAccessLog,
     B2CClientContact,
     CatalogImportMapping,
     ContactPerson,
     Direction,
     Product,
     Program,
-    University,
-    UniversityContact,
+    Organization,
+    OrganizationAddress,
+    OrganizationContact,
     Vendor,
     VendorContact,
 )
 from sova.catalog.models.contact_affiliation import AbstractContactAffiliation
-from sova.catalog.services import contact_affiliation_service
+from sova.catalog.services import b2c_client_address_service, contact_affiliation_service
 from sova.core.admin import AbstractBaseModelAdmin
+
+
+class B2CClientAddressInline(admin.StackedInline):
+    """Открытая часть адреса: улица, дом, квартира и индекс — персональные данные, в админке не показываются."""
+
+    model = B2CClientAddress
+    fields = ("country_code", "region", "city")
+    extra = 0
+    max_num = 1
 
 
 @admin.register(B2CClient)
 class B2CClientAdmin(AbstractBaseModelAdmin[B2CClient]):
     """Админка B2C-клиентов."""
 
-    list_display = ("id", "full_name", "kind", "phone", "is_active", "created_at")
+    list_display = ("id", "full_name", "phone", "is_active", "created_at")
     list_display_links = ("full_name",)
     search_fields = ("id", "full_name", "inn", "email", "phone")
-    list_filter = ("kind", "is_active")
+    list_filter = ("is_active",)
+    inlines = (B2CClientAddressInline,)
+
+
+@admin.register(B2CClientAddressAccessLog)
+class B2CClientAddressAccessLogAdmin(AbstractBaseModelAdmin[B2CClientAddressAccessLog]):
+    """Журнал доступа к адресам B2C-клиентов — только чтение и только администратору платформы."""
+
+    list_display = ("accessed_at", "user", "b2c_client", "action", "fields", "ip")
+    list_filter = ("action",)
+    search_fields = ("b2c_client__full_name", "user__username")
+
+    def has_module_permission(self, request):
+        return b2c_client_address_service.can_read(request.user) and super().has_module_permission(request)
+
+    def has_view_permission(self, request, obj=None):
+        return b2c_client_address_service.can_read(request.user) and super().has_view_permission(request, obj)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(CatalogImportMapping)
@@ -72,7 +109,7 @@ class ContactAffiliationFormsetMixin:
 class ContactAffiliationInlineForm(forms.ModelForm):
     """Человек и организация существующей связи не меняются: другая организация — другая связь (как в API)."""
 
-    locked_fields = ("contact", "university", "b2c_client", "vendor")
+    locked_fields = ("contact", "organization", "b2c_client", "vendor")
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -83,14 +120,14 @@ class ContactAffiliationInlineForm(forms.ModelForm):
                     self.fields[name].disabled = True
 
 
-class UniversityContactInline(admin.TabularInline):
-    """Связи контактного лица с вузами."""
+class OrganizationContactInline(admin.TabularInline):
+    """Связи контактного лица с организациями."""
 
-    model = UniversityContact
+    model = OrganizationContact
     form = ContactAffiliationInlineForm
     extra = 0
-    fields = ("university", "position", "preferred_channels")
-    autocomplete_fields = ("university",)
+    fields = ("organization", "position", "preferred_channels")
+    autocomplete_fields = ("organization",)
 
 
 class B2CClientContactInline(admin.TabularInline):
@@ -135,12 +172,12 @@ class ContactPersonAdmin(ContactAffiliationFormsetMixin, AbstractBaseModelAdmin[
         "email",
         "phone",
         "telegram",
-        "university_links__university__name",
+        "organization_links__organization__name",
         "b2c_client_links__b2c_client__full_name",
         "vendor_links__vendor__name",
     )
     list_filter = ("is_active",)
-    inlines = (UniversityContactInline, B2CClientContactInline, VendorContactInline)
+    inlines = (OrganizationContactInline, B2CClientContactInline, VendorContactInline)
 
     def save_related(self, request, form, formsets, change) -> None:
         """
@@ -192,14 +229,21 @@ class ProgramAdmin(AbstractBaseModelAdmin[Program]):
     autocomplete_fields = ("direction",)
 
 
-@admin.register(University)
-class UniversityAdmin(AbstractBaseModelAdmin[University]):
-    """Админка вузов."""
+class OrganizationAddressInline(admin.StackedInline):
+    model = OrganizationAddress
+    extra = 0
+    max_num = 2
 
-    list_display = ("id", "name", "inn", "is_active", "created_at")
+
+@admin.register(Organization)
+class OrganizationAdmin(AbstractBaseModelAdmin[Organization]):
+    """Админка организаций."""
+
+    list_display = ("id", "name", "inn", "organization_type", "is_active", "created_at")
     list_display_links = ("name",)
     search_fields = ("id", "name", "inn", "external_code")
-    list_filter = ("is_active",)
+    list_filter = ("organization_type", "is_active")
+    inlines = (OrganizationAddressInline,)
 
 
 @admin.register(Vendor)

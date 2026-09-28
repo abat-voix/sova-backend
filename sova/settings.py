@@ -471,7 +471,6 @@ SPECTACULAR_SETTINGS = {
         "StageInstanceStatusEnum": "sova.processes.enum.StageInstanceStatus",
         "ActionInstanceStatusEnum": "sova.processes.enum.ActionInstanceStatus",
         "StageInstanceContextTypeEnum": "sova.processes.enum.StageInstanceContextType",
-        "KindEnum": "sova.catalog.enum.ClientKind",
         "CatalogTypeEnum": "sova.catalog.enum.CatalogType",
         "CatalogImportTypeEnum": "sova.catalog.api.serializers.catalog_import.CATALOG_IMPORT_CHOICES",
         "NotificationKindEnum": "sova.notifications.enum.NotificationKind",

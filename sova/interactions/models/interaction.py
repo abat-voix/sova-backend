@@ -6,7 +6,7 @@ from sova.core.models import TimeStampedModel
 
 class Interaction(TimeStampedModel):
     """
-    Взаимодействие ИТ Школы с вузом либо B2C-клиентом — контрагент ровно один из двух.
+    Взаимодействие ИТ Школы с организацией либо B2C-клиентом — контрагент ровно один из двух.
 
     Нейтральна к аудитории: к ней привязан WorkflowInstance, Contract/License опциональны.
     """
@@ -20,13 +20,13 @@ class Interaction(TimeStampedModel):
         verbose_name="Активен",
     )
 
-    university = models.ForeignKey(
-        to="catalog.University",
+    organization = models.ForeignKey(
+        to="catalog.Organization",
         on_delete=models.PROTECT,
         related_name="interactions",
         null=True,
         blank=True,
-        verbose_name="Вуз",
+        verbose_name="Организация",
     )
     b2c_client = models.ForeignKey(
         to="catalog.B2CClient",
@@ -50,15 +50,15 @@ class Interaction(TimeStampedModel):
         constraints = [
             models.CheckConstraint(
                 check=(
-                    Q(university__isnull=False, b2c_client__isnull=True)
-                    | Q(university__isnull=True, b2c_client__isnull=False)
+                    Q(organization__isnull=False, b2c_client__isnull=True)
+                    | Q(organization__isnull=True, b2c_client__isnull=False)
                 ),
                 name="interaction_exactly_one_counterparty",
             ),
         ]
 
     def __str__(self):
-        return f"Взаимодействие №{self.display_number} — {self.university or self.b2c_client}"
+        return f"Взаимодействие №{self.display_number} — {self.organization or self.b2c_client}"
 
     @property
     def display_number(self) -> str:

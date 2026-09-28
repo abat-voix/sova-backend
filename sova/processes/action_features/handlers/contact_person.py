@@ -29,7 +29,7 @@ def _target_data(contact: ContactPerson, context, link=None) -> dict:
         "full_name": contact.full_name,
         "position": contact_affiliation_service.position_for(
             contact=contact,
-            organization=context.university or context.b2c_client,
+            organization=context.organization or context.b2c_client,
         ),
         "email": contact.email,
         "phone": contact.phone,
@@ -70,7 +70,7 @@ class CreateContactPersonHandler:
     code = "contact_person.create"
 
     def execute(self, *, context, data: dict, settings: dict) -> ActionFeatureResult:
-        counterparty = context.university or context.b2c_client
+        counterparty = context.organization or context.b2c_client
         if counterparty is None:
             raise ActionFeatureError("invalid_action_context")
         serializer = CreateContactPersonPayloadSerializer(data=data)
@@ -131,7 +131,7 @@ class UpdateContactPersonHandler:
                 400,
             )
 
-        counterparty = context.university or context.b2c_client
+        counterparty = context.organization or context.b2c_client
         if counterparty is None:
             raise ActionFeatureError("invalid_action_context")
         affiliation = contact_affiliation_service.find(contact=contact, organization=counterparty)

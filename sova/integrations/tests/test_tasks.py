@@ -38,7 +38,6 @@ class IntegrationTasksTest(TestCase):
             entity="b2c_client", is_active=True,
             rules=[
                 {"sourcePath": "$.name", "targetField": "full_name", "required": True, "defaultValue": None},
-                {"sourcePath": "", "targetField": "kind", "required": True, "defaultValue": "individual"},
             ],
         )
         message = IntegrationMessage.objects.create(
@@ -55,7 +54,6 @@ class IntegrationTasksTest(TestCase):
             entity="b2c_client", is_active=True,
             rules=[
                 {"sourcePath": "$.name", "targetField": "full_name", "required": True, "defaultValue": None},
-                {"sourcePath": "", "targetField": "kind", "required": True, "defaultValue": "individual"},
             ],
         )
         message = IntegrationMessage.objects.create(

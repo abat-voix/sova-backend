@@ -8,7 +8,6 @@ class B2CClientFilter(RankFilterMixin):
     class Meta:
         model = B2CClient
         fields = (
-            "kind",
             "is_active",
         )
         exact_search_fields = ["inn"]

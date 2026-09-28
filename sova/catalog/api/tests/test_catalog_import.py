@@ -13,7 +13,7 @@ from sova.catalog.models import Vendor
 from sova.catalog.tests.factories import (
     CatalogImportMappingFactory,
     ProductFactory,
-    UniversityFactory,
+    OrganizationFactory,
     VendorFactory,
 )
 from sova.core.tests.factories import UserFactory
@@ -144,7 +144,7 @@ class ContractRegistryImportWarningsApiTestCase(APITestCase):
         self.client.force_authenticate(user=self.user)
         self.url = reverse("catalog:catalog-import-list")
         columns = {
-            "university": "Вуз",
+            "organization": "Вуз",
             "vendor": "Вендор",
             "product": "ПО",
             "contract_number": "Номер",
@@ -154,7 +154,7 @@ class ContractRegistryImportWarningsApiTestCase(APITestCase):
             CatalogImportMappingFactory(
                 catalog_type=CatalogType.CONTRACT_REGISTRY, source_column=source_column, target_field=target_field
             )
-        UniversityFactory(name="МГУ")
+        OrganizationFactory(name="МГУ")
         ProductFactory(name="IDE", vendor=VendorFactory(name="1С"))
 
     def test_unknown_manager_is_returned_as_warning(self) -> None:
