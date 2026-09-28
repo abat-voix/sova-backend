@@ -55,14 +55,11 @@ CATALOG_IMPORT_FIELDS = {
             "works_count", "cited_by_count", "city", "region", "lat", "lon", "homepage_url",
         }),
     ),
-    # Справочник вендоров (name/external_code) или файл «вендор + продукты + контактное лицо» (Вендоры.xlsx).
+    # Файл «вендор + продукты + контактное лицо» (Вендоры.xlsx). external_code и is_active вендора — только
+    # у справочника reference_data/vendors.xlsx, который CLI loaddata читает без маппинга.
     CatalogType.VENDOR: CatalogImportFields(
         required=frozenset({"name"}),
-        optional=frozenset({
-            "external_code", "is_active", "products",
-            "contact_full_name", "contact_email", "contact_phone", "contact_telegram", "contact_position",
-            "contact_channels",
-        }),
+        optional=frozenset({"products", "contact_full_name", "contact_email", "contact_phone", "contact_channels"}),
     ),
     CatalogType.DIRECTION: CatalogImportFields(
         required=frozenset({"name", "external_code"}),
@@ -124,8 +121,6 @@ CATALOG_IMPORT_FIELD_LABELS: dict[str, str] = {
     "contact_full_name": "ФИО контакта",
     "contact_email": "E-mail контакта",
     "contact_phone": "Телефон контакта",
-    "contact_telegram": "Telegram контакта",
-    "contact_position": "Должность контакта",
     "contact_channels": "Способы связи контакта",
     "direction": "Направление",
     "vendor": "Вендор",

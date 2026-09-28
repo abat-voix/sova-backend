@@ -54,7 +54,7 @@ class CatalogImportMappingServiceTestCase(TestCase):
         other = CatalogImportMappingFactory(catalog_type=CatalogType.DIRECTION, target_field="name", source_column="Название")
 
         catalog_import_mapping_service.replace_for_type(
-            catalog_type=CatalogType.VENDOR, mappings={"name": "Название", "external_code": "Код"}
+            catalog_type=CatalogType.VENDOR, mappings={"name": "Название", "products": "Продукты"}
         )
 
         # Проверяем, что маппинг направлений на месте

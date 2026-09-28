@@ -18,7 +18,7 @@ from openpyxl.utils.exceptions import InvalidFileException
 from sova.catalog.enum import ContactChannel
 from sova.catalog.exceptions import CatalogImportError, CatalogImportRowsError
 from sova.catalog.models import CatalogImportMapping
-from sova.catalog.schemas import ImportRowError
+from sova.catalog.schemas import CATALOG_IMPORT_FIELDS, ImportRowError
 from sova.core.text import header_key, normalize_text, quote_insensitive_key, split_quoted_list, strip_outer_quotes
 
 Rows = Iterator[tuple[int, dict]]
@@ -375,11 +375,15 @@ class ImportFileService:
         return Path(source.name).name
 
     def _resolve_header_map(self, catalog_type: str, headers: list[str]) -> dict[str, str]:
-        """Строит {заголовок файла: канонический ключ} для замапленных колонок этого catalog_type."""
+        """
+        Строит {заголовок файла: канонический ключ} для замапленных колонок этого catalog_type.
+
+        Маппинги полей, которых уже нет в `CATALOG_IMPORT_FIELDS`, не применяются: интерфейс их не показывает.
+        """
         configured = dict(
-            CatalogImportMapping.objects.filter(catalog_type=catalog_type).values_list(
-                "source_column", "target_field"
-            )
+            CatalogImportMapping.objects.filter(
+                catalog_type=catalog_type, target_field__in=CATALOG_IMPORT_FIELDS[catalog_type].all
+            ).values_list("source_column", "target_field")
         )
         if not configured:
             raise CatalogImportError(f"Для типа '{catalog_type}' не настроен маппинг ни одной колонки.")

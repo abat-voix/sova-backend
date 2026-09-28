@@ -40,7 +40,7 @@ class CatalogImportApiTestCase(APITestCase):
         self.client.force_authenticate(user=user)
         self.url = reverse("catalog:catalog-import-list")
         CatalogImportMappingFactory(catalog_type=CatalogType.VENDOR, source_column="Вендор", target_field="name")
-        CatalogImportMappingFactory(catalog_type=CatalogType.VENDOR, source_column="Код", target_field="external_code")
+        CatalogImportMappingFactory(catalog_type=CatalogType.VENDOR, source_column="Продукты", target_field="products")
 
     def _post(self, catalog_type: str, file: SimpleUploadedFile):
         return self.client.post(
@@ -51,7 +51,7 @@ class CatalogImportApiTestCase(APITestCase):
 
     def test_import_returns_counts(self) -> None:
         """Успешный импорт возвращает количество созданных и обновлённых записей."""
-        file = _xlsx("vendors.xlsx", ("Вендор", "Код"), ("JetBrains", "jb"), ("1С", "one-c"))
+        file = _xlsx("vendors.xlsx", ("Вендор", "Продукты"), ("JetBrains", "IntelliJ IDEA"), ("1С", "1С:Предприятие"))
 
         response = self._post(CatalogType.VENDOR, file)
 
@@ -64,7 +64,7 @@ class CatalogImportApiTestCase(APITestCase):
 
     def test_row_errors_return_400_with_error_list(self) -> None:
         """Ошибки строк возвращаются списком с номерами строк, ничего не сохраняется."""
-        file = _xlsx("vendors.xlsx", ("Вендор", "Код"), ("JetBrains", "jb"), (None, "no-name"))
+        file = _xlsx("vendors.xlsx", ("Вендор", "Продукты"), ("JetBrains", "IntelliJ IDEA"), (None, "Без вендора"))
 
         response = self._post(CatalogType.VENDOR, file)
 
@@ -77,8 +77,8 @@ class CatalogImportApiTestCase(APITestCase):
 
     def test_error_list_is_limited(self) -> None:
         """В ответе не больше 100 ошибок, errors_total — полное число."""
-        rows = [(None, f"code-{index}") for index in range(150)]
-        file = _xlsx("vendors.xlsx", ("Вендор", "Код"), *rows)
+        rows = [(None, f"Продукт {index}") for index in range(150)]
+        file = _xlsx("vendors.xlsx", ("Вендор", "Продукты"), *rows)
 
         response = self._post(CatalogType.VENDOR, file)
 
@@ -116,7 +116,7 @@ class CatalogImportApiTestCase(APITestCase):
 
     def test_unknown_catalog_type_returns_400(self) -> None:
         """Неизвестный тип каталога отклоняется валидацией."""
-        file = _xlsx("vendors.xlsx", ("Вендор", "Код"), ("JetBrains", "jb"))
+        file = _xlsx("vendors.xlsx", ("Вендор", "Продукты"), ("JetBrains", "IntelliJ IDEA"))
 
         response = self._post("unknown", file)
 
@@ -127,7 +127,7 @@ class CatalogImportApiTestCase(APITestCase):
     def test_requires_authentication(self) -> None:
         """Анонимный запрос отклоняется."""
         self.client.force_authenticate(user=None)
-        file = _xlsx("vendors.xlsx", ("Вендор", "Код"), ("JetBrains", "jb"))
+        file = _xlsx("vendors.xlsx", ("Вендор", "Продукты"), ("JetBrains", "IntelliJ IDEA"))
 
         response = self._post(CatalogType.VENDOR, file)
 
