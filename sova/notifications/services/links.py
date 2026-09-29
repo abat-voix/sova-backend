@@ -21,7 +21,7 @@ def interaction_link(
 
 
 def absolute_link(link: str) -> str:
-    """Полный адрес относительной ссылки для внешних каналов; пусто — нет ссылки или не задан FRONTEND_URL."""
-    if not link or not settings.FRONTEND_URL:
+    """Полный адрес относительной ссылки для внешних каналов; пусто — нет ссылки или не задан APP_PUBLIC_URL."""
+    if not link or not settings.APP_PUBLIC_URL:
         return ""
-    return settings.FRONTEND_URL + link
+    return settings.APP_PUBLIC_URL + link

@@ -372,8 +372,6 @@ TELEGRAM_LINK_TOKEN_TTL_MINUTES = int(os.getenv("TELEGRAM_LINK_TOKEN_TTL_MINUTES
 MAX_BOT_TOKEN = os.getenv("MAX_BOT_TOKEN", "")
 MAX_API_URL = os.getenv("MAX_API_URL", "https://platform-api.max.ru").rstrip("/")
 NOTIFICATION_HTTP_TIMEOUT = float(os.getenv("NOTIFICATION_HTTP_TIMEOUT", "10"))
-# Адрес фронта для ссылок во внешних уведомлениях (email, Telegram, MAX); пусто — ссылки не добавляются
-FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -382,6 +380,7 @@ AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
 ]
 
+# Публичный адрес фронта: редиректы OIDC и ссылки во внешних уведомлениях (email, Telegram, MAX)
 APP_PUBLIC_URL = os.getenv("APP_PUBLIC_URL", "http://localhost:3000").rstrip("/")
 KEYCLOAK_PUBLIC_URL = os.getenv(
     "KEYCLOAK_PUBLIC_URL", "http://localhost:8080"

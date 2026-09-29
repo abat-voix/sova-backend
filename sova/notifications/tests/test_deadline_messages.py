@@ -80,7 +80,7 @@ class RenderDigestTest(SimpleTestCase):
         # Проверяем первую строку
         self.assertEqual(text.splitlines()[0], "Сроки — просрочено 1, скоро срок 0")
 
-    @override_settings(FRONTEND_URL="https://sova.example.ru")
+    @override_settings(APP_PUBLIC_URL="https://sova.example.ru")
     def test_digest_puts_link_under_each_item(self) -> None:
         """Под пунктом со взаимодействием — его полная ссылка; пункт без взаимодействия — без ссылки."""
         stage = replace(
@@ -116,9 +116,9 @@ class RenderDigestTest(SimpleTestCase):
             f"&action={reminder.object_id}",
         )
 
-    @override_settings(FRONTEND_URL="")
-    def test_digest_without_frontend_url_has_no_links(self) -> None:
-        """Без FRONTEND_URL сводка без ссылок — относительный адрес наружу не попадает."""
+    @override_settings(APP_PUBLIC_URL="")
+    def test_digest_without_app_public_url_has_no_links(self) -> None:
+        """Без APP_PUBLIC_URL сводка без ссылок — относительный адрес наружу не попадает."""
         text = deadline_message_service.render_digest(
             items=[
                 replace(
