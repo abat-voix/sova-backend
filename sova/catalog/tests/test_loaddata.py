@@ -6,11 +6,11 @@ from django.core.management import CommandError, call_command
 from django.test import TestCase, override_settings
 from openpyxl import Workbook
 
-from sova.catalog.models import Direction, Product, Program, University, Vendor
+from sova.catalog.models import Direction, Product, Program, Organization, Vendor
 from sova.catalog.tests.factories import DirectionFactory, ProgramFactory, VendorFactory
 
 
-class LoadUniversitiesCommandTestCase(TestCase):
+class LoadOrganizationsCommandTestCase(TestCase):
     """Тесты загрузки справочника вузов из XLSX."""
 
     headers = (
@@ -33,20 +33,20 @@ class LoadUniversitiesCommandTestCase(TestCase):
     def test_loads_and_updates_short_name(self) -> None:
         """Команда сохраняет краткое название при создании и обновлении вуза."""
         with TemporaryDirectory() as directory:
-            source = Path(directory) / "universities.xlsx"
+            source = Path(directory) / "organizations.xlsx"
             self._save_workbook(source, short_name="МГУ")
 
             call_command("loaddata", str(source), stdout=StringIO())
 
-            university = University.objects.get(external_code="https://ror.org/test")
-            self.assertEqual(university.short_name, "МГУ")
+            organization = Organization.objects.get(external_code="https://ror.org/test")
+            self.assertEqual(organization.short_name, "МГУ")
 
             self._save_workbook(source, short_name="МГУ имени М. В. Ломоносова")
             call_command("loaddata", str(source), stdout=StringIO())
 
-            university.refresh_from_db()
+            organization.refresh_from_db()
             self.assertEqual(
-                university.short_name,
+                organization.short_name,
                 "МГУ имени М. В. Ломоносова",
             )
 
@@ -58,7 +58,7 @@ class LoadUniversitiesCommandTestCase(TestCase):
             (
                 "test-id",
                 "https://ror.org/test",
-                "Lomonosov Moscow State University",
+                "Lomonosov Moscow State Organization",
                 "Московский государственный университет",
                 short_name,
                 "ru",
@@ -107,6 +107,22 @@ class LoadVendorsCommandTestCase(TestCase):
             vendor.refresh_from_db()
             self.assertFalse(vendor.is_active)
             self.assertEqual(Vendor.objects.count(), 1)
+
+    def test_loads_reference_headers_with_vendor_contacts(self) -> None:
+        """Штатный справочник вендоров использует понятные русские заголовки."""
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "vendors.xlsx"
+            _write_workbook(
+                source,
+                ("Компания", "Продукт", "ФИО", "Телефон", "Почта", "Способ связи"),
+                ("ООО «Базис»", "«Базис Dynamix»", "Иванов Иван", "+7 900 111-22-33", "ivanov@example.ru", "Почта"),
+            )
+
+            call_command("loaddata", str(source), stdout=StringIO())
+
+            vendor = Vendor.objects.get(name="ООО «Базис»")
+            self.assertTrue(vendor.products.filter(name="Базис Dynamix").exists())
+            self.assertTrue(vendor.contact_links.filter(contact__full_name="Иванов Иван").exists())
 
 
 class LoadDirectionsCommandTestCase(TestCase):
@@ -230,7 +246,7 @@ class LoadReferenceDataCommandTestCase(TestCase):
             with override_settings(BASE_DIR=Path(base_dir)):
                 call_command("loaddata", "--reference-data", stdout=StringIO())
 
-            self.assertEqual(University.objects.count(), 0)
+            self.assertEqual(Organization.objects.count(), 0)
             self.assertTrue(Vendor.objects.filter(external_code="vendor-1c").exists())
             self.assertTrue(Direction.objects.filter(external_code="dev").exists())
 
@@ -281,7 +297,7 @@ class LoadReferenceDataCommandTestCase(TestCase):
         directory = base_dir / "reference_data"
         directory.mkdir()
 
-        _write_workbook(directory / "universities.xlsx", LoadUniversitiesCommandTestCase.headers)
+        _write_workbook(directory / "organizations.xlsx", LoadOrganizationsCommandTestCase.headers)
         _write_workbook(directory / "vendors.xlsx", ("name", "external_code"), ("1С", "vendor-1c"))
         _write_workbook(directory / "directions.xlsx", ("name", "external_code"), ("Разработка", "dev"))
         _write_workbook(

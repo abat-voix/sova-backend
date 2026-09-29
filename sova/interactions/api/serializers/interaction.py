@@ -4,32 +4,33 @@ from rest_framework import serializers
 
 from sova.catalog.api.serializers import (
     B2CClientShortSerializer,
-    UniversityShortSerializer,
+    OrganizationShortSerializer,
 )
 from sova.core.api.validators import validate_exactly_one_counterparty
 from sova.interactions.api.serializers.responsible import ResponsibleShortSerializer
 from sova.interactions.models import Interaction
+from sova.interactions.services import interaction_service
 
 
 class InteractionShortSerializer(serializers.ModelSerializer):
     """Взаимодействие — краткое представление для вложенного использования."""
 
-    university = UniversityShortSerializer(
+    organization = OrganizationShortSerializer(
         read_only=True,
-        label=_("Вуз"),
+        label=_("Организация"),
         help_text=_("Показывается развёрнуто; пусто у взаимодействий с B2C-клиентом"),
     )
     b2c_client = B2CClientShortSerializer(
         read_only=True,
         label=_("B2C-клиент"),
-        help_text=_("Показывается развёрнуто; пусто у взаимодействий с вузом"),
+        help_text=_("Показывается развёрнуто; пусто у взаимодействий с организацией"),
     )
 
     number = serializers.CharField(source="display_number", read_only=True)
 
     class Meta:
         model = Interaction
-        fields = ("id", "number", "university", "b2c_client")
+        fields = ("id", "number", "organization", "b2c_client")
 
 
 class InteractionSerializer(serializers.ModelSerializer):
@@ -37,15 +38,15 @@ class InteractionSerializer(serializers.ModelSerializer):
 
     number = serializers.CharField(source="display_number", read_only=True, label=_("Номер"))
 
-    university = UniversityShortSerializer(
+    organization = OrganizationShortSerializer(
         read_only=True,
-        label=_("Вуз"),
+        label=_("Организация"),
         help_text=_("Показывается развёрнуто; пусто у взаимодействий с B2C-клиентом"),
     )
     b2c_client = B2CClientShortSerializer(
         read_only=True,
         label=_("B2C-клиент"),
-        help_text=_("Показывается развёрнуто; пусто у взаимодействий с вузом"),
+        help_text=_("Показывается развёрнуто; пусто у взаимодействий с организацией"),
     )
     current_responsibles = serializers.SerializerMethodField(
         label=_("Действующие ответственные"),
@@ -66,6 +67,10 @@ class InteractionSerializer(serializers.ModelSerializer):
         label=_("Количество продуктов"),
         help_text=_("Считается через annotate() по активным продуктам взаимодействия"),
     )
+    can_delete = serializers.SerializerMethodField(
+        label=_("Можно удалить"),
+        help_text=_("Взаимодействие не запущено: по нему нет процесса и договоров"),
+    )
 
     class Meta:
         model = Interaction
@@ -74,7 +79,7 @@ class InteractionSerializer(serializers.ModelSerializer):
             "number",
             "comment",
             "is_active",
-            "university",
+            "organization",
             "b2c_client",
             "created_at",
             "updated_at",
@@ -82,7 +87,15 @@ class InteractionSerializer(serializers.ModelSerializer):
             "directions_count",
             "programs_count",
             "products_count",
+            "can_delete",
         )
+
+    def get_can_delete(self, instance: Interaction) -> bool:
+        """Признак из аннотации ViewSet; без неё — отдельным запросом."""
+        can_delete = getattr(instance, "can_delete", None)
+        if can_delete is None:
+            can_delete = interaction_service.can_delete(instance)
+        return can_delete
 
     @extend_schema_field(ResponsibleShortSerializer(many=True))
     def get_current_responsibles(self, instance: Interaction) -> list[dict]:
@@ -112,7 +125,7 @@ class WriteInteractionSerializer(serializers.ModelSerializer):
             "id",
             "comment",
             "is_active",
-            "university",
+            "organization",
             "b2c_client",
         )
 

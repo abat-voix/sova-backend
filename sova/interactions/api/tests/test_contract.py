@@ -7,7 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
-from sova.catalog.tests.factories import UniversityFactory
+from sova.catalog.tests.factories import OrganizationFactory
 from sova.core.tests.base import BaseApiTestMixin
 from sova.core.tests.factories import UserFactory
 from sova.core.tests.media import TemporaryMediaMixin
@@ -42,9 +42,9 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
             "interaction": {
                 "id": str(instance.interaction_id),
                 "number": instance.interaction.display_number,
-                "university": {
-                    "id": str(instance.interaction.university_id),
-                    "name": instance.interaction.university.name,
+                "organization": {
+                    "id": str(instance.interaction.organization_id),
+                    "name": instance.interaction.organization.name,
                 },
                 "b2c_client": None,
             },
@@ -231,6 +231,28 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
             [str(signed.pk)],
         )
 
+    def test_filter_is_attached(self) -> None:
+        """Фильтр is_attached=false возвращает только договоры реестра без взаимодействия."""
+        attached = ContractFactory()
+        headless = ContractFactory(interaction=None, organization=attached.interaction.organization)
+
+        not_attached_response = self.client.get(path=self.list_url, data={"is_attached": "false"})
+        attached_response = self.client.get(path=self.list_url, data={"is_attached": "true"})
+
+        # Проверяем, что фильтр разделяет договоры по наличию взаимодействия
+        self.assertEqual([item["id"] for item in not_attached_response.data["results"]], [str(headless.pk)])
+        self.assertEqual([item["id"] for item in attached_response.data["results"]], [str(attached.pk)])
+
+    def test_filter_by_organization_ids(self) -> None:
+        """Фильтр organization__ids находит и договор без взаимодействия по его контрагенту."""
+        target = ContractFactory(interaction=None, organization=OrganizationFactory())
+        ContractFactory(interaction=None, organization=OrganizationFactory())
+
+        response = self.client.get(path=self.list_url, data={"organization__ids": str(target.organization_id)})
+
+        # Проверяем, что найден только договор выбранной организации
+        self.assertEqual([item["id"] for item in response.data["results"]], [str(target.pk)])
+
     def test_filter_by_signed_period(self) -> None:
         """Фильтры signed_at__gte/signed_at__lte ограничивают период подписания."""
         inside = ContractFactory(signed_at=date(2026, 3, 15))
@@ -257,7 +279,7 @@ class ContractCurrentResponsiblesApiTestCase(APITestCase):
         UserRole.objects.create(user=user, role=SystemRole.PLATFORM_ADMIN)
         self.client.force_authenticate(user=user)
         self.kam = UserFactory(first_name="Максим", last_name="Менеджеров")
-        self.university = UniversityFactory()
+        self.organization = OrganizationFactory()
 
     def _get(self, contract: Contract) -> dict:
         response = self.client.get(path=reverse("interactions:contract-detail", args=[contract.pk]))
@@ -265,7 +287,7 @@ class ContractCurrentResponsiblesApiTestCase(APITestCase):
         return response.data
 
     def test_headless_contract_shows_its_kams(self) -> None:
-        contract = ContractFactory(interaction=None, university=self.university)
+        contract = ContractFactory(interaction=None, organization=self.organization)
         Responsible.objects.create(contract=contract, manager=self.kam)
 
         data = self._get(contract)
@@ -276,14 +298,14 @@ class ContractCurrentResponsiblesApiTestCase(APITestCase):
         self.assertNotIn("draft_manager_full_name", data)
 
     def test_closed_kam_is_not_shown(self) -> None:
-        contract = ContractFactory(interaction=None, university=self.university)
+        contract = ContractFactory(interaction=None, organization=self.organization)
         Responsible.objects.create(contract=contract, manager=self.kam, unassigned_at=timezone.now())
 
         # Проверяем, что снятый КАМ не показывается
         self.assertEqual(self._get(contract)["current_responsibles"], [])
 
     def test_attached_contract_keeps_registry_kams(self) -> None:
-        contract = ContractFactory(interaction=None, university=self.university)
+        contract = ContractFactory(interaction=None, organization=self.organization)
         Responsible.objects.create(contract=contract, manager=self.kam)
         contract_attachment_service.attach_to_new_interaction(contract=contract, author=None)
 

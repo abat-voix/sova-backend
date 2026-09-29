@@ -1,9 +1,9 @@
 from django.test import TestCase
 
 from sova.catalog.exceptions import CatalogImportError, CatalogImportRowsError
-from sova.catalog.models import ContactPerson, Direction, Product, Program, University, Vendor
+from sova.catalog.models import ContactPerson, Direction, Product, Program, Organization, OrganizationContact, Vendor
 from sova.catalog.services import catalog_import_service, import_file_service
-from sova.catalog.tests.factories import DirectionFactory, UniversityFactory, VendorFactory
+from sova.catalog.tests.factories import DirectionFactory, OrganizationContactFactory, OrganizationFactory, VendorFactory
 
 
 class LoadVendorsServiceTestCase(TestCase):
@@ -25,27 +25,43 @@ class LoadVendorsServiceTestCase(TestCase):
 
 
 class LoadContactPersonsTestCase(TestCase):
-    """load_contact_persons — апсерт ответственных от вуза по (university, full_name)."""
+    """load_contact_persons — человек и его связь с вузом."""
 
     def test_creates_and_updates_contact_person(self) -> None:
-        university = UniversityFactory(name="МГУ")
+        organization = OrganizationFactory(name="МГУ")
         rows = iter(
             [
-                (2, {"full_name": "Иванов Иван", "university": "МГУ", "email": "ivanov@example.com"}),
+                (2, {"full_name": "Иванов Иван", "organization": "МГУ", "email": "ivanov@example.com"}),
             ]
         )
 
         created, updated = catalog_import_service.load_contact_persons(rows)
 
         self.assertEqual((created, updated), (1, 0))
-        contact = ContactPerson.objects.get(university=university, full_name="Иванов Иван")
-        self.assertEqual(contact.email, "ivanov@example.com")
+        link = OrganizationContact.objects.get(organization=organization, contact__full_name="Иванов Иван")
+        self.assertEqual(link.contact.email, "ivanov@example.com")
 
-    def test_unknown_university_raises(self) -> None:
-        rows = iter([(2, {"full_name": "Иванов Иван", "university": "Неизвестный вуз"})])
+    def test_unknown_organization_raises(self) -> None:
+        rows = iter([(2, {"full_name": "Иванов Иван", "organization": "Неизвестный вуз"})])
 
         with self.assertRaises(CatalogImportError):
             catalog_import_service.load_contact_persons(rows)
+
+    def test_inactive_contact_is_turned_on(self) -> None:
+        link = OrganizationContactFactory(
+            organization=OrganizationFactory(name="МГУ"),
+            contact__full_name="Иванов Иван",
+            contact__is_active=False,
+            position="Проректор",
+        )
+        rows = iter([(2, {"full_name": "Иванов Иван", "organization": "МГУ", "position": "Декан"})])
+
+        created, updated = catalog_import_service.load_contact_persons(rows)
+
+        link.refresh_from_db()
+        link.contact.refresh_from_db()
+        self.assertEqual((created, updated), (0, 1))
+        self.assertEqual((link.contact.is_active, link.position), (True, "Декан"))
 
 
 class CollectRowErrorsTestCase(TestCase):
@@ -69,11 +85,11 @@ class CollectRowErrorsTestCase(TestCase):
         self.assertFalse(Vendor.objects.exists())
 
     def test_lookup_error_is_reported_with_row_number(self) -> None:
-        UniversityFactory(name="МГУ")
+        OrganizationFactory(name="МГУ")
         rows = iter(
             [
-                (2, {"full_name": "Иванов Иван", "university": "МГУ"}),
-                (3, {"full_name": "Петров Пётр", "university": "Неизвестный вуз"}),
+                (2, {"full_name": "Иванов Иван", "organization": "МГУ"}),
+                (3, {"full_name": "Петров Пётр", "organization": "Неизвестный вуз"}),
             ]
         )
 
@@ -81,7 +97,7 @@ class CollectRowErrorsTestCase(TestCase):
             catalog_import_service.load_contact_persons(rows)
 
         [error] = context.exception.errors
-        self.assertEqual((error.row_number, error.message), (3, "вуз не найден: Неизвестный вуз"))
+        self.assertEqual((error.row_number, error.message), (3, "организация не найдена: Неизвестный вуз"))
         self.assertFalse(ContactPerson.objects.exists())
 
 
@@ -126,9 +142,9 @@ class CaseInsensitiveMatchingTestCase(TestCase):
         self.assertEqual(Program.objects.get().name, "devops-ИНЖЕНЕР")
 
     def test_contact_person_is_matched_in_other_case(self) -> None:
-        university = UniversityFactory(name="МГУ")
-        ContactPerson.objects.create(full_name="Иванов Иван", university=university)
-        rows = iter([(2, {"full_name": "ИВАНОВ ИВАН", "university": "мгу", "email": "ivanov@example.com"})])
+        organization = OrganizationFactory(name="МГУ")
+        OrganizationContactFactory(organization=organization, contact__full_name="Иванов Иван")
+        rows = iter([(2, {"full_name": "ИВАНОВ ИВАН", "organization": "мгу", "email": "ivanov@example.com"})])
 
         created, updated = catalog_import_service.load_contact_persons(rows)
 
@@ -201,29 +217,37 @@ class FileColumnsAreSourceOfTruthTestCase(TestCase):
         self.assertFalse(Program.objects.get().is_active)
 
     def test_missing_contact_columns_keep_values(self) -> None:
-        university = UniversityFactory(name="МГУ")
-        ContactPerson.objects.create(
-            full_name="Иванов Иван", university=university, position="Ректор", email="a@example.com", phone="1"
+        organization = OrganizationFactory(name="МГУ")
+        OrganizationContactFactory(
+            organization=organization,
+            position="Ректор",
+            contact__full_name="Иванов Иван",
+            contact__email="a@example.com",
+            contact__phone="1",
         )
 
         catalog_import_service.load_contact_persons(
-            iter([(2, {"full_name": "Иванов Иван", "university": "МГУ", "phone": "2"})])
+            iter([(2, {"full_name": "Иванов Иван", "organization": "МГУ", "phone": "2"})])
         )
 
         # Проверяем, что отсутствующие колонки не тронуты, а телефон обновлён
-        contact = ContactPerson.objects.get()
-        self.assertEqual((contact.position, contact.email, contact.phone), ("Ректор", "a@example.com", "2"))
+        link = OrganizationContact.objects.select_related("contact").get()
+        self.assertEqual((link.position, link.contact.email, link.contact.phone), ("Ректор", "a@example.com", "2"))
 
-    def test_empty_contact_cells_clear_values(self) -> None:
-        university = UniversityFactory(name="МГУ")
-        ContactPerson.objects.create(full_name="Иванов Иван", university=university, position="Ректор")
-
-        catalog_import_service.load_contact_persons(
-            iter([(2, {"full_name": "Иванов Иван", "university": "МГУ", "position": ""})])
+    def test_empty_affiliation_cells_clear_values_but_person_data_is_kept(self) -> None:
+        """Должность — данные связи с вузом файла, стирается; email человека может прийти из другой организации."""
+        organization = OrganizationFactory(name="МГУ")
+        OrganizationContactFactory(
+            organization=organization, position="Ректор", contact__full_name="Иванов Иван", contact__email="a@example.com"
         )
 
-        # Проверяем, что пустая ячейка стёрла должность
-        self.assertEqual(ContactPerson.objects.get().position, "")
+        catalog_import_service.load_contact_persons(
+            iter([(2, {"full_name": "Иванов Иван", "organization": "МГУ", "position": "", "email": ""})])
+        )
+
+        # Проверяем, что пустая ячейка стёрла должность, но не email человека
+        link = OrganizationContact.objects.select_related("contact").get()
+        self.assertEqual((link.position, link.contact.email), ("", "a@example.com"))
 
 
 class ReadableValueErrorsTestCase(TestCase):
@@ -249,7 +273,7 @@ class ReadableValueErrorsTestCase(TestCase):
         # Проверяем, что год из числовой ячейки xlsx читается без дробной части
         self.assertEqual(import_file_service.to_year(2027.0), 2027)
 
-    def test_university_row_error_message(self) -> None:
+    def test_organization_row_error_message(self) -> None:
         row = {
             "id": "", "ror": "R-1", "name_en": "", "name": "Вуз", "short_name": "", "country_code": "", "type": "",
             "works_count": "", "cited_by_count": "", "city": "", "region": "", "lat": "север", "lon": "",
@@ -257,8 +281,8 @@ class ReadableValueErrorsTestCase(TestCase):
         }
 
         with self.assertRaises(CatalogImportRowsError) as context:
-            catalog_import_service.load_universities(iter([(2, row)]))
+            catalog_import_service.load_organizations(iter([(2, row)]))
 
         # Проверяем текст ошибки строки
         self.assertEqual(context.exception.errors[0].message, "ожидалось число, получено север")
-        self.assertFalse(University.objects.exists())
+        self.assertFalse(Organization.objects.exists())

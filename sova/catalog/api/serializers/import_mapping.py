@@ -37,6 +37,10 @@ class CatalogImportFieldSerializer(serializers.Serializer):
         label=_("Поле"),
         help_text=_("Значение для target_field маппинга"),
     )
+    label = serializers.CharField(
+        label=_("Подпись"),
+        help_text=_("Название поля для интерфейса"),
+    )
     required = serializers.BooleanField(
         label=_("Обязательное"),
         help_text=_("Без колонки, замапленной на это поле, файл этого типа не загрузится"),
@@ -49,6 +53,10 @@ class CatalogImportTypeMappingFieldSerializer(serializers.Serializer):
     target_field = serializers.CharField(
         label=_("Поле"),
         help_text=_("Канонический ключ, который понимает обработчик импорта"),
+    )
+    label = serializers.CharField(
+        label=_("Подпись"),
+        help_text=_("Название поля для интерфейса"),
     )
     required = serializers.BooleanField(
         label=_("Обязательное"),

@@ -38,6 +38,15 @@ class IntegrationMessage(TimeStampedModel):
     external_id = models.CharField(max_length=255, blank=True, verbose_name="Внешний ID")
     correlation_id = models.UUIDField(default=uuid.uuid4, verbose_name="Correlation ID")
     payload = models.JSONField(verbose_name="Payload")
+    mapping = models.ForeignKey(
+        IntegrationMapping,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="messages",
+        verbose_name="Маппинг",
+    )
+    result = models.JSONField(default=dict, blank=True, verbose_name="Результат обработки")
     status = models.CharField(
         max_length=16,
         choices=IntegrationStatus.choices,

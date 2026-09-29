@@ -13,7 +13,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
-from sova.catalog.tests.factories import ProductFactory, ProgramFactory, UniversityFactory
+from sova.catalog.tests.factories import ProductFactory, ProgramFactory, OrganizationFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.models import Responsible
 from sova.interactions.services import responsible_service
@@ -192,13 +192,13 @@ class InteractionReportRowsTestCase(ReportTestMixin, APITestCase):
     def test_selected_columns_only(self) -> None:
         InteractionFactory()
 
-        data = self.preview(columns=["university"])
+        data = self.preview(columns=["organization"])
 
         row = data["results"][0]
-        self.assertIn("university", row)
+        self.assertIn("organization", row)
         self.assertIn("interaction_id", row)
         self.assertNotIn("product", row)
-        self.assertEqual([c["key"] for c in data["meta"]["columns"]], ["university"])
+        self.assertEqual([c["key"] for c in data["meta"]["columns"]], ["organization"])
 
     def test_period_by_created_at(self) -> None:
         old = InteractionFactory()
@@ -229,7 +229,7 @@ class InteractionReportValidationTestCase(ReportTestMixin, APITestCase):
             with self.subTest(url=url):
                 response = self.client.post(url, data={"columns": None}, format="json")
                 self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
-                self.assertEqual(response.data["meta"]["columns"][0]["key"], "university")
+                self.assertEqual(response.data["meta"]["columns"][0]["key"], "organization")
 
     def assert_error(self, data, field, code):
         response = self.client.post(self.preview_url, data=data, format="json")
@@ -241,7 +241,7 @@ class InteractionReportValidationTestCase(ReportTestMixin, APITestCase):
 
     def test_unknown_ids(self) -> None:
         self.assert_error(
-            {"universities": ["00000000-0000-0000-0000-000000000000"]}, "universities", "unknown_ids"
+            {"organizations": ["00000000-0000-0000-0000-000000000000"]}, "organizations", "unknown_ids"
         )
 
     def test_unknown_column(self) -> None:
@@ -269,7 +269,7 @@ class InteractionReportVisibilityTestCase(ReportTestMixin, APITestCase):
 
         self.assertEqual([row["interaction_id"] for row in rows], [str(own.pk)])
         self.assertEqual(summary["interactions_count"], 1)
-        self.assertNotIn(str(foreign.university_id), [item["id"] for item in summary["by_university"]])
+        self.assertNotIn(str(foreign.organization_id), [item["id"] for item in summary["by_organization"]])
 
     def test_user_without_role_gets_nothing(self) -> None:
         InteractionFactory()
@@ -287,18 +287,18 @@ class InteractionReportVisibilityTestCase(ReportTestMixin, APITestCase):
 class InteractionReportSummaryTestCase(ReportTestMixin, APITestCase):
     def test_unique_interaction_counts(self) -> None:
         """Вуз с несколькими продуктами не завышает число взаимодействий."""
-        university = UniversityFactory()
-        interaction = InteractionFactory(university=university)
+        organization = OrganizationFactory()
+        interaction = InteractionFactory(organization=organization)
         InteractionProductFactory(interaction=interaction)
         InteractionProductFactory(interaction=interaction)
-        InteractionFactory(university=university)
+        InteractionFactory(organization=organization)
 
         data = self.client.post(self.summary_url, data={}, format="json").data
 
         self.assertEqual(data["interactions_count"], 2)
         self.assertEqual(data["rows_count"], 3)
         self.assertEqual(data["products_count"], 2)
-        self.assertEqual(data["by_university"][0]["interactions"], 2)
+        self.assertEqual(data["by_organization"][0]["interactions"], 2)
         self.assertEqual(data["by_process_status"][0]["status"], None)
 
     def test_interaction_counts_for_each_responsible(self) -> None:
@@ -345,32 +345,32 @@ class ReportExportTestCase(ReportTestMixin, APITestCase):
         return b"".join(response.streaming_content)
 
     def setup_data(self):
-        university = UniversityFactory(name="Московский университет")
-        interaction = InteractionFactory(university=university)
+        organization = OrganizationFactory(name="Московский университет")
+        interaction = InteractionFactory(organization=organization)
         InteractionProductFactory(interaction=interaction)
         InteractionProductFactory(interaction=interaction)
         InteractionFactory()
 
     def test_formats_have_same_rows(self) -> None:
         self.setup_data()
-        preview = self.preview(columns=["university", "product"])
-        expected = [[row["university"], row["product"]] for row in preview["results"]]
+        preview = self.preview(columns=["organization", "product"])
+        expected = [[row["organization"], row["product"]] for row in preview["results"]]
 
-        content = self.download(self.export("xlsx", columns=["university", "product"]))
+        content = self.download(self.export("xlsx", columns=["organization", "product"]))
         sheet = load_workbook(io.BytesIO(content)).active
         values = [list(row) for row in sheet.iter_rows(values_only=True)]
-        header_index = values.index(["Вуз", "Продукт"])
+        header_index = values.index(["Организация", "Продукт"])
         self.assertEqual([[v or "" for v in row] for row in values[header_index + 1:]], expected)
 
-        content = self.download(self.export("xls", columns=["university", "product"]))
+        content = self.download(self.export("xls", columns=["organization", "product"]))
         sheet = xlrd.open_workbook(file_contents=content).sheet_by_index(0)
         rows = [sheet.row_values(i) for i in range(sheet.nrows)]
-        header_index = rows.index(["Вуз", "Продукт"])
+        header_index = rows.index(["Организация", "Продукт"])
         self.assertEqual(rows[header_index + 1:], expected)
 
-        content = self.download(self.export("json", columns=["university", "product"]))
+        content = self.download(self.export("json", columns=["organization", "product"]))
         data = json.loads(content)
-        self.assertEqual([[r["university"], r["product"]] for r in data["rows"]], expected)
+        self.assertEqual([[r["organization"], r["product"]] for r in data["rows"]], expected)
         self.assertIn("interaction_product_id", data["rows"][0])
 
     def test_pdf_uses_gotenberg(self) -> None:
@@ -398,7 +398,7 @@ class ReportExportTestCase(ReportTestMixin, APITestCase):
         responsible_service.assign(interaction=foreign, manager=self.create_user(SystemRole.KAM), assigned_by=None)
         self.client.force_authenticate(user=kam)
 
-        job = self.export("json", universities=[str(foreign.university_id)])
+        job = self.export("json", organizations=[str(foreign.organization_id)])
 
         self.assertEqual(json.loads(self.download(job))["rows"], [])
 

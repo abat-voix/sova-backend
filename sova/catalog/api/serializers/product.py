@@ -1,7 +1,7 @@
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from sova.catalog.api.serializers.program import ProgramShortSerializer
+from sova.catalog.api.serializers.program import ProgramWithDirectionSerializer
 from sova.catalog.api.serializers.vendor import VendorShortSerializer
 from sova.catalog.models import Product
 from sova.core.api.validators import validate_model_constraints
@@ -18,16 +18,22 @@ class ProductShortSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     """Продукт — представление для чтения (list/retrieve)."""
 
+    rank = serializers.IntegerField(
+        read_only=True,
+        allow_null=True,
+        label=_("Место в рейтинге"),
+        help_text=_("По числу взаимодействий, где продукт активен; при равенстве место делится. Null — места нет"),
+    )
     vendor = VendorShortSerializer(
         read_only=True,
         label=_("Вендор"),
         help_text=_("Показывается развёрнуто, для записи см. write-сериализатор"),
     )
-    programs = ProgramShortSerializer(
+    programs = ProgramWithDirectionSerializer(
         many=True,
         read_only=True,
         label=_("Программы"),
-        help_text=_("Показываются развёрнуто, для записи см. write-сериализатор"),
+        help_text=_("Показываются развёрнуто, с направлением; для записи см. write-сериализатор"),
     )
 
     class Meta:
@@ -41,6 +47,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "programs",
             "created_at",
             "updated_at",
+            "rank",
         )
 
 

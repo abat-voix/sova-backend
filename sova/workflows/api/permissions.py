@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import SAFE_METHODS, IsAuthenticated
 
 from accounts.models import SystemRole
 from accounts.policy import Action, can, effective_role
@@ -62,6 +62,24 @@ class CanManageWorkflows(IsAuthenticated):
             view, "action", None
         ) == "validate_definition":
             return True
+        return can_edit_workflow(request.user, workflow_for_object(obj))
+
+
+class CanReadOrManageWorkflows(IsAuthenticated):
+    """Allow workers to read published workflows and managers to administer them."""
+
+    message = "Просмотр workflow недоступен для вашей роли."
+
+    def has_permission(self, request, view) -> bool:
+        if not super().has_permission(request, view):
+            return False
+        if request.method in SAFE_METHODS:
+            return can(request.user, Action.WORKFLOWS_READ)
+        return can_manage_workflows(request.user)
+
+    def has_object_permission(self, request, view, obj) -> bool:
+        if request.method in SAFE_METHODS:
+            return can(request.user, Action.WORKFLOWS_READ)
         return can_edit_workflow(request.user, workflow_for_object(obj))
 
 

@@ -78,7 +78,7 @@ class ContractAttachmentApiTestCase(EngineApiTestCase):
     def setUp(self) -> None:
         """Безголовый договор с одним безголовым продуктом."""
         super().setUp()
-        self.contract = ContractFactory(interaction=None, university=self.interaction.university)
+        self.contract = ContractFactory(interaction=None, organization=self.interaction.organization)
         self.item = InteractionProductFactory(contract=self.contract, interaction=None)
 
     def attach_new_url(self, contract: Contract) -> str:
@@ -101,8 +101,22 @@ class ContractAttachmentApiTestCase(EngineApiTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
         interaction = Interaction.objects.get(pk=response.data["interaction"]["id"])
         self.assertNotEqual(interaction.pk, self.interaction.pk)
-        self.assertEqual(interaction.university_id, self.contract.university_id)
+        self.assertEqual(interaction.organization_id, self.contract.organization_id)
         self.assertEqual(InteractionProduct.objects.get(pk=self.item.pk).interaction_id, interaction.pk)
+
+    def test_attach_takes_comment_and_activity_from_request(self) -> None:
+        """Комментарий и активность — из запроса; комментарий заменяет комментарий договора из реестра."""
+        self.contract.draft_comment = "Из реестра"
+        self.contract.save(update_fields=["draft_comment"])
+
+        response = self.client.post(
+            path=self.attach_new_url(self.contract), data={"comment": "Из формы", "is_active": False}
+        )
+
+        # Проверяем, что взаимодействие получило комментарий и активность из формы
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        interaction = Interaction.objects.get(pk=response.data["interaction"]["id"])
+        self.assertEqual((interaction.comment, interaction.is_active), ("Из формы", False))
 
     def test_attach_contract_without_kams_creates_interaction_without_responsible(self) -> None:
         """Договор без КАМов, создаёт администратор — взаимодействие без ответственного."""

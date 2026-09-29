@@ -104,7 +104,7 @@ class ActionInstanceViewSet(SovaReadOnlyViewSet):
                 "responsible",
                 "result__created_by",
                 "stage_instance__stage",
-                "stage_instance__workflow_instance__interaction__university",
+                "stage_instance__workflow_instance__interaction__organization",
                 "stage_instance__workflow_instance__interaction__b2c_client",
             )
             .prefetch_related(

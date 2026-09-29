@@ -13,9 +13,25 @@ class ProgramShortSerializer(serializers.ModelSerializer):
         fields = ("id", "name")
 
 
+class ProgramWithDirectionSerializer(serializers.ModelSerializer):
+    """Программа с направлением — для вложенных списков: одинаковые названия бывают в разных направлениях."""
+
+    direction = DirectionShortSerializer(read_only=True, label=_("Направление"))
+
+    class Meta:
+        model = Program
+        fields = ("id", "name", "direction")
+
+
 class ProgramSerializer(serializers.ModelSerializer):
     """Программа — представление для чтения (list/retrieve)."""
 
+    rank = serializers.IntegerField(
+        read_only=True,
+        allow_null=True,
+        label=_("Место в рейтинге"),
+        help_text=_("По числу зачисленных (оплативших обучение) людей; при равенстве место делится. Null — места нет"),
+    )
     direction = DirectionShortSerializer(
         read_only=True,
         label=_("Направление"),
@@ -39,6 +55,7 @@ class ProgramSerializer(serializers.ModelSerializer):
             "direction",
             "created_at",
             "updated_at",
+            "rank",
             "products_count",
         )
 

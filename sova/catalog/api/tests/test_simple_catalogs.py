@@ -2,14 +2,14 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from sova.catalog.enum import ClientKind
-from sova.catalog.models import B2CClient, Direction, University, Vendor
+from sova.catalog.models import B2CClient, Direction, Organization, Vendor
+from sova.catalog.models.organization import OrganizationType
 from sova.catalog.tests.factories import (
     B2CClientFactory,
     DirectionFactory,
     ProductFactory,
     ProgramFactory,
-    UniversityFactory,
+    OrganizationFactory,
     VendorFactory,
 )
 from sova.core.tests.base import BaseApiTestMixin
@@ -146,17 +146,17 @@ class DirectionApiTestCase(BaseApiTestMixin, APITestCase):
         self.assertEqual(response.data["code"], "protected")
 
 
-class UniversityApiTestCase(BaseApiTestMixin, APITestCase):
-    """Тесты CRUD /api/catalog/universities/."""
+class OrganizationApiTestCase(BaseApiTestMixin, APITestCase):
+    """Тесты CRUD /api/catalog/organizations/."""
 
-    url_basename = "catalog:university"
-    model = University
+    url_basename = "catalog:organization"
+    model = Organization
 
-    def create_instance(self, **kwargs) -> University:
+    def create_instance(self, **kwargs) -> Organization:
         """Создаёт вуз."""
-        return UniversityFactory(**kwargs)
+        return OrganizationFactory(**kwargs)
 
-    def get_expected_data(self, instance: University) -> dict:
+    def get_expected_data(self, instance: Organization) -> dict:
         """Поля read-представления вуза."""
         return {
             "id": str(instance.pk),
@@ -176,14 +176,14 @@ class UniversityApiTestCase(BaseApiTestMixin, APITestCase):
         """Данные обновления вуза."""
         return {"name": "СПбГУ", "phone": "+7 812 000-00-00"}
 
-    def get_search_term(self, instance: University) -> str:
+    def get_search_term(self, instance: Organization) -> str:
         """Поиск по названию."""
         return instance.name
 
     def test_filter_by_inn_iexact_returns_only_matching(self) -> None:
         """Фильтр inn__iexact находит вуз по ИНН."""
-        target = UniversityFactory(inn="7729082090")
-        UniversityFactory(inn="7701000000")
+        target = OrganizationFactory(inn="7729082090")
+        OrganizationFactory(inn="7701000000")
 
         response = self.client.get(
             path=self.list_url,
@@ -196,10 +196,26 @@ class UniversityApiTestCase(BaseApiTestMixin, APITestCase):
             [str(target.pk)],
         )
 
-    def test_search_finds_university_by_inn(self) -> None:
+    def test_filter_by_organization_type_returns_only_matching(self) -> None:
+        """Фильтр organization_type возвращает только организации этого вида."""
+        OrganizationFactory(organization_type=OrganizationType.EDUCATION)
+        target = OrganizationFactory(organization_type=OrganizationType.COMPANY)
+
+        response = self.client.get(
+            path=self.list_url,
+            data={"organization_type": OrganizationType.COMPANY},
+        )
+
+        # Проверяем, что найдена только компания
+        self.assertEqual(
+            [item["id"] for item in response.data["results"]],
+            [str(target.pk)],
+        )
+
+    def test_search_finds_organization_by_inn(self) -> None:
         """Поиск находит вуз по ИНН."""
-        target = UniversityFactory(inn="7729082090")
-        UniversityFactory()
+        target = OrganizationFactory(inn="7729082090")
+        OrganizationFactory()
 
         response = self.client.get(path=self.list_url, data={"search": "7729082090"})
 
@@ -211,11 +227,10 @@ class UniversityApiTestCase(BaseApiTestMixin, APITestCase):
 
     def test_map_returns_only_ids_and_coordinates(self) -> None:
         """Карта получает только координаты вузов, у которых они заполнены."""
-        target = UniversityFactory(lat="57.160488", lon="65.527412")
-        UniversityFactory(lat=None, lon=None)
-        UniversityFactory(lat="55.755864", lon=None)
+        target = OrganizationFactory(lat="57.160488", lon="65.527412")
+        OrganizationFactory(lat=None, lon=None)
 
-        response = self.client.get(path=reverse("catalog:university-map-points"))
+        response = self.client.get(path=reverse("catalog:organization-map-points"))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
@@ -230,21 +245,21 @@ class UniversityApiTestCase(BaseApiTestMixin, APITestCase):
             ],
         )
 
-    def test_map_search_returns_only_matching_university(self) -> None:
+    def test_map_search_returns_only_matching_organization(self) -> None:
         """Поиск карты фильтрует точки по данным вуза."""
-        target = UniversityFactory(
+        target = OrganizationFactory(
             name="Московский государственный университет",
             lat="55.703934",
             lon="37.528669",
         )
-        UniversityFactory(
+        OrganizationFactory(
             name="Санкт-Петербургский государственный университет",
             lat="59.941988",
             lon="30.298918",
         )
 
         response = self.client.get(
-            path=reverse("catalog:university-map-points"),
+            path=reverse("catalog:organization-map-points"),
             data={"search": "Московский"},
         )
 
@@ -273,34 +288,17 @@ class B2CClientApiTestCase(BaseApiTestMixin, APITestCase):
             "inn": instance.inn,
             "email": instance.email,
             "phone": instance.phone,
-            "kind": instance.kind,
             "is_active": instance.is_active,
         }
 
     def get_post_data(self) -> dict:
         """Данные создания клиента."""
-        return {"full_name": "ООО Ромашка", "kind": ClientKind.LEGAL_ENTITY}
+        return {"full_name": "Петров Пётр Петрович"}
 
     def get_change_data(self) -> dict:
         """Данные обновления клиента."""
-        return {"full_name": "ИП Петров", "kind": ClientKind.INDIVIDUAL}
+        return {"full_name": "Сидоров Иван Олегович"}
 
     def get_search_term(self, instance: B2CClient) -> str:
-        """Поиск по ФИО / наименованию."""
+        """Поиск по ФИО."""
         return instance.full_name
-
-    def test_filter_by_kind_returns_only_matching(self) -> None:
-        """Фильтр kind возвращает клиентов только указанного типа."""
-        B2CClientFactory(kind=ClientKind.INDIVIDUAL)
-        legal = B2CClientFactory(kind=ClientKind.LEGAL_ENTITY)
-
-        response = self.client.get(
-            path=self.list_url,
-            data={"kind": ClientKind.LEGAL_ENTITY},
-        )
-
-        # Проверяем, что найден только юрлицо
-        self.assertEqual(
-            [item["id"] for item in response.data["results"]],
-            [str(legal.pk)],
-        )

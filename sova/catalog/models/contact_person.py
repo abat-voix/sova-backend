@@ -1,21 +1,22 @@
 from django.db import models
-from django.db.models import F, Q
 from django.db.models.functions import Lower
 
 from sova.core.models import NormalizedTextFieldsMixin, TimeStampedModel
+from sova.core.validators import validate_phone
 
 
 class ContactPerson(NormalizedTextFieldsMixin, TimeStampedModel):
-    """Контактное лицо со стороны вуза или B2C-клиента-юрлица. Контрагент — ровно один из двух."""
+    """
+    Контактное лицо — человек, без привязки к организации.
+
+    С организациями его связывают `OrganizationContact` / `B2CClientContact` / `VendorContact`: должность и способы
+    связи принадлежат связи, а один человек может быть связан с несколькими организациями. ФИО не уникально —
+    тёзки считаются разными людьми, пока пользователь явно не свяжет их или не сольёт.
+    """
 
     full_name = models.CharField(
         max_length=255,
         verbose_name="ФИО",
-    )
-    position = models.CharField(
-        max_length=255,
-        blank=True,
-        verbose_name="Должность",
     )
     email = models.EmailField(
         blank=True,
@@ -23,58 +24,32 @@ class ContactPerson(NormalizedTextFieldsMixin, TimeStampedModel):
     )
     phone = models.CharField(
         max_length=50,
+        validators=[validate_phone],
         blank=True,
         verbose_name="Телефон",
+    )
+    telegram = models.CharField(
+        max_length=64,
+        blank=True,
+        verbose_name="Telegram",
+        help_text="Ник без @",
     )
     is_active = models.BooleanField(
         default=True,
         verbose_name="Активен",
     )
 
-    university = models.ForeignKey(
-        to="catalog.University",
-        on_delete=models.CASCADE,
-        related_name="contact_persons",
-        null=True,
-        blank=True,
-        verbose_name="Вуз",
-    )
-    b2c_client = models.ForeignKey(
-        to="catalog.B2CClient",
-        on_delete=models.CASCADE,
-        related_name="contact_persons",
-        null=True,
-        blank=True,
-        verbose_name="B2C-клиент",
-    )
-
-    normalized_text_fields = ("full_name", "position", "phone")
+    normalized_text_fields = ("full_name", "phone", "telegram")
 
     class Meta:
         verbose_name = "Контактное лицо"
         verbose_name_plural = "Контактные лица"
         ordering = ["full_name"]
-        constraints = [
-            models.CheckConstraint(
-                check=(
-                    Q(university__isnull=False, b2c_client__isnull=True)
-                    | Q(university__isnull=True, b2c_client__isnull=False)
-                ),
-                name="contact_person_exactly_one_counterparty",
-            ),
-            # ФИО уникально у контрагента без учёта регистра: импорт сопоставляет его через iexact.
-            models.UniqueConstraint(
-                F("university"),
-                Lower("full_name"),
-                name="unique_university_contact_name",
-                violation_error_message="Контактное лицо с таким ФИО у этого вуза уже существует.",
-            ),
-            models.UniqueConstraint(
-                F("b2c_client"),
-                Lower("full_name"),
-                name="unique_b2c_client_contact_name",
-                violation_error_message="Контактное лицо с таким ФИО у этого B2C-клиента уже существует.",
-            ),
+        # Поиск возможных дублей и сопоставление при импорте — без учёта регистра.
+        indexes = [
+            models.Index(Lower("full_name"), name="contact_person_full_name_ci"),
+            models.Index(Lower("email"), name="contact_person_email_ci"),
+            models.Index(Lower("telegram"), name="contact_person_telegram_ci"),
         ]
 
     def __str__(self):

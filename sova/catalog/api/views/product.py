@@ -1,10 +1,10 @@
 from sova.catalog.api import filters, serializers
 from sova.catalog.models import Product
 from sova.core.api.views import SovaBaseViewSet
-from sova.catalog.api.views.mixins import CatalogPolicyMixin
+from sova.catalog.api.views.mixins import CatalogPolicyMixin, CatalogRankMixin
 
 
-class ProductViewSet(CatalogPolicyMixin, SovaBaseViewSet):
+class ProductViewSet(CatalogPolicyMixin, CatalogRankMixin, SovaBaseViewSet):
     """Продукты. Доступны CRUD операции; программы продукта передаются списком id."""
 
     read_serializer_class = serializers.ProductSerializer
@@ -12,7 +12,7 @@ class ProductViewSet(CatalogPolicyMixin, SovaBaseViewSet):
     queryset = (
         Product.objects
         .select_related("vendor")
-        .prefetch_related("programs")
+        .prefetch_related("programs__direction")
     )
     ordering_fields = "__all__"
     search_fields = ("name", "external_code", "vendor__name")

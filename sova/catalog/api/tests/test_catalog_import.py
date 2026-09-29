@@ -13,7 +13,7 @@ from sova.catalog.models import Vendor
 from sova.catalog.tests.factories import (
     CatalogImportMappingFactory,
     ProductFactory,
-    UniversityFactory,
+    OrganizationFactory,
     VendorFactory,
 )
 from sova.core.tests.factories import UserFactory
@@ -40,7 +40,7 @@ class CatalogImportApiTestCase(APITestCase):
         self.client.force_authenticate(user=user)
         self.url = reverse("catalog:catalog-import-list")
         CatalogImportMappingFactory(catalog_type=CatalogType.VENDOR, source_column="Вендор", target_field="name")
-        CatalogImportMappingFactory(catalog_type=CatalogType.VENDOR, source_column="Код", target_field="external_code")
+        CatalogImportMappingFactory(catalog_type=CatalogType.VENDOR, source_column="Продукты", target_field="products")
 
     def _post(self, catalog_type: str, file: SimpleUploadedFile):
         return self.client.post(
@@ -51,7 +51,7 @@ class CatalogImportApiTestCase(APITestCase):
 
     def test_import_returns_counts(self) -> None:
         """Успешный импорт возвращает количество созданных и обновлённых записей."""
-        file = _xlsx("vendors.xlsx", ("Вендор", "Код"), ("JetBrains", "jb"), ("1С", "one-c"))
+        file = _xlsx("vendors.xlsx", ("Вендор", "Продукты"), ("JetBrains", "IntelliJ IDEA"), ("1С", "1С:Предприятие"))
 
         response = self._post(CatalogType.VENDOR, file)
 
@@ -64,7 +64,7 @@ class CatalogImportApiTestCase(APITestCase):
 
     def test_row_errors_return_400_with_error_list(self) -> None:
         """Ошибки строк возвращаются списком с номерами строк, ничего не сохраняется."""
-        file = _xlsx("vendors.xlsx", ("Вендор", "Код"), ("JetBrains", "jb"), (None, "no-name"))
+        file = _xlsx("vendors.xlsx", ("Вендор", "Продукты"), ("JetBrains", "IntelliJ IDEA"), (None, "Без вендора"))
 
         response = self._post(CatalogType.VENDOR, file)
 
@@ -77,8 +77,8 @@ class CatalogImportApiTestCase(APITestCase):
 
     def test_error_list_is_limited(self) -> None:
         """В ответе не больше 100 ошибок, errors_total — полное число."""
-        rows = [(None, f"code-{index}") for index in range(150)]
-        file = _xlsx("vendors.xlsx", ("Вендор", "Код"), *rows)
+        rows = [(None, f"Продукт {index}") for index in range(150)]
+        file = _xlsx("vendors.xlsx", ("Вендор", "Продукты"), *rows)
 
         response = self._post(CatalogType.VENDOR, file)
 
@@ -89,9 +89,15 @@ class CatalogImportApiTestCase(APITestCase):
 
     def test_file_level_error_returns_400(self) -> None:
         """Ошибка файла целиком (нет обязательной колонки) возвращает 400 без списка строк."""
-        file = _xlsx("vendors.xlsx", ("Вендор",), ("JetBrains",))
+        CatalogImportMappingFactory(
+            catalog_type=CatalogType.DIRECTION, source_column="Направление", target_field="name"
+        )
+        CatalogImportMappingFactory(
+            catalog_type=CatalogType.DIRECTION, source_column="Код", target_field="external_code"
+        )
+        file = _xlsx("directions.xlsx", ("Направление",), ("Разработка",))
 
-        response = self._post(CatalogType.VENDOR, file)
+        response = self._post(CatalogType.DIRECTION, file)
 
         # Проверяем, что ошибка описана в detail
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -110,7 +116,7 @@ class CatalogImportApiTestCase(APITestCase):
 
     def test_unknown_catalog_type_returns_400(self) -> None:
         """Неизвестный тип каталога отклоняется валидацией."""
-        file = _xlsx("vendors.xlsx", ("Вендор", "Код"), ("JetBrains", "jb"))
+        file = _xlsx("vendors.xlsx", ("Вендор", "Продукты"), ("JetBrains", "IntelliJ IDEA"))
 
         response = self._post("unknown", file)
 
@@ -121,7 +127,7 @@ class CatalogImportApiTestCase(APITestCase):
     def test_requires_authentication(self) -> None:
         """Анонимный запрос отклоняется."""
         self.client.force_authenticate(user=None)
-        file = _xlsx("vendors.xlsx", ("Вендор", "Код"), ("JetBrains", "jb"))
+        file = _xlsx("vendors.xlsx", ("Вендор", "Продукты"), ("JetBrains", "IntelliJ IDEA"))
 
         response = self._post(CatalogType.VENDOR, file)
 
@@ -138,7 +144,7 @@ class ContractRegistryImportWarningsApiTestCase(APITestCase):
         self.client.force_authenticate(user=self.user)
         self.url = reverse("catalog:catalog-import-list")
         columns = {
-            "university": "Вуз",
+            "organization": "Вуз",
             "vendor": "Вендор",
             "product": "ПО",
             "contract_number": "Номер",
@@ -148,7 +154,7 @@ class ContractRegistryImportWarningsApiTestCase(APITestCase):
             CatalogImportMappingFactory(
                 catalog_type=CatalogType.CONTRACT_REGISTRY, source_column=source_column, target_field=target_field
             )
-        UniversityFactory(name="МГУ")
+        OrganizationFactory(name="МГУ")
         ProductFactory(name="IDE", vendor=VendorFactory(name="1С"))
 
     def test_unknown_manager_is_returned_as_warning(self) -> None:
@@ -191,3 +197,46 @@ class ContractRegistryImportWarningsApiTestCase(APITestCase):
         responsible = Responsible.objects.get(contract__contract_number="Д-1")
         self.assertEqual((responsible.manager_id, responsible.assigned_by_id), (kam.pk, self.user.pk))
         self.assertEqual(response.data["warnings"], [])
+
+
+class CatalogImportHeadersApiTestCase(APITestCase):
+    """Тесты POST /api/catalog/imports/headers/."""
+
+    def setUp(self) -> None:
+        """Аутентифицирует администратора платформы."""
+        user = UserFactory()
+        UserRole.objects.create(user=user, role=SystemRole.PLATFORM_ADMIN)
+        self.client.force_authenticate(user=user)
+        self.url = reverse("catalog:catalog-import-headers")
+
+    def test_returns_headers_without_mapping(self) -> None:
+        """Заголовки читаются без настроенного маппинга и ничего не импортируют."""
+        file = _xlsx("vendors.xlsx", ("Вендор", "Код"), ("JetBrains", "jb"))
+
+        response = self.client.post(path=self.url, data={"file": file}, format="multipart")
+
+        # Проверяем заголовки и что вендор не создан
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        self.assertEqual(response.data, {"headers": ["Вендор", "Код"]})
+        self.assertFalse(Vendor.objects.exists())
+
+    def test_unreadable_file_returns_import_error(self) -> None:
+        """Текст под видом xlsx — 400 import_error с понятным сообщением."""
+        file = SimpleUploadedFile("vendors.xlsx", "Вендор;Код\nJetBrains;jb".encode())
+
+        response = self.client.post(path=self.url, data={"file": file}, format="multipart")
+
+        # Проверяем код и наличие причины
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "import_error")
+        self.assertIn("vendors.xlsx", response.data["detail"])
+
+    def test_rejects_other_extensions(self) -> None:
+        """Расширение не xlsx/xls — ошибка валидации поля file."""
+        file = SimpleUploadedFile("vendors.csv", b"a;b")
+
+        response = self.client.post(path=self.url, data={"file": file}, format="multipart")
+
+        # Проверяем ошибку поля
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("file", response.data)

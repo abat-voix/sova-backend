@@ -12,11 +12,11 @@ from sova.catalog.tests.factories import (
     DirectionFactory,
     ProductFactory,
     ProgramFactory,
-    UniversityFactory,
+    OrganizationFactory,
 )
 from sova.core.tests.factories import UserFactory
 from sova.core.tests.base import BaseApiTestMixin
-from sova.interactions.models import Interaction
+from sova.interactions.models import Interaction, InteractionProduct, InteractionProgram
 from sova.interactions.services import responsible_service
 from sova.interactions.tests.factories import (
     ContractFactory,
@@ -27,7 +27,9 @@ from sova.interactions.tests.factories import (
     ResponsibleFactory,
 )
 from sova.processes.enum import ActionInstanceStatus
-from sova.processes.tests.factories import ActionInstanceFactory
+from sova.messaging.models import Conversation
+from sova.messaging.services import conversation_service
+from sova.processes.tests.factories import ActionInstanceFactory, WorkflowInstanceFactory
 
 
 class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
@@ -47,14 +49,14 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
 
     def get_expected_data(self, instance: Interaction) -> dict:
         """Поля read-представления взаимодействия."""
-        university = instance.university
+        organization = instance.organization
         return {
             "id": str(instance.pk),
             "comment": instance.comment,
             "is_active": instance.is_active,
-            "university": (
-                {"id": str(university.pk), "name": university.name}
-                if university
+            "organization": (
+                {"id": str(organization.pk), "name": organization.name}
+                if organization
                 else None
             ),
             "b2c_client": None,
@@ -66,7 +68,7 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
 
     def get_post_data(self) -> dict:
         """Данные создания взаимодействия (вуз — по id)."""
-        return {"comment": "Первичный контакт", "university": str(UniversityFactory().pk)}
+        return {"comment": "Первичный контакт", "organization": str(OrganizationFactory().pk)}
 
     def get_change_data(self) -> dict:
         """Данные обновления взаимодействия."""
@@ -74,7 +76,7 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
 
     def get_search_term(self, instance: Interaction) -> str:
         """Поиск по названию вуза."""
-        return instance.university.name
+        return instance.organization.name
 
     def test_add_for_b2c_client_creates_interaction(self) -> None:
         """Взаимодействие с B2C-клиентом создаётся без вуза."""
@@ -88,7 +90,7 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
 
         # Проверяем, что контрагентом выбран клиент
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
-        self.assertIsNone(response.data["university"])
+        self.assertIsNone(response.data["organization"])
         self.assertEqual(response.data["b2c_client"]["id"], str(client.pk))
 
     def test_add_returns_400_without_counterparty(self) -> None:
@@ -103,7 +105,7 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
         response = self.client.post(
             path=self.list_url,
             data={
-                "university": str(UniversityFactory().pk),
+                "organization": str(OrganizationFactory().pk),
                 "b2c_client": str(B2CClientFactory().pk),
             },
             format="json",
@@ -126,14 +128,66 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_delete_returns_409_when_interaction_has_contract(self) -> None:
-        """Удаление взаимодействия с договором возвращает 409 с кодом protected."""
+        """Удаление взаимодействия с договором возвращает 409 с кодом has_contracts."""
         contract = ContractFactory()
 
         response = self.client.delete(path=self.detail_url(contract.interaction))
 
-        # Проверяем, что защита PROTECT превращается в 409, а не 500
+        # Проверяем понятную ошибку вместо 500 и общего protected
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
-        self.assertEqual(response.data["code"], "protected")
+        self.assertEqual(response.data["code"], "has_contracts")
+        self.assertTrue(Interaction.objects.filter(pk=contract.interaction_id).exists())
+
+    def test_delete_not_started_interaction_removes_it_with_chat(self) -> None:
+        """Незапущенное взаимодействие удаляется вместе с чатом."""
+        interaction = InteractionFactory()
+        conversation, _created = conversation_service.get_or_create_interaction(interaction=interaction, actor=self.user)
+
+        response = self.client.delete(path=self.detail_url(interaction))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Interaction.objects.filter(pk=interaction.pk).exists())
+        self.assertFalse(Conversation.objects.filter(pk=conversation.pk).exists())
+
+    def test_delete_interaction_with_product_linked_to_program(self) -> None:
+        """Взаимодействие с продуктом, привязанным к его программе, удаляется вместе с составом."""
+        interaction = InteractionFactory()
+        program = InteractionProgramFactory(interaction=interaction)
+        product = InteractionProductFactory(interaction=interaction, interaction_program=program)
+
+        response = self.client.delete(path=self.detail_url(interaction))
+
+        # Проверяем, что PROTECT продукта на программу не блокирует удаление
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Interaction.objects.filter(pk=interaction.pk).exists())
+        self.assertFalse(InteractionProgram.objects.filter(pk=program.pk).exists())
+        self.assertFalse(InteractionProduct.objects.filter(pk=product.pk).exists())
+
+    def test_delete_started_interaction_returns_409(self) -> None:
+        """Взаимодействие с запущенным процессом не удаляется."""
+        process = WorkflowInstanceFactory()
+
+        response = self.client.delete(path=self.detail_url(process.interaction))
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "workflow_started")
+        self.assertTrue(Interaction.objects.filter(pk=process.interaction_id).exists())
+
+    def test_can_delete_flag(self) -> None:
+        """`can_delete` — только у взаимодействия без процесса и договоров."""
+        not_started = InteractionFactory()
+        started = WorkflowInstanceFactory().interaction
+        with_contract = ContractFactory().interaction
+
+        response = self.client.get(path=reverse(f"{self.url_basename}-list"))
+
+        flags = {item["id"]: item["can_delete"] for item in response.data["results"]}
+        self.assertEqual(
+            flags,
+            {str(not_started.pk): True, str(started.pk): False, str(with_contract.pk): False},
+        )
+        detail = self.client.get(path=self.detail_url(not_started))
+        self.assertTrue(detail.data["can_delete"])
 
     def test_list_returns_counts_and_current_responsibles(self) -> None:
         """В списке считаются активные направления/программы/продукты и видны действующие ответственные."""
@@ -191,20 +245,20 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
             sorted(str(interaction.pk) for interaction in expected),
         )
 
-    def test_filter_by_university_ids(self) -> None:
-        """Фильтр university__ids возвращает взаимодействия указанных вузов."""
+    def test_filter_by_organization_ids(self) -> None:
+        """Фильтр organization__ids возвращает взаимодействия указанных вузов."""
         target = InteractionFactory()
         InteractionFactory()
 
         self.assert_filter_returns(
-            params={"university__ids": str(target.university_id)},
+            params={"organization__ids": str(target.organization_id)},
             expected=[target],
         )
 
     def test_filter_by_b2c_client_ids(self) -> None:
         """Фильтр b2c_client__ids возвращает взаимодействия указанных клиентов."""
         client = B2CClientFactory()
-        target = InteractionFactory(university=None, b2c_client=client)
+        target = InteractionFactory(organization=None, b2c_client=client)
         InteractionFactory()
 
         self.assert_filter_returns(
@@ -625,7 +679,7 @@ class ResponsibleRulesApiTestCase(APITestCase):
         self.client.force_authenticate(user=actor)
         return self.client.post(
             reverse("interactions:interaction-list"),
-            {"university": str(UniversityFactory().pk)},
+            {"organization": str(OrganizationFactory().pk)},
             format="json",
         )
 

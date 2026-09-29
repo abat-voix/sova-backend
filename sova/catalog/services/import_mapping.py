@@ -4,8 +4,8 @@ from django.db import transaction
 
 from sova.catalog.exceptions import CatalogImportMappingError
 from sova.catalog.models import CatalogImportMapping
-from sova.catalog.schemas import CATALOG_IMPORT_FIELDS
-from sova.core.text import normalize_text, text_key
+from sova.catalog.schemas import CATALOG_IMPORT_FIELD_LABELS, CATALOG_IMPORT_FIELDS
+from sova.core.text import header_key, normalize_text
 
 
 @dataclass(frozen=True)
@@ -16,6 +16,11 @@ class MappingField:
     required: bool
     source_column: str | None
 
+    @property
+    def label(self) -> str:
+        """Подпись поля для интерфейса."""
+        return CATALOG_IMPORT_FIELD_LABELS[self.target_field]
+
 
 class CatalogImportMappingService:
     """
@@ -23,7 +28,7 @@ class CatalogImportMappingService:
 
     Маппинг меняется только целиком: так смена колонок местами не упирается в уникальность
     source_column, а незаполненные обязательные поля и дубли колонок отсекаются до записи в БД.
-    Дубли сравниваются так же, как импорт сопоставляет заголовки файла (`text_key`).
+    Дубли сравниваются так же, как импорт сопоставляет заголовки файла (`header_key`).
     """
 
     def get_for_type(self, catalog_type: str) -> list[MappingField]:
@@ -73,7 +78,7 @@ class CatalogImportMappingService:
             if not source_column:
                 continue
 
-            key = text_key(source_column)
+            key = header_key(source_column)
             if key in used_by:
                 errors[target_field] = f"Колонка уже используется для поля {used_by[key]}."
                 continue

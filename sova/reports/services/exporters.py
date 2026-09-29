@@ -22,7 +22,7 @@ from reports.pdf import html_to_pdf
 from sova.reports.enum import ReportFormat
 from sova.reports.services.dataset import STATE_NOTE, ReportDataset
 
-REPORT_TITLE = "Отчёт по взаимодействиям с вузами"
+REPORT_TITLE = "Отчёт по взаимодействиям с организациями"
 CONTENT_TYPES = {
     ReportFormat.XLSX: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ReportFormat.XLS: "application/vnd.ms-excel",
@@ -49,7 +49,7 @@ def header_lines(dataset: ReportDataset) -> list[str]:
         f"Период создания взаимодействий: {period_from} – {period_to}",
     ]
     filters = [
-        ("Вузы", spec.universities),
+        ("Организации", spec.organizations),
         ("Направления", spec.directions),
         ("Программы", spec.programs),
         ("Продукты", spec.products),

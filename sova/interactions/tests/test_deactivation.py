@@ -4,7 +4,7 @@ from django.test import TestCase
 
 from accounts.models import SystemRole, UserRole
 from accounts.services import account_service
-from sova.catalog.tests.factories import UniversityFactory
+from sova.catalog.tests.factories import OrganizationFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.models import Responsible
 from sova.interactions.services import responsible_service
@@ -62,7 +62,7 @@ class DeactivationReleasesResponsibilitiesTestCase(TestCase):
 
     def test_deactivation_closes_headless_contract_assignments(self, task) -> None:
         """Назначение на headless-договор из реестра закрывается вместе с назначениями на взаимодействия."""
-        contract = ContractFactory(interaction=None, university=UniversityFactory())
+        contract = ContractFactory(interaction=None, organization=OrganizationFactory())
         responsible_service.sync_contract_responsibles(contract=contract, managers=[self.kam], assigned_by=None)
 
         account_service.deactivate(user=self.kam, actor=None)

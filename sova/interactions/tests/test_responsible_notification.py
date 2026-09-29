@@ -41,7 +41,7 @@ class ResponsibleNotificationTest(TestCase):
             self.system_texts(task),
             [
                 f"{self.kam.get_full_name()}({self.kam.email}), Вас назначили КАМом — "
-                f"{self.interaction.university.name}"
+                f"{self.interaction.organization.name}"
             ],
         )
         # Проверяем получателя и ссылку
@@ -66,7 +66,7 @@ class ResponsibleNotificationTest(TestCase):
             self.system_texts(task),
             [
                 f"{self.kam.get_full_name()}({self.kam.email}), Вас назначили КАМом — "
-                f"{self.interaction.university.name}"
+                f"{self.interaction.organization.name}"
             ],
         )
 

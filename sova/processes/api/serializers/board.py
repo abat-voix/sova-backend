@@ -188,7 +188,7 @@ class WorkflowBoardSerializer(serializers.Serializer):
     workflow = WorkflowShortSerializer(label=_("Workflow"), help_text=_("Шаблон, по которому идёт процесс"))
     interaction = InteractionShortSerializer(
         label=_("Взаимодействие"),
-        help_text=_("Вуз или клиент, с которым ведётся работа"),
+        help_text=_("Организация или клиент, с которым ведётся работа"),
     )
     interaction_stages = BoardStageSerializer(
         many=True,

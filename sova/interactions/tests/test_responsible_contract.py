@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from sova.catalog.tests.factories import UniversityFactory
+from sova.catalog.tests.factories import OrganizationFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.services import responsible_service
 from sova.interactions.tests.factories import ContractFactory
@@ -10,7 +10,7 @@ class SyncContractResponsiblesTestCase(TestCase):
     """Ответственные договора приводятся к переданному набору КАМов."""
 
     def setUp(self) -> None:
-        self.contract = ContractFactory(interaction=None, university=UniversityFactory())
+        self.contract = ContractFactory(interaction=None, organization=OrganizationFactory())
         self.ivanov = UserFactory()
         self.petrov = UserFactory()
         self.importer = UserFactory()

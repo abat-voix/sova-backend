@@ -4,11 +4,13 @@ from django.db import transaction
 from django.db.models import Count, IntegerField, OuterRef, Prefetch, QuerySet, Subquery
 from django.db.models.functions import Coalesce
 from django.utils.translation import gettext_lazy as _
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.fields import UUIDField
+from rest_framework.filters import OrderingFilter
 from rest_framework.response import Response
 
 from accounts.exceptions import KamHasHeadError
@@ -18,6 +20,7 @@ from accounts.services import get_system_role
 from sova.core.api.exceptions import ConflictError
 from sova.core.api.views import SovaBaseViewSet
 from sova.catalog.models import ContactPerson
+from sova.catalog.services.contact_affiliation import contact_affiliation_service
 from sova.interactions.api import filters, serializers
 from sova.interactions.exceptions import NoActiveResponsibleError
 from sova.interactions.models import (
@@ -31,6 +34,7 @@ from sova.interactions.models import (
 from sova.interactions.services import (
     assignment_candidates,
     contact_link_service,
+    interaction_service,
     responsible_service,
     visible_interactions,
 )
@@ -59,7 +63,7 @@ def _active_count(model: type) -> Coalesce:
 
 class InteractionViewSet(SovaBaseViewSet):
     """
-    Взаимодействия с вузами и B2C-клиентами. Доступны CRUD операции.
+    Взаимодействия с организациями и B2C-клиентами. Доступны CRUD операции.
 
     Состав выборки зависит от роли запрашивающего: КАМ видит взаимодействия, где он
     действующий ответственный, руководитель — свои, КАМов своей команды и КАМов без руководителя, администратор
@@ -72,6 +76,10 @@ class InteractionViewSet(SovaBaseViewSet):
     поэтому напрямую в теле взаимодействия не редактируется.
 
     Права на операции — `policy_actions` (`accounts.policy`): наблюдатель только читает взаимодействия и их контакты.
+
+    Удалить можно только незапущенное взаимодействие — без процесса и договоров (`can_delete`); иначе 409.
+
+    `search` ищет по комментарию, организации, B2C-клиенту и имени, фамилии или email действующего ответственного.
     """
 
     policy_actions = {
@@ -96,21 +104,22 @@ class InteractionViewSet(SovaBaseViewSet):
     ordering_fields = "__all__"
     search_fields = (
         "comment",
-        "university__name",
-        "university__short_name",
+        "organization__name",
+        "organization__short_name",
         "b2c_client__full_name",
     )
     filterset_class = filters.InteractionFilter
+    filter_backends = [DjangoFilterBackend, filters.InteractionSearchFilter, OrderingFilter]
 
     def get_queryset(self) -> QuerySet:
         """Взаимодействия, видимые пользователю по его роли в СОВА."""
         return self._with_details(visible_interactions(self.request.user))
 
     def _with_details(self, queryset: QuerySet) -> QuerySet:
-        """Дополняет выборку счётчиками состава и действующим ответственным."""
+        """Дополняет выборку счётчиками состава, действующим ответственным и признаком `can_delete`."""
         return (
-            queryset
-            .select_related("university", "b2c_client")
+            interaction_service.annotate_can_delete(queryset)
+            .select_related("organization", "b2c_client")
             .prefetch_related(
                 Prefetch(
                     "responsibles",
@@ -126,6 +135,10 @@ class InteractionViewSet(SovaBaseViewSet):
                 products_count=_active_count(InteractionProduct),
             )
         )
+
+    def perform_destroy(self, instance: Interaction) -> None:
+        """Удаляет незапущенное взаимодействие; запущенное или с договорами — 409."""
+        interaction_service.delete(instance)
 
     def perform_create(self, serializer: serializers.WriteInteractionSerializer) -> None:
         """Создаёт взаимодействие; КАМ-автор сразу становится ответственным. Ответ — из аннотированного queryset."""
@@ -266,6 +279,7 @@ class InteractionViewSet(SovaBaseViewSet):
                 .select_related("contact_person")
                 .order_by("linked_at")
             )
+            links = contact_affiliation_service.annotate_interaction_position(links)
             return Response(
                 serializers.InteractionContactSerializer(
                     links,
@@ -291,7 +305,9 @@ class InteractionViewSet(SovaBaseViewSet):
             contact_person=contact,
             actor=request.user,
         )
-        link = InteractionContact.objects.select_related("contact_person").get(pk=link.pk)
+        link = contact_affiliation_service.annotate_interaction_position(
+            InteractionContact.objects.select_related("contact_person")
+        ).get(pk=link.pk)
         return Response(
             serializers.InteractionContactSerializer(
                 link,
@@ -349,7 +365,7 @@ class InteractionViewSet(SovaBaseViewSet):
                 "participants",
                 queryset=ConversationParticipant.objects.select_related("user"),
             ),
-        ).select_related("interaction__university", "interaction__b2c_client")
+        ).select_related("interaction__organization", "interaction__b2c_client")
 
     @extend_schema(
         methods=["GET"],

@@ -3,6 +3,7 @@ from sova.interactions.services.contract_attachment import (
     contract_attachment_service,
 )
 from sova.interactions.services.contact_link import ContactLinkService, contact_link_service
+from sova.interactions.services.interaction import InteractionService, interaction_service
 from sova.interactions.services.license import LicenseService, license_service
 from sova.interactions.services.responsible import (
     ResponsibleService,
@@ -23,6 +24,7 @@ from sova.interactions.services.visibility import (
 __all__ = [
     "ContactLinkService",
     "ContractAttachmentService",
+    "InteractionService",
     "LicenseService",
     "ManagerCandidate",
     "ResponsibleService",
@@ -30,6 +32,7 @@ __all__ = [
     "assignment_candidates",
     "contact_link_service",
     "contract_attachment_service",
+    "interaction_service",
     "license_service",
     "removable_managers",
     "responsible_service",

@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from drf_spectacular.utils import extend_schema_field
 
+from sova.catalog.api.serializers import B2CClientShortSerializer, OrganizationShortSerializer
 from sova.core.files import validate_file_size
 from sova.interactions.api.serializers.interaction import InteractionShortSerializer
 from sova.interactions.api.serializers.responsible import ResponsibleShortSerializer
@@ -25,7 +26,17 @@ class ContractSerializer(serializers.ModelSerializer):
     interaction = InteractionShortSerializer(
         read_only=True,
         label=_("Взаимодействие"),
-        help_text=_("Показывается развёрнуто, для записи см. write-сериализатор"),
+        help_text=_("Показывается развёрнуто, для записи см. write-сериализатор; пусто у договора из реестра"),
+    )
+    organization = OrganizationShortSerializer(
+        read_only=True,
+        label=_("Организация"),
+        help_text=_("Контрагент договора; заполнен и у договора без взаимодействия. Пусто у договора с B2C-клиентом"),
+    )
+    b2c_client = B2CClientShortSerializer(
+        read_only=True,
+        label=_("B2C-клиент"),
+        help_text=_("Контрагент договора; заполнен и у договора без взаимодействия. Пусто у договора с организацией"),
     )
     current_responsibles = serializers.SerializerMethodField(
         label=_("Действующие ответственные"),
@@ -56,6 +67,8 @@ class ContractSerializer(serializers.ModelSerializer):
             "corrected_at",
             "signed_at",
             "interaction",
+            "organization",
+            "b2c_client",
             "current_responsibles",
             "files_count",
             "created_at",
@@ -79,6 +92,18 @@ class ContractSerializer(serializers.ModelSerializer):
         if not obj.file:
             return None
         return reverse("interactions:contract-download", args=[obj.pk])
+
+
+class AttachContractToNewInteractionSerializer(serializers.Serializer):
+    """Создание взаимодействия из договора реестра."""
+
+    comment = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        label=_("Комментарий"),
+        help_text=_("Комментарий взаимодействия; не передан — берётся комментарий договора из реестра"),
+    )
+    is_active = serializers.BooleanField(default=True, label=_("Активно"))
 
 
 class WriteContractSerializer(serializers.ModelSerializer):

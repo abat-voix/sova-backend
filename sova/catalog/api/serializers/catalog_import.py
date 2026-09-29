@@ -4,12 +4,15 @@ from rest_framework import serializers
 
 from sova.catalog.enum import CatalogType
 
+# Типы, которые загружает импорт каталогов; обучающиеся — своим эндпоинтом обучения (/api/training/learners/import/)
+CATALOG_IMPORT_CHOICES = [choice for choice in CatalogType.choices if choice[0] != CatalogType.LEARNER]
+
 
 class CatalogImportSerializer(serializers.Serializer):
     """Загрузка файла каталога или реестра договоров — валидация входных данных."""
 
     catalog_type = serializers.ChoiceField(
-        choices=CatalogType.choices,
+        choices=CATALOG_IMPORT_CHOICES,
         label=_("Тип каталога"),
         help_text=_("Определяет обработчик и маппинг колонок файла"),
     )
@@ -17,6 +20,26 @@ class CatalogImportSerializer(serializers.Serializer):
         validators=[FileExtensionValidator(allowed_extensions=("xlsx", "xls"))],
         label=_("Файл"),
         help_text=_("Первый лист xlsx или xls; первая строка — заголовки колонок из маппинга типа"),
+    )
+
+
+class CatalogImportHeadersSerializer(serializers.Serializer):
+    """Файл, заголовки которого нужно прочитать для настройки маппинга."""
+
+    file = serializers.FileField(
+        validators=[FileExtensionValidator(allowed_extensions=("xlsx", "xls"))],
+        label=_("Файл"),
+        help_text=_("Первый лист xlsx или xls; читается только первая строка"),
+    )
+
+
+class CatalogImportHeadersResultSerializer(serializers.Serializer):
+    """Заголовки файла."""
+
+    headers = serializers.ListField(
+        child=serializers.CharField(),
+        label=_("Заголовки"),
+        help_text=_("Непустые заголовки первой строки первого листа в порядке файла, без повторов"),
     )
 
 
@@ -50,7 +73,7 @@ class CatalogImportResultSerializer(serializers.Serializer):
     """Результат успешного импорта."""
 
     catalog_type = serializers.ChoiceField(
-        choices=CatalogType.choices,
+        choices=CATALOG_IMPORT_CHOICES,
         label=_("Тип каталога"),
         help_text=_("Тип, переданный в запросе"),
     )

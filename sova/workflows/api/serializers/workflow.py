@@ -60,30 +60,3 @@ class WriteWorkflowSerializer(serializers.ModelSerializer):
             "is_base",
             "is_active",
         )
-
-    def validate(self, attrs: dict) -> dict:
-        """
-        Проверка «один базовый workflow на аудиторию».
-
-        Условное ограничение БД `one_base_workflow_per_audience` DRF не проверяет,
-        а без валидации клиент получил бы ошибку БД. Недостающие значения берутся
-        из сохранённого workflow (PATCH) или из default поля модели (создание):
-        DRF не подставляет model default в `attrs`, а аудитория по умолчанию — B2B.
-        """
-        audience_field = Workflow._meta.get_field("audience")
-        is_base = attrs.get("is_base", getattr(self.instance, "is_base", False))
-        audience = attrs.get(
-            "audience",
-            getattr(self.instance, "audience", audience_field.get_default()),
-        )
-        if not is_base:
-            return attrs
-
-        conflicting = Workflow.objects.filter(is_base=True, audience=audience)
-        if self.instance is not None:
-            conflicting = conflicting.exclude(pk=self.instance.pk)
-        if conflicting.exists():
-            raise serializers.ValidationError(
-                {"is_base": _("Для этой аудитории уже есть базовый workflow.")},
-            )
-        return attrs

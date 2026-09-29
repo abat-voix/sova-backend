@@ -10,7 +10,7 @@ from sova.catalog.api import filters, serializers
 from sova.catalog.enum import CatalogType
 from sova.catalog.exceptions import CatalogImportMappingError
 from sova.catalog.models import CatalogImportMapping
-from sova.catalog.schemas import CATALOG_IMPORT_FIELDS
+from sova.catalog.schemas import CATALOG_IMPORT_FIELD_LABELS, CATALOG_IMPORT_FIELDS
 from sova.catalog.services import MappingField, catalog_import_mapping_service
 from sova.core.api.views import SovaReadOnlyViewSet
 
@@ -37,11 +37,12 @@ class CatalogImportMappingViewSet(SovaReadOnlyViewSet):
     ordering_fields = "__all__"
     search_fields = ("source_column", "target_field")
     filterset_class = filters.CatalogImportMappingFilter
+    # Маппинг нужен только тому, кто загружает файлы, — чтение закрыто тем же правом, что и изменение
     policy_actions = {
-        "list": Action.CATALOG_READ,
-        "retrieve": Action.CATALOG_READ,
-        "available_fields": Action.CATALOG_READ,
-        "by_type": {"GET": Action.CATALOG_READ, "PUT": Action.CATALOG_MAPPINGS_MANAGE},
+        "list": Action.CATALOG_MAPPINGS_MANAGE,
+        "retrieve": Action.CATALOG_MAPPINGS_MANAGE,
+        "available_fields": Action.CATALOG_MAPPINGS_MANAGE,
+        "by_type": Action.CATALOG_MAPPINGS_MANAGE,
     }
 
     @extend_schema(
@@ -63,8 +64,14 @@ class CatalogImportMappingViewSet(SovaReadOnlyViewSet):
         query.is_valid(raise_exception=True)
         fields = CATALOG_IMPORT_FIELDS[query.validated_data["catalog_type"]]
 
-        data = [{"name": name, "required": True} for name in sorted(fields.required)]
-        data += [{"name": name, "required": False} for name in sorted(fields.optional)]
+        data = [
+            {"name": name, "label": CATALOG_IMPORT_FIELD_LABELS[name], "required": True}
+            for name in sorted(fields.required)
+        ]
+        data += [
+            {"name": name, "label": CATALOG_IMPORT_FIELD_LABELS[name], "required": False}
+            for name in sorted(fields.optional)
+        ]
         return Response(
             data=self.get_serializer(data, many=True).data,
             status=status.HTTP_200_OK,

@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
-from sova.catalog.tests.factories import DirectionFactory, ProductFactory, ProgramFactory, UniversityFactory
+from sova.catalog.tests.factories import DirectionFactory, ProductFactory, ProgramFactory, OrganizationFactory
 from sova.interactions.models import Contract, InteractionDirection, InteractionProduct, InteractionProgram
 from sova.interactions.tests.factories import ContractFactory, InteractionFactory
 
@@ -11,7 +11,7 @@ class HeadlessContextTestCase(TestCase):
     """Направление/программа/продукт взаимодействия могут временно висеть на договоре без Interaction."""
 
     def _headless_contract(self) -> Contract:
-        return ContractFactory(interaction=None, university=UniversityFactory())
+        return ContractFactory(interaction=None, organization=OrganizationFactory())
 
     def test_headless_interaction_product_requires_contract_or_interaction(self) -> None:
         with transaction.atomic(), self.assertRaises(IntegrityError):

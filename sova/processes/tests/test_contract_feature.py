@@ -7,7 +7,9 @@ from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
 
-from sova.catalog.tests.factories import ContactPersonFactory, UniversityFactory
+from sova.catalog.enum import AddressKind
+from sova.catalog.models import OrganizationAddress
+from sova.catalog.tests.factories import OrganizationContactFactory, OrganizationFactory
 from sova.core.tests.factories import UserFactory
 from sova.core.tests.media import TemporaryMediaMixin
 from sova.interactions.enum import DocumentTemplateKind
@@ -33,8 +35,8 @@ class CreateContractFeatureApiTestCase(TemporaryMediaMixin, APITestCase):
         UserRole.objects.create(user=self.user, role=SystemRole.PLATFORM_ADMIN)
         self.client.force_authenticate(user=self.user)
 
-        university = UniversityFactory(short_name="ВУЗ", inn="7700000000", city="Москва")
-        self.interaction = InteractionFactory(university=university)
+        organization = OrganizationFactory(short_name="ВУЗ", inn="7700000000", city="Москва")
+        self.interaction = InteractionFactory(organization=organization)
         self.action_instance = ActionInstanceFactory(
             stage_instance__workflow_instance__interaction=self.interaction,
         )
@@ -69,8 +71,25 @@ class CreateContractFeatureApiTestCase(TemporaryMediaMixin, APITestCase):
             },
         }
 
+    def test_initial_takes_city_from_actual_and_address_from_legal(self) -> None:
+        OrganizationAddress.objects.create(
+            organization=self.interaction.organization,
+            kind=AddressKind.LEGAL,
+            postal_code="119991",
+            city="Москва",
+            street="Ленинские горы",
+            house="1",
+        )
+
+        response = self.client.get(f"{self.base_url}/initial/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        document = response.data["document"]
+        self.assertEqual(document["city"], "Москва")
+        self.assertEqual(document["counterparty"]["address"], "119991, Москва, Ленинские горы, 1")
+
     def test_initial_prefills_counterparty_contacts_and_products(self) -> None:
-        contact = ContactPersonFactory(university=self.interaction.university, position="Ректор")
+        contact = OrganizationContactFactory(organization=self.interaction.organization, position="Ректор").contact
         InteractionContact.objects.create(interaction=self.interaction, contact_person=contact)
         product = InteractionProductFactory(interaction=self.interaction)
 
@@ -79,8 +98,9 @@ class CreateContractFeatureApiTestCase(TemporaryMediaMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
         self.assertEqual(response.data["templates"], [{"id": self.template.pk, "name": "Договор"}])
         self.assertEqual(response.data["contacts"][0]["full_name"], contact.full_name)
+        self.assertEqual(response.data["contacts"][0]["position"], "Ректор")
         document = response.data["document"]
-        self.assertEqual(document["counterparty"]["name"], self.interaction.university.name)
+        self.assertEqual(document["counterparty"]["name"], self.interaction.organization.name)
         self.assertEqual(document["counterparty"]["short_name"], "ВУЗ")
         self.assertEqual(document["counterparty"]["inn"], "7700000000")
         self.assertEqual(document["city"], "Москва")

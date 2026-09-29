@@ -3,7 +3,7 @@ from rest_framework import serializers
 
 from sova.integrations.enum import IntegrationDirection
 from sova.integrations.models import IntegrationMapping
-from sova.integrations.registry import ENTITIES, serializer_fields
+from sova.integrations.registry import ENTITIES, incoming_fields, serializer_fields
 
 
 class IntegrationMessageResponseSerializer(serializers.Serializer):
@@ -55,7 +55,8 @@ class IntegrationMappingSerializer(serializers.ModelSerializer):
         entity = attrs.get("entity", getattr(self.instance, "entity", None))
         is_active = attrs.get("is_active", getattr(self.instance, "is_active", False))
         rules = attrs.get("rules", getattr(self.instance, "rules", []))
-        fields = serializer_fields(entity) or {}
+        is_incoming = direction == IntegrationDirection.INCOMING
+        fields = (incoming_fields(entity) if is_incoming else serializer_fields(entity)) or {}
         crm_names = []
         errors = []
         for index, rule in enumerate(rules):
@@ -65,9 +66,10 @@ class IntegrationMappingSerializer(serializers.ModelSerializer):
             external_path = source if direction == IntegrationDirection.INCOMING else target
             crm_names.append(crm_name)
             if crm_name not in fields:
-                errors.append(f"Правило {index + 1}: поле CRM «{crm_name}» не зарегистрировано.")
-            elif direction == IntegrationDirection.INCOMING and fields[crm_name].read_only:
-                errors.append(f"Правило {index + 1}: поле «{crm_name}» доступно только для чтения.")
+                if is_incoming and crm_name in (serializer_fields(entity) or {}):
+                    errors.append(f"Правило {index + 1}: поле «{crm_name}» нельзя заполнить из входящего сообщения.")
+                else:
+                    errors.append(f"Правило {index + 1}: поле CRM «{crm_name}» не зарегистрировано.")
             if external_path and not external_path.startswith("$."):
                 errors.append(f"Правило {index + 1}: внешний путь должен начинаться с $.")
             if rule["required"] and not external_path and rule.get("defaultValue") is None:
@@ -126,6 +128,28 @@ class IntegrationEntityMetadataSerializer(serializers.Serializer):
     label = serializers.CharField()
     serializer = serializers.CharField()
     fields = IntegrationFieldMetadataSerializer(many=True)
+
+
+class IntegrationMappingProcessSerializer(serializers.Serializer):
+    payload = serializers.JSONField()
+
+    def validate_payload(self, value):
+        if not isinstance(value, (dict, list)):
+            raise serializers.ValidationError("Payload должен быть JSON-объектом или массивом объектов.")
+        return value
+
+
+class IntegrationCreatedEntitySerializer(serializers.Serializer):
+    entity = serializers.CharField()
+    id = serializers.CharField()
+
+
+class IntegrationMappingProcessResultSerializer(serializers.Serializer):
+    id = serializers.UUIDField(help_text="ID интеграционного сообщения")
+    status = serializers.CharField()
+    created = IntegrationCreatedEntitySerializer(many=True, help_text="Созданные или обновлённые сущности CRM")
+    errors = serializers.ListField(child=serializers.CharField())
+    warnings = serializers.ListField(child=serializers.CharField())
 
 
 class IntegrationSystemSerializer(serializers.Serializer):

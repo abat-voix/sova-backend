@@ -10,6 +10,16 @@ from sova.catalog.enum import CatalogType
 from sova.catalog.services import catalog_import_service
 
 
+VENDOR_REFERENCE_HEADER_ALIASES = {
+    "Компания": "name",
+    "Продукт": "products",
+    "ФИО": "contact_full_name",
+    "Телефон": "contact_phone",
+    "Почта": "contact_email",
+    "Способ связи": "contact_channels",
+}
+
+
 class Command(DjangoLoadDataCommand):
     help = "Загружает Django fixtures или справочники XLSX из reference_data."
 
@@ -51,7 +61,7 @@ class Command(DjangoLoadDataCommand):
     def _loaders(self) -> dict:
         """Справочники в порядке зависимостей: продукты ссылаются на вендоров и программы."""
         return {
-            "universities.xlsx": self._load_universities,
+            "organizations.xlsx": self._load_organizations,
             "vendors.xlsx": self._load_vendors,
             "directions.xlsx": self._load_directions,
             "programs.xlsx": self._load_programs,
@@ -90,11 +100,16 @@ class Command(DjangoLoadDataCommand):
 
         raise CommandError(f"Файл справочника не найден: {fixture_labels[0]}")
 
-    def _load_universities(self, source: Path) -> None:
-        self._run_loader(source, CatalogType.UNIVERSITY, "вузов")
+    def _load_organizations(self, source: Path) -> None:
+        self._run_loader(source, CatalogType.ORGANIZATION, "организаций")
 
     def _load_vendors(self, source: Path) -> None:
-        self._run_loader(source, CatalogType.VENDOR, "вендоров")
+        self._run_loader(
+            source,
+            CatalogType.VENDOR,
+            "вендоров",
+            header_aliases=VENDOR_REFERENCE_HEADER_ALIASES,
+        )
 
     def _load_directions(self, source: Path) -> None:
         self._run_loader(source, CatalogType.DIRECTION, "направлений")
@@ -105,10 +120,20 @@ class Command(DjangoLoadDataCommand):
     def _load_programs(self, source: Path) -> None:
         self._run_loader(source, CatalogType.PROGRAM, "программ")
 
-    def _run_loader(self, source: Path, catalog_type: str, label: str) -> None:
+    def _run_loader(
+        self,
+        source: Path,
+        catalog_type: str,
+        label: str,
+        header_aliases: dict[str, str] | None = None,
+    ) -> None:
         """CLI читает файл с фиксированными заголовками (без CatalogImportMapping) и вызывает сервис импорта."""
         try:
-            result = catalog_import_service.import_canonical_file(catalog_type=catalog_type, source=source)
+            result = catalog_import_service.import_canonical_file(
+                catalog_type=catalog_type,
+                source=source,
+                header_aliases=header_aliases,
+            )
         except CatalogImportError as error:
             raise CommandError(str(error)) from error
         self.stdout.write(

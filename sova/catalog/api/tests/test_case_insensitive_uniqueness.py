@@ -7,7 +7,7 @@ from sova.catalog.models import Vendor
 from sova.catalog.tests.factories import (
     ContactPersonFactory,
     ProductFactory,
-    UniversityFactory,
+    OrganizationFactory,
     VendorFactory,
 )
 from sova.core.tests.factories import UserFactory
@@ -76,12 +76,12 @@ class CaseInsensitiveUniquenessApiTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
         self.assertEqual(response.data["name"], "мОсква Софт")
 
-    def test_university_name_duplicate_in_other_case_returns_400(self) -> None:
+    def test_organization_name_duplicate_in_other_case_returns_400(self) -> None:
         """Вуз «мгу» при существующем «МГУ» отклоняется."""
-        UniversityFactory(name="МГУ")
+        OrganizationFactory(name="МГУ")
 
         response = self.client.post(
-            path=reverse("catalog:university-list"),
+            path=reverse("catalog:organization-list"),
             data={"name": "мгу"},
             format="json",
         )
@@ -104,16 +104,15 @@ class CaseInsensitiveUniquenessApiTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("name", response.data)
 
-    def test_contact_person_duplicate_in_other_case_returns_400(self) -> None:
-        """ФИО ответственного уникально у вуза без учёта регистра."""
-        existing = ContactPersonFactory(full_name="Иванов Иван")
+    def test_contact_person_namesakes_are_allowed(self) -> None:
+        """ФИО контактного лица не уникально: тёзки — разные люди, пока их явно не свяжут или не сольют."""
+        ContactPersonFactory(full_name="Иванов Иван")
 
         response = self.client.post(
             path=reverse("catalog:contact-person-list"),
-            data={"full_name": "ИВАНОВ  ИВАН", "university": str(existing.university_id)},
+            data={"full_name": "ИВАНОВ  ИВАН"},
             format="json",
         )
 
-        # Проверяем, что ошибка привязана к полю full_name
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("full_name", response.data)
+        # Проверяем, что тёзка создан отдельным человеком
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)

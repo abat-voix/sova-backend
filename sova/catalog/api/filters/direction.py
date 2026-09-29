@@ -1,8 +1,8 @@
+from sova.catalog.api.filters.rank import RankFilterMixin
 from sova.catalog.models import Direction
-from sova.core.api.filters import SearchFilterMixin
 
 
-class DirectionFilter(SearchFilterMixin):
+class DirectionFilter(RankFilterMixin):
     """Фильтр направлений."""
 
     class Meta:

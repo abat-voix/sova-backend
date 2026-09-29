@@ -2,7 +2,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.utils import timezone
 
-from sova.catalog.tests.factories import UniversityFactory
+from sova.catalog.tests.factories import OrganizationFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.models import Responsible
 from sova.interactions.tests.factories import ContractFactory
@@ -12,7 +12,7 @@ class ResponsibleOwnerTestCase(TestCase):
     """Назначение принадлежит взаимодействию или договору; КАМ не дублируется на договоре."""
 
     def setUp(self) -> None:
-        self.contract = ContractFactory(interaction=None, university=UniversityFactory())
+        self.contract = ContractFactory(interaction=None, organization=OrganizationFactory())
         self.manager = UserFactory()
 
     def test_contract_responsible_without_interaction_is_saved(self) -> None:

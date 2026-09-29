@@ -3,7 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import Supervision, SystemRole, UserRole
-from sova.catalog.tests.factories import UniversityFactory
+from sova.catalog.tests.factories import OrganizationFactory
 from sova.core.tests.factories import UserFactory
 from sova.interactions.services import responsible_service
 from sova.interactions.tests.factories import InteractionFactory
@@ -176,12 +176,12 @@ class InteractionVisibilityApiTestCase(APITestCase):
     def test_created_interaction_is_returned_to_its_author(self) -> None:
         """Ответ на создание приходит автору, хотя ответственный ещё не назначен."""
         kam = self.create_user(SystemRole.KAM)
-        university = UniversityFactory()
+        organization = OrganizationFactory()
         self.client.force_authenticate(user=kam)
 
         response = self.client.post(
             path=self.list_url,
-            data={"university": str(university.pk)},
+            data={"organization": str(organization.pk)},
             format="json",
         )
 

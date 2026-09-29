@@ -43,6 +43,30 @@ class EmailChannelSenderTest(TestCase):
         # Проверяем, что ошибка не поднимается наружу
         self.assertFalse(result)
 
+    @override_settings(APP_PUBLIC_URL="https://sova.example.ru")
+    def test_send_appends_absolute_link_to_body(self) -> None:
+        """Ссылка из Message дописывается в конец письма полным адресом; тема не меняется."""
+        EmailChannelSender().send(
+            target="user@example.com",
+            message=Message(text="Вас назначили КАМом\nМГУ", link="/interactions?interaction=1"),
+        )
+
+        # Проверяем тело письма
+        self.assertEqual(mail.outbox[0].body, "Вас назначили КАМом\nМГУ\n\nhttps://sova.example.ru/interactions?interaction=1")
+        # Проверяем, что тема — по-прежнему первая строка
+        self.assertEqual(mail.outbox[0].subject, "Вас назначили КАМом")
+
+    @override_settings(APP_PUBLIC_URL="")
+    def test_send_without_app_public_url_skips_link(self) -> None:
+        """Без APP_PUBLIC_URL письмо уходит без ссылки — относительный адрес наружу не попадает."""
+        EmailChannelSender().send(
+            target="user@example.com",
+            message=Message(text="Вас назначили КАМом", link="/interactions?interaction=1"),
+        )
+
+        # Проверяем тело письма
+        self.assertEqual(mail.outbox[0].body, "Вас назначили КАМом")
+
 
 @override_settings(TELEGRAM_BOT_TOKEN="test-token", TELEGRAM_PROXY="", NOTIFICATION_HTTP_TIMEOUT=5)
 class TelegramChannelSenderTest(SimpleTestCase):
@@ -126,6 +150,49 @@ class TelegramChannelSenderTest(SimpleTestCase):
         # Проверяем, что предупреждение записано один раз
         self.assertEqual(len(logs.records), 1)
 
+    @override_settings(APP_PUBLIC_URL="https://sova.example.ru")
+    @patch("sova.notifications.services.channels.telegram.requests.post")
+    def test_send_appends_absolute_link(self, post: Mock) -> None:
+        """Ссылка из Message дописывается в конец текста полным адресом."""
+        post.return_value = Mock(status_code=200)
+
+        TelegramChannelSender().send(target="123456", message=Message(text="Текст", link="/interactions?interaction=1"))
+
+        # Проверяем текст со ссылкой
+        self.assertEqual(
+            post.call_args.kwargs["data"]["text"],
+            "Текст\n\nhttps://sova.example.ru/interactions?interaction=1",
+        )
+
+    @patch("sova.notifications.services.channels.telegram.TELEGRAM_MESSAGE_MAX_LENGTH", 21)
+    @patch("sova.notifications.services.channels.telegram.requests.post")
+    def test_send_splits_long_text_by_lines(self, post: Mock) -> None:
+        """Текст длиннее лимита уходит несколькими сообщениями по границам строк."""
+        post.return_value = Mock(status_code=200)
+
+        result = TelegramChannelSender().send(target="123456", message=Message(text="Строка один\nСтрока два\nСтрока три"))
+
+        # Проверяем успешный результат
+        self.assertTrue(result)
+        # Проверяем части: каждая не длиннее лимита, строки не разорваны
+        self.assertEqual(
+            [call.kwargs["data"]["text"] for call in post.call_args_list],
+            ["Строка один", "Строка два\nСтрока три"],
+        )
+
+    @patch("sova.notifications.services.channels.telegram.TELEGRAM_MESSAGE_MAX_LENGTH", 21)
+    @patch("sova.notifications.services.channels.telegram.requests.post")
+    def test_send_fails_if_any_part_fails(self, post: Mock) -> None:
+        """Если не дошла одна из частей, отправка неуспешна — сводка повторится на следующем запуске."""
+        failed = Mock(status_code=400)
+        failed.raise_for_status.side_effect = requests.HTTPError("400")
+        post.side_effect = [Mock(status_code=200), failed]
+
+        result = TelegramChannelSender().send(target="123456", message=Message(text="Строка один\nСтрока два\nСтрока три"))
+
+        # Проверяем неуспешный результат
+        self.assertFalse(result)
+
 
 @override_settings(
     MAX_BOT_TOKEN="test-max-token",
@@ -182,6 +249,54 @@ class MaxChannelSenderTest(SimpleTestCase):
         post.assert_not_called()
         # Проверяем, что предупреждение записано один раз
         self.assertEqual(len(logs.records), 1)
+
+
+    @override_settings(APP_PUBLIC_URL="https://sova.example.ru")
+    @patch("sova.notifications.services.channels.max.requests.post")
+    def test_send_appends_absolute_link(self, post: Mock) -> None:
+        """Ссылка из Message дописывается в конец текста полным адресом."""
+        post.return_value = Mock(status_code=200)
+
+        MaxChannelSender().send(target="789", message=Message(text="Текст", link="/interactions?interaction=1"))
+
+        # Проверяем текст со ссылкой
+        self.assertEqual(
+            post.call_args.kwargs["json"],
+            {"text": "Текст\n\nhttps://sova.example.ru/interactions?interaction=1"},
+        )
+
+    @patch("sova.notifications.services.channels.max.MAX_MESSAGE_MAX_LENGTH", 21)
+    @patch("sova.notifications.services.channels.max.requests.post")
+    def test_send_splits_long_text_by_lines(self, post: Mock) -> None:
+        """Текст длиннее лимита уходит несколькими сообщениями по границам строк."""
+        post.return_value = Mock(status_code=200)
+
+        MaxChannelSender().send(target="789", message=Message(text="Строка один\nСтрока два\nСтрока три"))
+
+        # Проверяем части
+        self.assertEqual(
+            [call.kwargs["json"]["text"] for call in post.call_args_list],
+            ["Строка один", "Строка два\nСтрока три"],
+        )
+
+
+class ChunksTest(SimpleTestCase):
+    """Разбиение длинного текста на части для мессенджеров."""
+
+    def test_short_text_is_single_chunk(self) -> None:
+        """Текст в пределах лимита — одна часть без изменений."""
+        # Проверяем одну часть
+        self.assertEqual(TelegramChannelSender()._chunks("А\n\nБ", limit=10), ["А\n\nБ"])
+
+    def test_long_line_is_cut_by_limit(self) -> None:
+        """Строка длиннее лимита режется на куски по лимиту."""
+        # Проверяем нарезку
+        self.assertEqual(TelegramChannelSender()._chunks("Тема\n" + "х" * 12, limit=5), ["Тема", "ххххх", "ххххх", "хх"])
+
+    def test_blank_lines_on_chunk_border_are_dropped(self) -> None:
+        """Пустые строки на границе частей не дают пустых сообщений."""
+        # Проверяем, что части не начинаются и не заканчиваются пустой строкой
+        self.assertEqual(TelegramChannelSender()._chunks("Тема\n\nПункт один", limit=10), ["Тема", "Пункт один"])
 
 
 class SystemChannelSenderTest(TestCase):
@@ -241,3 +356,16 @@ class SystemChannelSenderTest(TestCase):
         self.assertEqual(notification.kind, NotificationKind.ASSIGNMENT)
         # Проверяем ссылку
         self.assertEqual(notification.link, "/interactions/1")
+
+    @override_settings(APP_PUBLIC_URL="https://sova.example.ru")
+    def test_send_keeps_relative_link_and_text(self) -> None:
+        """Колокольчик хранит относительную ссылку и не дописывает её в текст — фронт переходит сам."""
+        user = UserFactory()
+
+        SystemChannelSender().send(target=user.pk, message=Message(text="Заголовок\nТекст", link="/interactions/1"))
+
+        notification = Notification.objects.get()
+        # Проверяем относительную ссылку
+        self.assertEqual(notification.link, "/interactions/1")
+        # Проверяем текст без ссылки
+        self.assertEqual(notification.text, "Текст")

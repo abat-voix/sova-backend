@@ -1,27 +1,66 @@
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from sova.catalog.api.serializers.b2c_client import B2CClientShortSerializer
-from sova.catalog.api.serializers.university import UniversityShortSerializer
+from sova.catalog.api.serializers.product import ProductShortSerializer
+from sova.catalog.enum import ContactChannel
 from sova.catalog.models import ContactPerson
-from sova.core.api.exceptions import ConflictError
-from sova.core.api.validators import validate_exactly_one_counterparty, validate_model_constraints
-from sova.interactions.models import InteractionContact
+from sova.catalog.services import contact_affiliation_service
+from sova.core.text import normalize_telegram
+
+
+class ContactPersonShortSerializer(serializers.ModelSerializer):
+    """Контактное лицо — краткое представление для вложенного использования."""
+
+    class Meta:
+        model = ContactPerson
+        fields = ("id", "full_name", "email", "phone", "telegram", "is_active")
+
+
+class ContactOwnerSerializer(serializers.Serializer):
+    """Владелец связи — организация, B2C-клиент или вендор."""
+
+    id = serializers.UUIDField(read_only=True)
+    name = serializers.CharField(read_only=True)
+
+
+class ContactAffiliationSerializer(serializers.Serializer):
+    """Связь человека с организацией любого типа — в составе контактного лица."""
+
+    id = serializers.UUIDField(read_only=True)
+    type = serializers.SerializerMethodField(help_text=_("organization, b2c_client или vendor"))
+    organization = serializers.SerializerMethodField()
+    position = serializers.CharField(read_only=True)
+    preferred_channels = serializers.ListField(
+        child=serializers.ChoiceField(choices=ContactChannel.choices),
+        read_only=True,
+    )
+    products = serializers.SerializerMethodField(help_text=_("Продукты вендора; у организации и B2C-клиента — пусто"))
+
+    @extend_schema_field(serializers.ChoiceField(choices=("organization", "b2c_client", "vendor")))
+    def get_type(self, affiliation) -> str:
+        return contact_affiliation_service.type_code(
+            organization=contact_affiliation_service.organization_of(affiliation=affiliation)
+        )
+
+    @extend_schema_field(ContactOwnerSerializer)
+    def get_organization(self, affiliation) -> dict:
+        organization = contact_affiliation_service.organization_of(affiliation=affiliation)
+        return {"id": organization.pk, "name": str(organization)}
+
+    @extend_schema_field(ProductShortSerializer(many=True))
+    def get_products(self, affiliation) -> list:
+        if not hasattr(affiliation, "products"):
+            return []
+        return ProductShortSerializer(affiliation.products.all(), many=True).data
 
 
 class ContactPersonSerializer(serializers.ModelSerializer):
-    """Контактное лицо — представление для чтения (list/retrieve)."""
+    """Контактное лицо — человек и все его связи с организациями (list/retrieve)."""
 
-    university = UniversityShortSerializer(
-        read_only=True,
-        label=_("Вуз"),
-        help_text=_("Показывается развёрнуто, для записи см. write-сериализатор"),
-    )
-    b2c_client = B2CClientShortSerializer(
-        read_only=True,
-        label=_("B2C-клиент"),
-        help_text=_("Показывается развёрнуто, для записи см. write-сериализатор"),
+    affiliations = serializers.SerializerMethodField(
+        help_text=_("Связи с организациями: должность и способы связи в каждой"),
     )
 
     class Meta:
@@ -29,76 +68,93 @@ class ContactPersonSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "full_name",
-            "position",
             "email",
             "phone",
+            "telegram",
             "is_active",
-            "university",
-            "b2c_client",
+            "affiliations",
             "created_at",
             "updated_at",
         )
 
+    @extend_schema_field(ContactAffiliationSerializer(many=True))
+    def get_affiliations(self, contact: ContactPerson) -> list:
+        return ContactAffiliationSerializer(contact_affiliation_service.links_of(contact=contact), many=True).data
+
 
 class WriteContactPersonSerializer(serializers.ModelSerializer):
-    """Контактное лицо — валидация входных данных (create/update)."""
+    """
+    Контактное лицо — данные человека (create/update).
+
+    Связь с организацией — `/organization-contacts/`, `/b2c-client-contacts/`, `/vendor-contacts/`; там же нового
+    человека можно создать вместе со связью (`new_contact`).
+    """
 
     class Meta:
         model = ContactPerson
         fields = (
             "id",
             "full_name",
-            "position",
             "email",
             "phone",
+            "telegram",
             "is_active",
-            "university",
-            "b2c_client",
         )
+
+    def validate_telegram(self, value: str) -> str:
+        """Ник без @ и ссылки t.me."""
+        try:
+            return normalize_telegram(value)
+        except ValueError as error:
+            raise serializers.ValidationError(str(error)) from error
 
     def validate(self, attrs: dict) -> dict:
-        """Проверка, что задан ровно один контрагент, и уникальности ФИО у него без учёта регистра."""
-        validate_exactly_one_counterparty(attrs=attrs, instance=self.instance)
-
-        university = attrs.get("university", getattr(self.instance, "university", None))
-        b2c_client = attrs.get("b2c_client", getattr(self.instance, "b2c_client", None))
-
-        self._ensure_counterparty_can_change(
-            instance=self.instance,
-            university=university,
-            b2c_client=b2c_client,
+        """Поле, выбранное способом связи в какой-либо связи человека, нельзя очистить."""
+        if self.instance is None:
+            return attrs
+        values = {
+            field: attrs.get(field, getattr(self.instance, field)) for field in ("email", "phone", "telegram")
+        }
+        unfilled = contact_affiliation_service.unfilled_channels(
+            channels=contact_affiliation_service.used_channels(contact=self.instance), **values
         )
-
-        validate_model_constraints(model=ContactPerson, attrs=attrs, instance=self.instance)
+        if unfilled:
+            raise serializers.ValidationError(
+                {
+                    channel: _("Выбрано способом связи у организации: сначала уберите его из способов связи.")
+                    for channel in unfilled
+                }
+            )
         return attrs
 
-    @staticmethod
-    def _ensure_counterparty_can_change(instance, university, b2c_client) -> None:
-        if instance is None or not InteractionContact.objects.filter(
-            contact_person=instance,
-            unlinked_at__isnull=True,
-        ).exists():
-            return
-        current_counterparty = (instance.university_id, instance.b2c_client_id)
-        new_counterparty = (
-            getattr(university, "pk", university),
-            getattr(b2c_client, "pk", b2c_client),
-        )
-        if current_counterparty != new_counterparty:
-            raise ConflictError(
-                detail=_(
-                    "Нельзя изменить контрагента: контактное лицо уже привязано к взаимодействию.",
-                ),
-                code="contact_counterparty_locked",
-            )
-
     @transaction.atomic
-    def update(self, instance, validated_data):
-        """Повторно проверяет блокировку под блокировкой строки контакта."""
-        locked_instance = ContactPerson.objects.select_for_update().get(pk=instance.pk)
-        self._ensure_counterparty_can_change(
-            instance=locked_instance,
-            university=validated_data.get("university", locked_instance.university),
-            b2c_client=validated_data.get("b2c_client", locked_instance.b2c_client),
-        )
-        return super().update(locked_instance, validated_data)
+    def update(self, instance: ContactPerson, validated_data: dict) -> ContactPerson:
+        """Выключение человека — уход отовсюду: привязки к активным взаимодействиям закрываются, КАМы уведомлены, связи удаляются."""
+        deactivating = instance.is_active and validated_data.get("is_active") is False
+        instance = super().update(instance, validated_data)
+        if deactivating:
+            request = self.context.get("request")
+            contact_affiliation_service.deactivate_contact(contact=instance, actor=getattr(request, "user", None))
+        return instance
+
+
+class PossibleDuplicatesQuerySerializer(serializers.Serializer):
+    """Признаки человека, для которого ищутся возможные дубли."""
+
+    full_name = serializers.CharField(required=False, allow_blank=True, default="")
+    email = serializers.CharField(required=False, allow_blank=True, default="")
+    phone = serializers.CharField(required=False, allow_blank=True, default="")
+    telegram = serializers.CharField(required=False, allow_blank=True, default="")
+    exclude = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        default=None,
+        help_text=_("ID самого контакта — при редактировании"),
+    )
+
+    def validate_telegram(self, value: str) -> str:
+        """Некорректный ник не участвует в поиске."""
+        try:
+            return normalize_telegram(value)
+        except ValueError:
+            return ""

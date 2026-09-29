@@ -12,7 +12,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractBaseUser
 from django.db import transaction
 
-from sova.catalog.models import B2CClient, University
+from sova.catalog.models import B2CClient, Organization
 from sova.interactions.models import Interaction, Responsible
 
 # Метка в комментарии: по ней видно, что взаимодействие тестовое, и считается уже созданное
@@ -31,7 +31,7 @@ class SeedResult:
     """Итог наполнения: что создано и на кого назначено."""
 
     created: int
-    with_universities: int
+    with_organizations: int
     with_b2c_clients: int
     existing: int
     manager: AbstractBaseUser
@@ -45,8 +45,8 @@ def seed_interactions(count: int = DEFAULT_COUNT, manager_email: str = MANAGER_E
     Уже созданные считаются по метке в комментарии, поэтому повторный запуск лишних не плодит.
     Ответственным назначается пользователь с `manager_email`, а если такого нет — первый активный.
     """
-    universities = list(University.objects.filter(is_active=True))
-    if not universities:
+    organizations = list(Organization.objects.filter(is_active=True))
+    if not organizations:
         raise SeedError("В базе нет активных вузов — сначала загрузите справочники.")
 
     manager = _resolve_manager(manager_email=manager_email)
@@ -55,15 +55,15 @@ def seed_interactions(count: int = DEFAULT_COUNT, manager_email: str = MANAGER_E
 
     b2c_clients = list(B2CClient.objects.filter(is_active=True))
     b2c_count = round(count * B2C_RATIO) if b2c_clients else 0
-    university_count = count - b2c_count
+    organization_count = count - b2c_count
 
     existing = Interaction.objects.filter(comment__startswith=SEED_COMMENT_PREFIX).count()
     created = [
         _build_interaction(
             number=number,
-            universities=universities,
+            organizations=organizations,
             b2c_clients=b2c_clients,
-            university_count=university_count,
+            organization_count=organization_count,
         )
         for number in range(existing, count)
     ]
@@ -83,7 +83,7 @@ def seed_interactions(count: int = DEFAULT_COUNT, manager_email: str = MANAGER_E
 
     return SeedResult(
         created=len(created),
-        with_universities=sum(interaction.university_id is not None for interaction in created),
+        with_organizations=sum(interaction.organization_id is not None for interaction in created),
         with_b2c_clients=sum(interaction.b2c_client_id is not None for interaction in created),
         existing=existing,
         manager=manager,
@@ -101,19 +101,19 @@ def _resolve_manager(manager_email: str) -> AbstractBaseUser | None:
 
 def _build_interaction(
     number: int,
-    universities: list[University],
+    organizations: list[Organization],
     b2c_clients: list[B2CClient],
-    university_count: int,
+    organization_count: int,
 ) -> Interaction:
     """Собирает взаимодействие с контрагентом по порядковому номеру: сначала вузы, потом B2C-клиенты."""
-    if number < university_count:
-        university = universities[number % len(universities)]
+    if number < organization_count:
+        organization = organizations[number % len(organizations)]
         return Interaction(
             comment=f"{SEED_COMMENT_PREFIX} Взаимодействие с вузом #{number + 1}",
-            university=university,
+            organization=organization,
         )
 
-    b2c_client = b2c_clients[(number - university_count) % len(b2c_clients)]
+    b2c_client = b2c_clients[(number - organization_count) % len(b2c_clients)]
     return Interaction(
         comment=f"{SEED_COMMENT_PREFIX} Взаимодействие с B2C-клиентом #{number + 1}",
         b2c_client=b2c_client,

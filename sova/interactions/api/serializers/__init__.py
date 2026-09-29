@@ -3,6 +3,7 @@ from sova.interactions.api.serializers.chat import (
     CreateInteractionChatSerializer,
 )
 from sova.interactions.api.serializers.contract import (
+    AttachContractToNewInteractionSerializer,
     ContractSerializer,
     ContractShortSerializer,
     WriteContractSerializer,
@@ -45,6 +46,7 @@ from sova.interactions.api.serializers.responsible import (
 __all__ = [
     "AddChatParticipantsSerializer",
     "AssignResponsibleSerializer",
+    "AttachContractToNewInteractionSerializer",
     "ContractFileSerializer",
     "ContractSerializer",
     "ContractShortSerializer",

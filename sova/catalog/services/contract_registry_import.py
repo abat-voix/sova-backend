@@ -6,14 +6,16 @@ from django.db import transaction
 
 from accounts.models import SystemRole
 from sova.catalog.exceptions import CatalogImportError
-from sova.catalog.models import ContactPerson
 from sova.catalog.schemas import ImportRowWarning
 from sova.catalog.services.catalog_lookup import catalog_lookup_service
+from sova.catalog.services.contact_affiliation import contact_affiliation_service
 from sova.catalog.services.import_file import Rows, import_file_service
 from sova.core.text import text_key
 from sova.interactions.exceptions import AmbiguousManagerError, ManagerNotFoundError
 from sova.interactions.models import Contract, InteractionDirection, InteractionProduct, InteractionProgram
-from sova.interactions.services import license_service, responsible_service
+# Модули, а не пакет sova.interactions.services: пакет импортирует сервис связей каталога (цикл импорта).
+from sova.interactions.services.license import license_service
+from sova.interactions.services.responsible import responsible_service
 
 _MANAGER_FIELD = "manager_full_name"
 _DRAFT_FIELDS = ("draft_status", "draft_comment")
@@ -36,9 +38,9 @@ class _ContractGroup:
 class ContractRegistryImportService:
     """
     Импорт реестра договоров: headless `Contract` (без Interaction) с продуктами, лицензиями,
-    направлениями/программами и ответственными от вуза.
+    направлениями/программами и ответственными от организации.
 
-    Строки группируются по договору (вуз + contract_number без учёта регистра): несколько строк одного
+    Строки группируются по договору (организация + contract_number без учёта регистра): несколько строк одного
     договора — несколько продуктов. Привязка договора к Interaction — отдельно, в `ContractAttachmentService`.
     Реестр нужен только для создания взаимодействий: строки договора, уже привязанного к взаимодействию, не
     загружаются (договор не меняется и не дублируется) — предупреждение в результате импорта.
@@ -99,12 +101,12 @@ class ContractRegistryImportService:
 
     def _collect_groups(self, rows: list[tuple[int, dict]]) -> dict[tuple, _ContractGroup]:
         """
-        Итоговые черновые поля и ФИО менеджеров каждого договора файла: {(вуз, номер): группа строк договора}.
+        Итоговые черновые поля и ФИО менеджеров каждого договора файла: {(организация, номер): группа строк договора}.
 
         Группа договора, уже привязанного к взаимодействию, помечается `attached` — её строки не загружаются.
 
         В значения попадают только колонки, которые есть в файле: первое непустое значение из строк договора,
-        иначе пустая строка (значение будет стёрто). ФИО менеджеров собираются по всем строкам договора. Строки с ошибкой вуза или номера пропускаются — их
+        иначе пустая строка (значение будет стёрто). ФИО менеджеров собираются по всем строкам договора. Строки с ошибкой организации или номера пропускаются — их
         ошибки сообщит основной проход.
         """
         present = [name for name in _DRAFT_FIELDS if rows and name in rows[0][1]]
@@ -121,7 +123,7 @@ class ContractRegistryImportService:
                     contract_number=contract_number,
                     drafts=dict.fromkeys(present, ""),
                     attached=Contract.objects.filter(
-                        university_id=key[0], contract_number__iexact=contract_number, interaction__isnull=False
+                        organization_id=key[0], contract_number__iexact=contract_number, interaction__isnull=False
                     ).exists(),
                 )
             group = groups[key]
@@ -167,12 +169,12 @@ class ContractRegistryImportService:
         return warnings
 
     def _contract_key(self, row: dict) -> tuple:
-        """Ключ договора в файле: найденный вуз + номер без учёта регистра (как поиск договора в БД)."""
-        university = catalog_lookup_service.find_university(raw_value=row["university"])
+        """Ключ договора в файле: найденная организация + номер без учёта регистра (как поиск договора в БД)."""
+        organization = catalog_lookup_service.find_organization(raw_value=row["organization"])
         contract_number = import_file_service.to_text(row["contract_number"])
         if not contract_number:
             raise CatalogImportError("поле contract_number обязательно")
-        return university.pk, text_key(contract_number)
+        return organization.pk, text_key(contract_number)
 
     def _process_row(
         self, row: dict, groups: dict[tuple, _ContractGroup], touched_ids: set
@@ -182,12 +184,12 @@ class ContractRegistryImportService:
 
         Строку договора, уже привязанного к взаимодействию, пропускает без проверок — (None, False).
         """
-        university = catalog_lookup_service.find_university(raw_value=row["university"])
+        organization = catalog_lookup_service.find_organization(raw_value=row["organization"])
         contract_number = import_file_service.to_text(row["contract_number"])
         if not contract_number:
             raise CatalogImportError("поле contract_number обязательно")
 
-        group = groups[(university.pk, text_key(contract_number))]
+        group = groups[(organization.pk, text_key(contract_number))]
         if group.attached:
             return None, False
 
@@ -201,11 +203,11 @@ class ContractRegistryImportService:
         # Блокировка: параллельная привязка договора (она тоже блокирует строку) дождётся конца импорта и не
         # привяжет договор посреди его обновления.
         contract = Contract.objects.select_for_update().filter(
-            contract_number__iexact=contract_number, university=university, interaction__isnull=True
+            contract_number__iexact=contract_number, organization=organization, interaction__isnull=True
         ).first()
         was_created = contract is None
         if was_created:
-            contract = Contract.objects.create(contract_number=contract_number, university=university, **drafts)
+            contract = Contract.objects.create(contract_number=contract_number, organization=organization, **drafts)
         elif contract.pk not in touched_ids:
             # Черновые поля договора записываются один раз — итоговыми значениями по всем его строкам.
             for field, value in drafts.items():
@@ -232,12 +234,21 @@ class ContractRegistryImportService:
             created_by=None,
         )
 
-        for full_name in import_file_service.split_list(row.get("university_contact")):
-            # Ответственный из реестра только дополняет справочник: найденная запись не переименовывается.
-            if not ContactPerson.objects.filter(university=university, full_name__iexact=full_name).exists():
-                ContactPerson.objects.create(university=university, full_name=full_name)
+        for full_name in import_file_service.split_list(row.get("organization_contact")):
+            self._add_organization_contact(organization=organization, full_name=full_name)
 
         return contract, was_created
+
+    def _add_organization_contact(self, organization, full_name: str) -> None:
+        """
+        Ответственный от организации из реестра только дополняет справочник: найденный человек не меняется.
+
+        Тёзка у организации есть (один или несколько) — ничего не создаётся: реестр не про контакты, и без email/телефона
+        выбрать среди тёзок нельзя.
+        """
+        if contact_affiliation_service.contacts_for(organization=organization).filter(full_name__iexact=full_name).exists():
+            return
+        contact_affiliation_service.create_contact(organization=organization, full_name=full_name)
 
     def _check_no_conflict(self, row: dict, contract_number: str, drafts: dict[str, str]) -> None:
         """Непустое черновое поле строки должно совпадать со значением договора из первой заполненной строки."""
