@@ -110,6 +110,8 @@ class WriteOrganizationSerializer(serializers.ModelSerializer):
             "actual_address",
             "actual_same_as_legal",
         )
+        # Длину ИНН проверяет validate_inn с понятным сообщением; стандартное «не более 12 символов» было бы лишним
+        extra_kwargs = {"inn": {"max_length": None}}
 
     def validate(self, attrs: dict) -> dict:
         """Уникальность названия и кода без учёта регистра — 400 вместо ошибки БД."""
