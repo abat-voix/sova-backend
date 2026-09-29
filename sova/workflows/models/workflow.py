@@ -26,7 +26,7 @@ class Workflow(TimeStampedModel):
         max_length=10,
         choices=Audience.choices,
         default=Audience.B2B,
-        verbose_name="Аудитория",
+        verbose_name="Целевая аудитория процесса",
     )
     description = models.TextField(
         blank=True,

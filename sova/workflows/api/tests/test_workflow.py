@@ -87,6 +87,23 @@ class WorkflowApiTestCase(BaseApiTestMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("code", response.data)
 
+    def test_add_allows_duplicate_audience(self) -> None:
+        """Обычные workflow одной аудитории могут сосуществовать."""
+        WorkflowFactory(audience=Audience.B2B)
+
+        response = self.client.post(
+            path=self.list_url,
+            data={
+                "name": "Ещё один B2B workflow",
+                "code": "another-b2b-workflow",
+                "audience": Audience.B2B,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
+        self.assertEqual(response.data["audience"], Audience.B2B)
+
     def test_list_counts_stages(self) -> None:
         """stages_count равен числу этапов workflow."""
         workflow = WorkflowFactory()
