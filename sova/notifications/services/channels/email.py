@@ -15,12 +15,12 @@ class EmailChannelSender(NotificationChannelSender):
     """Отправка уведомления на email через настроенный EMAIL_BACKEND."""
 
     def send(self, target: str, message: Message) -> bool:
-        """Отправляет message на email target. Тема письма — первая строка message."""
+        """Отправляет message на email target. Тема письма — первая строка message, ссылка — в конце письма."""
         subject = message.text.splitlines()[0][:EMAIL_SUBJECT_MAX_LENGTH] if message.text else ""
         try:
             send_mail(
                 subject=subject,
-                message=message.text,
+                message=self._text_with_link(message),
                 from_email=settings.DEFAULT_FROM_EMAIL,
                 recipient_list=[target],
             )

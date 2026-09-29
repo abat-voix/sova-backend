@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 
 from sova.notifications.enum import NotifyEvent, NotifyType
-from sova.notifications.services.links import interaction_link
+from sova.notifications.services.links import absolute_link, interaction_link
 from sova.processes.services.deadlines import DeadlineItem
 
 # Порядок блоков сводки: от крупного к мелкому
@@ -25,7 +25,11 @@ class DeadlineMessageService:
     """Тексты и ссылки уведомлений о сроках: сводка на получателя и отдельное сообщение о пункте."""
 
     def render_digest(self, items: list[DeadlineItem], now: datetime, is_branded: bool = True) -> str:
-        """Сводка на получателя; первая строка — тема письма (без префикса «СОВА:» при is_branded=False)."""
+        """
+        Сводка на получателя; первая строка — тема письма (без префикса «СОВА:» при is_branded=False).
+
+        Сводка уходит только во внешние каналы, поэтому под каждым пунктом — его полная ссылка, если она есть.
+        """
         overdue = [item for item in items if item.event == NotifyEvent.OVERDUE]
         reminders = [item for item in items if item.event == NotifyEvent.REMINDER]
         lines = [self._subject(f"сроки — просрочено {len(overdue)}, скоро срок {len(reminders)}", is_branded)]
@@ -33,12 +37,13 @@ class DeadlineMessageService:
             group = [item for item in overdue if item.notify_type == kind]
             if group:
                 lines += ["", f"{OVERDUE_TITLES[kind]}:"]
-                lines += [f"- {self._describe(item)}: {self._term(item, now)}" for item in group]
+                for item in group:
+                    lines += self._with_link(item, f"- {self._describe(item)}: {self._term(item, now)}")
         if reminders:
             lines += ["", "Скоро срок:"]
-            lines += [
-                f"- {self._describe(item)} ({TYPE_LABELS[item.notify_type]}): {self._term(item, now)}" for item in reminders
-            ]
+            for item in reminders:
+                line = f"- {self._describe(item)} ({TYPE_LABELS[item.notify_type]}): {self._term(item, now)}"
+                lines += self._with_link(item, line)
         return "\n".join(lines)
 
     def render_single(self, item: DeadlineItem, now: datetime, is_branded: bool = True) -> str:
@@ -57,6 +62,11 @@ class DeadlineMessageService:
             stage_id=item.object_id if item.notify_type == NotifyType.STAGE_DEADLINE else None,
             action_id=item.object_id if item.notify_type == NotifyType.ACTION_DEADLINE else None,
         )
+
+    def _with_link(self, item: DeadlineItem, line: str) -> list[str]:
+        """Строка пункта сводки и, если есть, его полная ссылка строкой ниже с отступом."""
+        link = absolute_link(self.link(item))
+        return [line, f"  {link}"] if link else [line]
 
     def _subject(self, subject: str, is_branded: bool) -> str:
         """Тема: «СОВА: …» для внешних каналов, где важно видеть отправителя; в интерфейсе — с заглавной буквы."""
