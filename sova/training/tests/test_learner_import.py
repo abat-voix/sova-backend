@@ -13,6 +13,7 @@ from sova.catalog.exceptions import CatalogImportError, CatalogImportRowsError
 from sova.catalog.models import CatalogImportMapping
 from sova.catalog.services import catalog_import_mapping_service
 from sova.core.tests.factories import UserFactory
+from sova.interactions.services import responsible_service
 from sova.training.enum import EducationLevel, Gender, TrainingStreamStatus
 from sova.training.exceptions import TrainingError
 from sova.training.models import Learner, TrainingApplication
@@ -273,14 +274,75 @@ class LearnerImportApiTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(response.data["code"], "stream_cancelled")
 
-    def test_only_platform_admin(self) -> None:
+    def test_kam_and_head_can_upload(self) -> None:
+        for role in (SystemRole.KAM, SystemRole.HEAD):
+            with self.subTest(role=role):
+                user = UserFactory()
+                UserRole.objects.create(user=user, role=role)
+                self.client.force_authenticate(user)
+
+                response = self.client.post(self.url, {"file": xlsx(FILE_ROWS)}, format="multipart")
+
+                self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+
+    def test_kam_cannot_upload_into_invisible_stream(self) -> None:
+        kam = UserFactory()
+        UserRole.objects.create(user=kam, role=SystemRole.KAM)
+        self.client.force_authenticate(kam)
+        stream = TrainingStreamFactory()
+        foreign_kam = UserFactory()
+        UserRole.objects.create(user=foreign_kam, role=SystemRole.KAM)
+        responsible_service.assign(
+            interaction=stream.interaction_program.interaction, manager=foreign_kam, assigned_by=None
+        )
+
+        response = self.client.post(self.url, {"file": xlsx(FILE_ROWS), "stream": str(stream.pk)}, format="multipart")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("stream", response.data)
+
+    def test_observer_forbidden(self) -> None:
+        observer = UserFactory()
+        UserRole.objects.create(user=observer, role=SystemRole.OBSERVER)
+        self.client.force_authenticate(observer)
+
+        responses = [
+            self.client.post(self.url, {"file": xlsx(FILE_ROWS)}, format="multipart"),
+            self.client.post(f"{self.url}headers/", {"file": xlsx(FILE_ROWS)}, format="multipart"),
+            self.client.get(f"{self.url}mapping/"),
+            self.client.put(f"{self.url}mapping/", {"mappings": MAPPING}, format="json"),
+        ]
+
+        self.assertEqual({response.status_code for response in responses}, {status.HTTP_403_FORBIDDEN})
+
+    def test_kam_reads_headers(self) -> None:
         kam = UserFactory()
         UserRole.objects.create(user=kam, role=SystemRole.KAM)
         self.client.force_authenticate(kam)
 
-        response = self.client.post(self.url, {"file": xlsx(FILE_ROWS)}, format="multipart")
+        response = self.client.post(f"{self.url}headers/", {"file": xlsx(FILE_ROWS)}, format="multipart")
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        self.assertEqual(response.data["headers"], HEADERS)
+
+    def test_kam_reads_and_replaces_mapping(self) -> None:
+        kam = UserFactory()
+        UserRole.objects.create(user=kam, role=SystemRole.KAM)
+        self.client.force_authenticate(kam)
+
+        response = self.client.put(
+            f"{self.url}mapping/", {"mappings": {**MAPPING, "last_name": "Фамилия слушателя"}}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        fields = {item["target_field"]: item["source_column"] for item in self.client.get(f"{self.url}mapping/").data}
+        self.assertEqual(fields["last_name"], "Фамилия слушателя")
+
+    def test_mapping_errors_by_field(self) -> None:
+        response = self.client.put(f"{self.url}mapping/", {"mappings": {"first_name": "Имя"}}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("last_name", response.data["mappings"])
 
     def test_catalog_import_does_not_accept_learner_type(self) -> None:
         response = self.client.post(

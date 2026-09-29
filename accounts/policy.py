@@ -75,6 +75,8 @@ class Action:
     # Потоки обучения, заявки и оплаты — видимость по взаимодействию программы потока
     TRAINING_READ = "training.read"
     TRAINING_UPDATE = "training.update"
+    # Загрузка файла «Пользователи» с обучающимися
+    TRAINING_IMPORT = "training.import"
     # Полные персональные данные обучающихся (паспорт, СНИЛС, адрес, диплом) — только администратор платформы
     TRAINING_PERSONAL_DATA_READ = "training.personal_data.read"
     TRAINING_PERSONAL_DATA_UPDATE = "training.personal_data.update"
@@ -130,6 +132,7 @@ _TRAINING_WORK = frozenset(
     {
         Action.TRAINING_READ,
         Action.TRAINING_UPDATE,
+        Action.TRAINING_IMPORT,
         # ПД обучающихся нужны в работе всем рабочим ролям; каждый просмотр и изменение — в журнале
         Action.TRAINING_PERSONAL_DATA_READ,
         Action.TRAINING_PERSONAL_DATA_UPDATE,
