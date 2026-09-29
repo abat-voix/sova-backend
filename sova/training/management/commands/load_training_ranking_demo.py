@@ -1,4 +1,5 @@
 import datetime
+from dataclasses import replace
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
@@ -15,8 +16,9 @@ from sova.interactions.models import (
 )
 from sova.processes.services import workflow_engine_service
 from sova.training.enum import TrainingStreamStatus
-from sova.training.models import Learner
+from sova.training.models import Learner, TrainingInstructor, TrainingStream
 from sova.training.services.application import training_application_service
+from sova.training.services.stream import CLOSED_STREAM_STATUSES
 from sova.training.services.stream import training_stream_service
 from sova.workflows.enum import Audience
 from sova.workflows.models import Workflow
@@ -51,20 +53,49 @@ B2C_PLAN: tuple[tuple[str, tuple[tuple[int, int, int], ...]], ...] = (
 LAST_NAMES = ("Иванов", "Петров", "Сидоров", "Кузнецов", "Смирнов", "Попов", "Волков", "Соколов", "Лебедев", "Козлов")
 FIRST_NAMES = ("Алексей", "Мария", "Дмитрий", "Анна", "Сергей", "Елена", "Илья", "Ольга", "Никита", "Татьяна")
 FEMALE_FIRST_NAMES = {"Мария", "Анна", "Елена", "Ольга", "Татьяна"}
+INSTRUCTOR_NAMES = (
+    ("Соколова", "Мария", "Андреевна"),
+    ("Волков", "Алексей", "Сергеевич"),
+    ("Морозова", "Елена", "Викторовна"),
+    ("Лебедев", "Дмитрий", "Игоревич"),
+    ("Орлова", "Анна", "Павловна"),
+)
 
 
 class Command(BaseCommand):
     help = (
-        "Демо-данные для проверки рейтинга каталога: базовые workflow для организаций и B2C (B2C — копия B2B), "
+        "Демо-данные для проверки рейтинга каталога: отдельные базовые workflow для вузов и физлиц, "
         "взаимодействия с вузами и B2C-клиентами (физлицами) по разным программам и направлениям с подписанным договором и "
         "запущенным процессом, потоки обучения и обучающиеся — оплатившие (зачисленные) и нет. "
-        "Повторный запуск ничего не создаёт, если демо-данные уже есть."
+        "До пяти преподавателей с программами и назначениями на потоки. "
+        "Повторный запуск дополняет преподавателей, не дублируя демо-данные."
     )
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--refresh-workflows", action="store_true",
+            help="Создать шаблоны base-b2b-v2/base-b2c-v2 и назначить базовыми. Старые процессы сохраняются.",
+        )
 
     @transaction.atomic
     def handle(self, *args, **options):
+        if options["refresh_workflows"]:
+            self.manager = self._manager()
+            for spec in (BASE_B2B_PRESET, BASE_B2C_PRESET):
+                version = replace(spec, code=f"{spec.code}-v2")
+                workflow = Workflow.objects.filter(code=version.code).first()
+                if workflow is not None and (workflow.audience != spec.audience or not workflow.is_active):
+                    raise CommandError(f"Шаблон {version.code} имеет другую аудиторию или неактивен.")
+                if workflow is None:
+                    workflow = workflow_template_service.create(spec=version, created_by=self.manager)
+                Workflow.objects.filter(audience=spec.audience, is_base=True).exclude(pk=workflow.pk).update(is_base=False)
+                workflow.is_base = True
+                workflow.save(update_fields=["is_base", "updated_at"])
+                self.stdout.write(self.style.SUCCESS(f"Базовый шаблон: {workflow.name} ({workflow.code})."))
         if Interaction.objects.filter(comment__startswith=DEMO_PREFIX).exists():
-            self.stdout.write(self.style.WARNING("Демо-данные рейтинга уже созданы — ничего не делаю."))
+            self.manager = self._manager()
+            self._instructors()
+            self.stdout.write(self.style.WARNING("Демо-данные рейтинга уже созданы; существующие процессы сохранены."))
             return
         programs = list(
             Program.objects.filter(is_active=True, direction__is_active=True)
@@ -87,10 +118,47 @@ class Command(BaseCommand):
             client, _ = B2CClient.objects.get_or_create(full_name=full_name)
             self._interaction(workflows[Audience.B2C], plan, b2c_client=client)
 
+        self._instructors()
+
         self.stdout.write(self.style.SUCCESS(
             f"Взаимодействий: {len(ORGANIZATION_PLAN)} с вузами и {len(B2C_PLAN)} с B2C-клиентами, "
             f"обучающихся: {self.learner_number}. Ответственный: {self.manager}."
         ))
+
+    def _instructors(self):
+        """Три преподавателя вузов и два B2C; повторный запуск дополняет существующее демо."""
+        interactions = Interaction.objects.filter(comment__startswith=DEMO_PREFIX).order_by("sequence_number")
+        targets = list(interactions.filter(organization__isnull=False)[:3])
+        targets += list(interactions.filter(b2c_client__isnull=False)[:2])
+        created_count = 0
+        for number, (interaction, names) in enumerate(zip(targets, INSTRUCTOR_NAMES), start=1):
+            instructor, created = TrainingInstructor.objects.get_or_create(
+                email=f"ranking-demo-instructor-{number}@example.test",
+                defaults={
+                    "last_name": names[0], "first_name": names[1], "middle_name": names[2],
+                    "phone": f"+79980000{number:03d}",
+                    "organization_id": interaction.organization_id,
+                    "b2c_client_id": interaction.b2c_client_id,
+                    "department": "Учебный центр", "position": "Преподаватель",
+                    "teaching_experience_years": 3 + number * 2,
+                    "education": "Высшее образование, информационные технологии",
+                    "comment": f"{DEMO_PREFIX} Вымышленный преподаватель для демонстрации.",
+                },
+            )
+            created_count += created
+            streams = TrainingStream.objects.filter(
+                interaction_program__interaction__comment__startswith=DEMO_PREFIX,
+                interaction_program__interaction__organization_id=instructor.organization_id,
+                interaction_program__interaction__b2c_client_id=instructor.b2c_client_id,
+            ).select_related("interaction_program__program")
+            for stream in streams:
+                program = stream.interaction_program.program
+                instructor.programs.add(program)
+                instructor.directions.add(program.direction_id)
+                if (instructor.is_active and stream.status not in CLOSED_STREAM_STATUSES
+                        and not stream.instructor_links.filter(instructor=instructor).exists()):
+                    training_stream_service.assign_instructor(stream=stream, instructor=instructor, user=self.manager)
+        self.stdout.write(self.style.SUCCESS(f"Демо-преподаватели: создано {created_count}, обработано {len(targets)} (до 5)."))
 
     def _manager(self):
         """Ответственный за демо-взаимодействия: КАМ по почте, иначе первый активный пользователь."""
@@ -101,7 +169,7 @@ class Command(BaseCommand):
         return manager
 
     def _workflow(self, audience: str) -> Workflow:
-        """Базовый workflow аудитории; если его нет — собирается по пресету (для B2C — копия B2B)."""
+        """Базовый workflow аудитории; если его нет — собирается по её собственному пресету."""
         workflow = Workflow.objects.filter(audience=audience, is_base=True, is_active=True).first()
         if workflow is not None:
             return workflow

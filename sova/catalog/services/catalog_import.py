@@ -48,9 +48,18 @@ class CatalogImportService:
         )
         return self._run_loader(catalog_type=catalog_type, rows=rows, user=user)
 
-    def import_canonical_file(self, catalog_type: str, source: ImportSource) -> CatalogImportResult:
-        """Импорт файла, заголовки которого уже совпадают с каноническими ключами (CLI loaddata)."""
-        rows = import_file_service.read_canonical_rows(source=source, required=CATALOG_IMPORT_FIELDS[catalog_type].required)
+    def import_canonical_file(
+        self,
+        catalog_type: str,
+        source: ImportSource,
+        header_aliases: dict[str, str] | None = None,
+    ) -> CatalogImportResult:
+        """Импорт файла с каноническими заголовками или предопределёнными алиасами CLI."""
+        rows = import_file_service.read_canonical_rows(
+            source=source,
+            required=CATALOG_IMPORT_FIELDS[catalog_type].required,
+            header_aliases=header_aliases,
+        )
         return self._run_loader(catalog_type=catalog_type, rows=rows)
 
     @transaction.atomic
@@ -160,8 +169,8 @@ class CatalogImportService:
                     "country_code": import_file_service.to_text(row["country_code"]).upper(),
                     "region": import_file_service.to_text(row["region"]),
                     "city": import_file_service.to_text(row["city"]),
-                    "lat": import_file_service.to_decimal(row["lat"]),
-                    "lon": import_file_service.to_decimal(row["lon"]),
+                    "lat": import_file_service.to_coordinate(row["lat"]),
+                    "lon": import_file_service.to_coordinate(row["lon"]),
                 },
             )
         except ValidationError as error:

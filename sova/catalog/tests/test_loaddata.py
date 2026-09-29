@@ -108,6 +108,22 @@ class LoadVendorsCommandTestCase(TestCase):
             self.assertFalse(vendor.is_active)
             self.assertEqual(Vendor.objects.count(), 1)
 
+    def test_loads_reference_headers_with_vendor_contacts(self) -> None:
+        """Штатный справочник вендоров использует понятные русские заголовки."""
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "vendors.xlsx"
+            _write_workbook(
+                source,
+                ("Компания", "Продукт", "ФИО", "Телефон", "Почта", "Способ связи"),
+                ("ООО «Базис»", "«Базис Dynamix»", "Иванов Иван", "+7 900 111-22-33", "ivanov@example.ru", "Почта"),
+            )
+
+            call_command("loaddata", str(source), stdout=StringIO())
+
+            vendor = Vendor.objects.get(name="ООО «Базис»")
+            self.assertTrue(vendor.products.filter(name="Базис Dynamix").exists())
+            self.assertTrue(vendor.contact_links.filter(contact__full_name="Иванов Иван").exists())
+
 
 class LoadDirectionsCommandTestCase(TestCase):
     """Тесты загрузки справочника направлений из XLSX."""

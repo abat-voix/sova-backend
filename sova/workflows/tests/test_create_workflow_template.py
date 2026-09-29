@@ -123,10 +123,12 @@ class CreateWorkflowTemplateCommandTest(TestCase):
         self.assertEqual(WorkflowInstance.objects.filter(workflow=workflow).count(), 1)
 
     def test_command_creates_template_for_b2c_audience(self) -> None:
-        """Аудиторию шаблона можно сменить, не меняя граф."""
-        self.run_command("--audience=b2c", "--code=base-b2c")
+        """B2C выбирает отдельный граф и собственный код по умолчанию."""
+        self.run_command("--audience=b2c")
 
         workflow = Workflow.objects.get(code="base-b2c")
         # Проверяем аудиторию и сохранённый граф
         self.assertEqual(workflow.audience, Audience.B2C)
         self.assertEqual(WorkflowStage.objects.filter(workflow=workflow).count(), 5)
+        self.assertTrue(workflow.workflow_stages.filter(name="Зачисление и оплата").exists())
+        self.assertFalse(workflow.workflow_stages.filter(name="Поставка ПО").exists())

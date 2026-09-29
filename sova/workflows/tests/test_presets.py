@@ -15,7 +15,9 @@ from sova.processes.enum import (
 from sova.processes.models import ActionInstance, StageInstance
 from sova.processes.services import workflow_engine_service
 from sova.workflows.models import ActionOutcome, WorkflowAction
-from sova.workflows.presets import BASE_B2B_PRESET
+from sova.workflows.presets import BASE_B2B_PRESET, BASE_B2C_PRESET
+from sova.processes.action_features.registry import FEATURE_HANDLERS
+from sova.catalog.tests.factories import B2CClientFactory
 from sova.workflows.services import workflow_template_service
 
 
@@ -54,7 +56,7 @@ class BaseB2BPresetTest(TestCase):
         """Исход «Нужны правки» запускает доработку, которая сама по себе не стартует."""
         actions = {action.name: action for stage in BASE_B2B_PRESET.stages for action in stage.actions}
         revision = next(
-            outcome for outcome in actions["Согласовать документы"].outcomes if outcome.starts is not None
+            outcome for outcome in actions["Согласовать документы"].outcomes if outcome.code == "revision"
         )
 
         # Проверяем ветвление и то, что доработка ждёт перехода
@@ -211,6 +213,11 @@ class BaseB2BPresetProcessTest(TestCase):
             self.action_instances(process, "Доработать документы").first().status,
             ActionInstanceStatus.IN_PROGRESS,
         )
+        self.assertEqual(self.action_instances(process, "Подписать договор").first().status,
+                         ActionInstanceStatus.PENDING)
+        self.complete(process, "Доработать документы")
+        self.assertEqual(self.action_instances(process, "Подписать договор").first().status,
+                         ActionInstanceStatus.IN_PROGRESS)
         self.assertEqual(
             StageInstance.objects.get(
                 workflow_instance=process,
@@ -218,3 +225,52 @@ class BaseB2BPresetProcessTest(TestCase):
             ).status,
             StageInstanceStatus.IN_PROGRESS,
         )
+
+
+class AudiencePresetsTest(TestCase):
+    def test_all_features_have_executable_handlers(self):
+        for spec in (BASE_B2B_PRESET, BASE_B2C_PRESET):
+            for stage in spec.stages:
+                for action in stage.actions:
+                    for feature in action.features:
+                        self.assertIn(feature.code, FEATURE_HANDLERS)
+
+    def test_b2c_completes_without_products_or_organization(self):
+        user = UserFactory()
+        workflow = workflow_template_service.create(spec=BASE_B2C_PRESET)
+        interaction = InteractionFactory(organization=None, b2c_client=B2CClientFactory())
+        InteractionProgramFactory(interaction=interaction)
+        process = workflow_engine_service.start(workflow=workflow, interaction=interaction, started_by=user)
+        for _ in range(30):
+            active = list(ActionInstance.objects.filter(
+                stage_instance__workflow_instance=process, status=ActionInstanceStatus.IN_PROGRESS,
+            ))
+            if not active:
+                break
+            for instance in active:
+                workflow_engine_service.complete_action(
+                    action_instance=instance,
+                    outcome=ActionOutcome.objects.get(action=instance.action, code="done"),
+                    comment="Проверено", completed_by=user,
+                )
+        process.refresh_from_db()
+        self.assertEqual(process.status, WorkflowInstanceStatus.COMPLETED)
+        self.assertFalse(workflow.workflow_stages.filter(type=StageInstanceContextType.PRODUCT).exists())
+
+    def test_refresh_preserves_old_demo_process_and_is_repeatable(self):
+        from django.core.management import call_command
+        from io import StringIO
+        from sova.workflows.models import Workflow
+
+        user = UserFactory()
+        old = workflow_template_service.create(spec=BASE_B2B_PRESET, is_base=True)
+        interaction = InteractionFactory(comment="[ranking-demo] Existing")
+        process = workflow_engine_service.start(workflow=old, interaction=interaction, started_by=user)
+        for _ in range(2):
+            call_command("load_training_ranking_demo", "--refresh-workflows", stdout=StringIO())
+        process.refresh_from_db()
+        old.refresh_from_db()
+        self.assertEqual(process.workflow_id, old.pk)
+        self.assertFalse(old.is_base)
+        self.assertCountEqual(Workflow.objects.filter(is_base=True).values_list("code", flat=True),
+                              ["base-b2b-v2", "base-b2c-v2"])

@@ -16,7 +16,7 @@ from sova.workflows.models import (
     WorkflowAction,
     WorkflowStage,
 )
-from sova.workflows.presets import BASE_B2B_PRESET
+from sova.workflows.presets import BASE_B2B_PRESET, BASE_B2C_PRESET
 from sova.workflows.schemas import WorkflowSpec
 from sova.workflows.services import WorkflowTemplateError, workflow_template_service
 
@@ -30,7 +30,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--code",
-            default=BASE_B2B_PRESET.code,
+            default=None,
             help=f"Код шаблона. По умолчанию {BASE_B2B_PRESET.code}.",
         )
         parser.add_argument(
@@ -79,12 +79,13 @@ class Command(BaseCommand):
 
     def _build_spec(self, options: dict) -> WorkflowSpec:
         """Применяет переопределения командной строки к декларации шаблона."""
-        overrides = {"code": options["code"]}
+        preset = BASE_B2C_PRESET if options["audience"] == Audience.B2C else BASE_B2B_PRESET
+        overrides = {"code": options["code"] or preset.code}
         if options["name"] is not None:
             overrides["name"] = options["name"]
         if options["audience"] is not None:
             overrides["audience"] = options["audience"]
-        return replace(BASE_B2B_PRESET, **overrides)
+        return replace(preset, **overrides)
 
     def _resolve_user(self, username: str | None) -> AbstractBaseUser | None:
         """Находит пользователя по имени: без него шаблон создаётся без автора."""

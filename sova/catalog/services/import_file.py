@@ -37,6 +37,7 @@ _CONTACT_CHANNEL_SYNONYMS = {
 }
 _FALSE_VALUES = {"0", "false", "нет", "no"}
 _DATE_FORMATS = ("%d.%m.%Y", "%Y-%m-%d")
+_COORDINATE_QUANTUM = Decimal("0.000001")
 
 # Сигнатуры по первым байтам: xlsx — zip-архив, xls — OLE-контейнер (Excel 97+) или «голый» BIFF2–4.
 _XLSX_SIGNATURE = b"PK\x03\x04"
@@ -81,11 +82,18 @@ class ImportFileService:
             raise CatalogImportError(f"В файле {self._file_name(source=source)} нет заголовков в первой строке.")
         return result
 
-    def read_canonical_rows(self, source: ImportSource, required: set[str]) -> Rows:
-        """Читает файл, заголовки которого уже являются каноническими ключами (без маппинга)."""
+    def read_canonical_rows(
+        self,
+        source: ImportSource,
+        required: set[str],
+        header_aliases: dict[str, str] | None = None,
+    ) -> Rows:
+        """Читает файл с каноническими заголовками или предопределёнными алиасами CLI."""
         headers, raw_rows = self._read_raw_rows(source=source)
-        self._require_fields(present=set(headers), required=required, context=self._file_name(source=source))
-        return raw_rows
+        header_aliases = header_aliases or {}
+        header_to_key = {header: header_aliases.get(header, header) for header in headers}
+        self._require_fields(present=set(header_to_key.values()), required=required, context=self._file_name(source=source))
+        return self._translate_rows(raw_rows=raw_rows, header_to_key=header_to_key)
 
     def process_rows(self, rows: Rows, handler: Callable[[dict], RowResult]) -> list[RowResult]:
         """
@@ -141,6 +149,11 @@ class ImportFileService:
         if value in (None, ""):
             return None
         return self._parse_number(value=value)
+
+    def to_coordinate(self, value) -> Decimal | None:
+        """Координата для карты, округлённая до точности полей адреса."""
+        coordinate = self.to_decimal(value)
+        return coordinate.quantize(_COORDINATE_QUANTUM) if coordinate is not None else None
 
     def to_positive_int(self, value) -> int:
         """Целое неотрицательное число; пустая ячейка — 0."""

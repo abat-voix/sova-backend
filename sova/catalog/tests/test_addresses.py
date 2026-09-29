@@ -137,6 +137,27 @@ class OrganizationMapTestCase(APITestCase):
 class OrganizationLocationImportTestCase(TestCase):
     """Справочник обновляет местоположение в фактическом адресе, не трогая внесённые вручную улицу и дом."""
 
+    def test_import_rounds_coordinates_to_six_decimal_places(self) -> None:
+        """Координаты из OpenAlex могут быть точнее, чем поле карты в БД."""
+        catalog_import_service.load_organizations(
+            iter(
+                [
+                    (
+                        2,
+                        organization_row(
+                            city="Новосибирск",
+                            lat="55.04150009155273",
+                            lon="82.93460083007812",
+                        ),
+                    ),
+                ],
+            ),
+        )
+
+        address = OrganizationAddress.objects.get()
+        self.assertEqual(address.lat, Decimal("55.041500"))
+        self.assertEqual(address.lon, Decimal("82.934601"))
+
     def test_import_keeps_street(self) -> None:
         catalog_import_service.load_organizations(iter([(2, organization_row(city="Тюмень", lat="57.1", lon="65.5"))]))
         address = OrganizationAddress.objects.get()
