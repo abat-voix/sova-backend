@@ -7,32 +7,39 @@ from rest_framework.response import Response
 from accounts.policy import Action
 from sova.catalog.api.serializers import CatalogImportErrorSerializer
 from sova.catalog.api.views.mixins import ImportResponseMixin
-from sova.core.api.views import SovaReadOnlyViewSet
+from sova.core.api.views import SovaBaseViewSet
 from sova.training.api import filters, serializers
 from sova.training.models import Learner, LearnerPersonalData, TrainingApplicationLearner
 from sova.training.services.enrollment import training_enrollment_service
+from sova.training.services.learner import learner_service
 from sova.training.services.learner_import import learner_import_service
 from sova.training.services.personal_data_access import personal_data_access_service
 from sova.training.services.visibility import visible_applications
 
 
-class LearnerViewSet(ImportResponseMixin, SovaReadOnlyViewSet):
+class LearnerViewSet(ImportResponseMixin, SovaBaseViewSet):
     """
-    Обучающиеся. Приходят только из файла «Пользователи» (`import/`), вручную не создаются и не меняются.
+    Обучающиеся: из файла «Пользователи» (`import/`) и вручную — КАМ, руководитель, администратор платформы.
 
-    Email и телефон в ответах замаскированы; полные персональные данные (`personal-data/`) — только администратору
-    платформы, каждая выдача пишется в журнал доступа.
+    Удаления нет — карточку выключают (`is_active`). Email и телефон в списках замаскированы; полные персональные
+    данные — `personal-data/`, каждый просмотр и каждое изменение пишутся в журнал доступа.
     """
 
+    http_method_names = ("get", "post", "patch", "head", "options")
     read_serializer_class = serializers.LearnerSerializer
-    serializer_class = serializers.LearnerSerializer
+    serializer_class = serializers.WriteLearnerSerializer
     filterset_class = filters.LearnerFilter
     search_fields = ("last_name", "first_name", "middle_name")
     ordering_fields = ("last_name", "created_at")
     policy_actions = {
         "list": Action.TRAINING_READ,
         "retrieve": Action.TRAINING_READ,
-        "personal_data": Action.TRAINING_PERSONAL_DATA_READ,
+        "create": Action.TRAINING_UPDATE,
+        "partial_update": Action.TRAINING_UPDATE,
+        "personal_data": {
+            "GET": Action.TRAINING_PERSONAL_DATA_READ,
+            "PATCH": Action.TRAINING_PERSONAL_DATA_UPDATE,
+        },
         "import_file": Action.CATALOG_IMPORT,
     }
 
@@ -50,16 +57,36 @@ class LearnerViewSet(ImportResponseMixin, SovaReadOnlyViewSet):
             return serializers.LearnerDetailSerializer
         return super().get_serializer_class()
 
-    @extend_schema(request=None, responses=serializers.LearnerPersonalDataSerializer)
+    def perform_create(self, serializer) -> None:
+        serializer.instance = learner_service.create(**serializer.validated_data)
+
+    def perform_update(self, serializer) -> None:
+        serializer.instance = learner_service.update(serializer.instance, **serializer.validated_data)
+
+    @extend_schema(methods=["GET"], request=None, responses=serializers.LearnerPersonalDataSerializer)
+    @extend_schema(
+        methods=["PATCH"],
+        request=serializers.WriteLearnerPersonalDataSerializer,
+        responses=serializers.LearnerPersonalDataSerializer,
+    )
     @action(
-        methods=["GET"],
+        methods=["GET", "PATCH"],
         detail=True,
         url_path="personal-data",
         serializer_class=serializers.LearnerPersonalDataSerializer,
     )
     def personal_data(self, request, pk=None) -> Response:
-        """Полные персональные данные обучающегося; выдача пишется в журнал доступа."""
+        """Полные персональные данные: просмотр и правка; каждый просмотр и изменение пишутся в журнал доступа."""
         learner = self.get_object()
+        if request.method == "PATCH":
+            serializer = serializers.WriteLearnerPersonalDataSerializer(data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            data = learner_service.update_personal_data(
+                learner=learner, data=serializer.validated_data, user=request.user, request=request
+            )
+            # В ответе — все ПД, а не только изменённые поля: их выдача — такой же просмотр
+            personal_data_access_service.log_access(user=request.user, learner=learner, request=request)
+            return Response(self.get_serializer(data).data)
         data = LearnerPersonalData.objects.filter(learner=learner).first() or LearnerPersonalData(learner=learner)
         personal_data_access_service.log_access(user=request.user, learner=learner, request=request)
         return Response(self.get_serializer(data).data)

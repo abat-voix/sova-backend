@@ -3,6 +3,7 @@ from django.db import transaction
 from sova.training.enum import TrainingApplicationStatus, TrainingStreamStatus
 from sova.training.exceptions import TrainingError
 from sova.training.models import Learner, TrainingApplication, TrainingApplicationLearner, TrainingStream
+from sova.training.services.learner import learner_service
 
 
 class TrainingApplicationService:
@@ -45,6 +46,17 @@ class TrainingApplicationService:
         if application.participants.filter(learner=learner).exists():
             raise TrainingError("learner_already_in_application", "Обучающийся уже есть в заявке.")
         return TrainingApplicationLearner.objects.create(application=application, learner=learner, is_paid=is_paid)
+
+    @transaction.atomic
+    def add_new_learner(
+        self,
+        application: TrainingApplication,
+        learner_fields: dict,
+        is_paid: bool = False,
+    ) -> TrainingApplicationLearner:
+        """Создаёт обучающегося и добавляет в заявку одной транзакцией: отказ заявки откатывает и человека."""
+        learner = learner_service.create(**learner_fields)
+        return self.add_learner(application=application, learner=learner, is_paid=is_paid)
 
     def remove_learner(self, application: TrainingApplication, learner: Learner) -> None:
         """Убирает обучающегося из заявки; оплатившего — не убирает."""

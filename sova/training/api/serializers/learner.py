@@ -2,6 +2,7 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 from sova.core.masks import mask_email, mask_phone
+from sova.core.validators import validate_phone
 from sova.training.models import Learner, TrainingApplicationLearner
 
 
@@ -54,3 +55,23 @@ class LearnerDetailSerializer(LearnerSerializer):
 
     class Meta(LearnerSerializer.Meta):
         fields = (*LearnerSerializer.Meta.fields, "participations")
+
+
+class WriteLearnerSerializer(serializers.ModelSerializer):
+    """Обучающийся — создание и правка карточки; нужен email или телефон."""
+
+    email = serializers.EmailField(required=False, allow_blank=True, label=_("Email"))
+    phone = serializers.CharField(
+        required=False, allow_blank=True, validators=[validate_phone], label=_("Телефон")
+    )
+
+    class Meta:
+        model = Learner
+        fields = ("id", "last_name", "first_name", "middle_name", "email", "phone", "is_active")
+
+    def validate(self, attrs: dict) -> dict:
+        email = attrs.get("email", getattr(self.instance, "email", ""))
+        phone = attrs.get("phone", getattr(self.instance, "phone", ""))
+        if not email and not phone:
+            raise serializers.ValidationError({"email": [_("Нужен email или телефон обучающегося.")]})
+        return attrs

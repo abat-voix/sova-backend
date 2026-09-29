@@ -63,3 +63,4 @@ class EducationLevel(TextChoices):
 class PersonalDataAccessAction(TextChoices):
     READ = "read", "Просмотр"
     EXPORT = "export", "Выгрузка"
+    UPDATE = "update", "Изменение"
