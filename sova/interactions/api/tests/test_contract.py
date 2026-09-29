@@ -231,6 +231,28 @@ class ContractApiTestCase(TemporaryMediaMixin, BaseApiTestMixin, APITestCase):
             [str(signed.pk)],
         )
 
+    def test_filter_is_attached(self) -> None:
+        """Фильтр is_attached=false возвращает только договоры реестра без взаимодействия."""
+        attached = ContractFactory()
+        headless = ContractFactory(interaction=None, organization=attached.interaction.organization)
+
+        not_attached_response = self.client.get(path=self.list_url, data={"is_attached": "false"})
+        attached_response = self.client.get(path=self.list_url, data={"is_attached": "true"})
+
+        # Проверяем, что фильтр разделяет договоры по наличию взаимодействия
+        self.assertEqual([item["id"] for item in not_attached_response.data["results"]], [str(headless.pk)])
+        self.assertEqual([item["id"] for item in attached_response.data["results"]], [str(attached.pk)])
+
+    def test_filter_by_organization_ids(self) -> None:
+        """Фильтр organization__ids находит и договор без взаимодействия по его контрагенту."""
+        target = ContractFactory(interaction=None, organization=OrganizationFactory())
+        ContractFactory(interaction=None, organization=OrganizationFactory())
+
+        response = self.client.get(path=self.list_url, data={"organization__ids": str(target.organization_id)})
+
+        # Проверяем, что найден только договор выбранной организации
+        self.assertEqual([item["id"] for item in response.data["results"]], [str(target.pk)])
+
     def test_filter_by_signed_period(self) -> None:
         """Фильтры signed_at__gte/signed_at__lte ограничивают период подписания."""
         inside = ContractFactory(signed_at=date(2026, 3, 15))

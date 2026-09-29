@@ -94,6 +94,18 @@ class ContractSerializer(serializers.ModelSerializer):
         return reverse("interactions:contract-download", args=[obj.pk])
 
 
+class AttachContractToNewInteractionSerializer(serializers.Serializer):
+    """Создание взаимодействия из договора реестра."""
+
+    comment = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        label=_("Комментарий"),
+        help_text=_("Комментарий взаимодействия; не передан — берётся комментарий договора из реестра"),
+    )
+    is_active = serializers.BooleanField(default=True, label=_("Активно"))
+
+
 class WriteContractSerializer(serializers.ModelSerializer):
     """Договор — валидация входных данных (create/update)."""
 

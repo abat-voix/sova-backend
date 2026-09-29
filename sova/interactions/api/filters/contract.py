@@ -33,6 +33,24 @@ class ContractFilter(SearchFilterMixin):
         help_text=_("True — только подписанные договоры, false — ещё не подписанные"),
     )
 
+    organization__ids = UUIDInFilter(
+        field_name="organization",
+        label=_("Организации"),
+        help_text=_(
+            "Фильтр по списку ID организаций через запятую; контрагент хранится и у договора без взаимодействия"
+        ),
+    )
+    is_attached = filters.BooleanFilter(
+        field_name="interaction",
+        lookup_expr="isnull",
+        exclude=True,
+        label=_("Привязан к взаимодействию"),
+        help_text=_(
+            "False — договоры из реестра, по которым ещё не создано взаимодействие "
+            "(см. attach-to-new-interaction); true — привязанные"
+        ),
+    )
+
     class Meta:
         model = Contract
         fields = ()
