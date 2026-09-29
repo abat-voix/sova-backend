@@ -22,15 +22,16 @@ from sova.interactions.services.document_templates import (
 )
 from sova.processes.action_features.base import ActionFeatureResult
 from sova.processes.action_features.errors import ActionFeatureError
+from sova.core.validators import validate_inn, validate_phone
 
 
 class ContractCounterpartySerializer(serializers.Serializer):
     name = serializers.CharField(max_length=500)
     short_name = serializers.CharField(max_length=255, allow_blank=True, default="")
-    inn = serializers.CharField(max_length=12, allow_blank=True, default="")
+    inn = serializers.CharField(max_length=12, allow_blank=True, default="", validators=[validate_inn])
     address = serializers.CharField(max_length=1000, allow_blank=True, default="")
     email = serializers.EmailField(allow_blank=True, default="")
-    phone = serializers.CharField(max_length=50, allow_blank=True, default="")
+    phone = serializers.CharField(max_length=50, allow_blank=True, default="", validators=[validate_phone])
 
 
 class ContractSignatorySerializer(serializers.Serializer):

@@ -11,7 +11,7 @@ class TrainingInstructorViewSet(SovaBaseViewSet):
     serializer_class = serializers.WriteTrainingInstructorSerializer
     queryset = TrainingInstructor.objects.select_related("organization", "b2c_client").prefetch_related(
         "directions",
-        "programs",
+        "programs__direction",
     )
     filterset_class = filters.TrainingInstructorFilter
     search_fields = ("last_name", "first_name", "middle_name", "email", "lms_external_id")

@@ -342,6 +342,7 @@ class InstructorApiTestCase(TrainingApiTestCase):
                 "first_name": "Пётр",
                 "organization": str(self.interaction.organization.pk),
                 "academic_degree": "candidate",
+                "directions": [str(program.direction_id)],
                 "programs": [str(program.pk)],
             },
             format="json",
@@ -355,6 +356,60 @@ class InstructorApiTestCase(TrainingApiTestCase):
         self.assertEqual(created.status_code, status.HTTP_201_CREATED, msg=created.data)
         self.assertEqual(qualification.status_code, status.HTTP_201_CREATED, msg=qualification.data)
         self.assertEqual(TrainingInstructor.objects.get().qualifications.count(), 1)
+
+    def test_program_must_belong_to_selected_directions(self) -> None:
+        """Программа без своего направления не сохраняется: тёзки из разных направлений неразличимы."""
+        program = ProgramFactory(name="Аналитика данных")
+
+        response = self.client.post(
+            f"{BASE}/instructors/",
+            {
+                "last_name": "Петров",
+                "first_name": "Пётр",
+                "organization": str(self.interaction.organization.pk),
+                "directions": [str(ProgramFactory().direction_id)],
+                "programs": [str(program.pk)],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("«Аналитика данных»", str(response.data["programs"]))
+        self.assertFalse(TrainingInstructor.objects.exists())
+
+    def test_removing_direction_requires_removing_its_programs(self) -> None:
+        """PATCH только направлений проверяется по уже сохранённым программам."""
+        program = ProgramFactory()
+        instructor = TrainingInstructorFactory(organization=self.interaction.organization, programs=[program])
+        instructor.directions.set([program.direction])
+
+        kept = self.client.patch(
+            f"{BASE}/instructors/{instructor.pk}/", {"directions": []}, format="json"
+        )
+        cleared = self.client.patch(
+            f"{BASE}/instructors/{instructor.pk}/", {"directions": [], "programs": []}, format="json"
+        )
+
+        self.assertEqual(kept.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(cleared.status_code, status.HTTP_200_OK, msg=cleared.data)
+
+    def test_programs_come_with_their_direction(self) -> None:
+        """Программы преподавателя отдаются с направлением — для группировки на фронте."""
+        program = ProgramFactory()
+        instructor = TrainingInstructorFactory(organization=self.interaction.organization, programs=[program])
+
+        response = self.client.get(f"{BASE}/instructors/{instructor.pk}/")
+
+        self.assertEqual(
+            response.data["programs"],
+            [
+                {
+                    "id": str(program.pk),
+                    "name": program.name,
+                    "direction": {"id": str(program.direction_id), "name": program.direction.name},
+                }
+            ],
+        )
 
     def test_organization_required_exactly_once(self) -> None:
         response = self.client.post(

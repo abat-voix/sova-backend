@@ -1,6 +1,7 @@
 from django.db import models
 
 from sova.core.models import TimeStampedModel
+from sova.core.validators import validate_inn, validate_phone
 
 
 class B2CClient(TimeStampedModel):
@@ -12,6 +13,7 @@ class B2CClient(TimeStampedModel):
     )
     inn = models.CharField(
         max_length=12,
+        validators=[validate_inn],
         null=True,
         blank=True,
         verbose_name="ИНН",
@@ -22,6 +24,7 @@ class B2CClient(TimeStampedModel):
     )
     phone = models.CharField(
         max_length=50,
+        validators=[validate_phone],
         blank=True,
         verbose_name="Телефон",
     )

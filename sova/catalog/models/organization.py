@@ -2,18 +2,17 @@ from django.db import models
 from django.db.models.functions import Lower
 
 from sova.core.models import NormalizedTextFieldsMixin, TimeStampedModel
+from sova.core.validators import validate_inn, validate_phone
 
 
 class OrganizationType(models.TextChoices):
     EDUCATION = "education", "Образование"
     HEALTHCARE = "healthcare", "Здравоохранение"
     COMPANY = "company", "Компания"
-    ARCHIVE = "archive", "Архив"
     NONPROFIT = "nonprofit", "Некоммерческая организация"
     GOVERNMENT = "government", "Государственная организация"
     FACILITY = "facility", "Научный объект"
     FUNDER = "funder", "Фонд"
-    OTHER = "other", "Другое"
 
 
 class Organization(NormalizedTextFieldsMixin, TimeStampedModel):
@@ -38,6 +37,7 @@ class Organization(NormalizedTextFieldsMixin, TimeStampedModel):
     )
     inn = models.CharField(
         max_length=12,
+        validators=[validate_inn],
         unique=True,
         null=True,
         blank=True,
@@ -63,6 +63,7 @@ class Organization(NormalizedTextFieldsMixin, TimeStampedModel):
     )
     phone = models.CharField(
         max_length=50,
+        validators=[validate_phone],
         blank=True,
         verbose_name="Телефон организации",
     )

@@ -52,6 +52,7 @@ from sova.catalog.api.serializers.product import (
 from sova.catalog.api.serializers.program import (
     ProgramSerializer,
     ProgramShortSerializer,
+    ProgramWithDirectionSerializer,
     WriteProgramSerializer,
 )
 from sova.catalog.api.serializers.organization import (
@@ -94,6 +95,7 @@ __all__ = [
     "ProductShortSerializer",
     "ProgramSerializer",
     "ProgramShortSerializer",
+    "ProgramWithDirectionSerializer",
     "OrganizationContactSerializer",
     "OrganizationMapPointSerializer",
     "OrganizationSerializer",

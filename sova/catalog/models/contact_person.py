@@ -2,6 +2,7 @@ from django.db import models
 from django.db.models.functions import Lower
 
 from sova.core.models import NormalizedTextFieldsMixin, TimeStampedModel
+from sova.core.validators import validate_phone
 
 
 class ContactPerson(NormalizedTextFieldsMixin, TimeStampedModel):
@@ -23,6 +24,7 @@ class ContactPerson(NormalizedTextFieldsMixin, TimeStampedModel):
     )
     phone = models.CharField(
         max_length=50,
+        validators=[validate_phone],
         blank=True,
         verbose_name="Телефон",
     )

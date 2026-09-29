@@ -30,8 +30,13 @@ class ProductApiTestCase(BaseApiTestMixin, APITestCase):
             "external_code": instance.external_code,
             "is_active": instance.is_active,
             "vendor": {"id": str(instance.vendor_id), "name": instance.vendor.name},
+            # Программа с направлением: тёзки из разных направлений различимы
             "programs": [
-                {"id": str(program.pk), "name": program.name}
+                {
+                    "id": str(program.pk),
+                    "name": program.name,
+                    "direction": {"id": str(program.direction_id), "name": program.direction.name},
+                }
                 for program in instance.programs.all()
             ],
         }

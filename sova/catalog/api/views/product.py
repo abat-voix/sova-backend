@@ -12,7 +12,7 @@ class ProductViewSet(CatalogPolicyMixin, CatalogRankMixin, SovaBaseViewSet):
     queryset = (
         Product.objects
         .select_related("vendor")
-        .prefetch_related("programs")
+        .prefetch_related("programs__direction")
     )
     ordering_fields = "__all__"
     search_fields = ("name", "external_code", "vendor__name")

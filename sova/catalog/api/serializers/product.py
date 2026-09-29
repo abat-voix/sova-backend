@@ -1,7 +1,7 @@
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from sova.catalog.api.serializers.program import ProgramShortSerializer
+from sova.catalog.api.serializers.program import ProgramWithDirectionSerializer
 from sova.catalog.api.serializers.vendor import VendorShortSerializer
 from sova.catalog.models import Product
 from sova.core.api.validators import validate_model_constraints
@@ -29,11 +29,11 @@ class ProductSerializer(serializers.ModelSerializer):
         label=_("Вендор"),
         help_text=_("Показывается развёрнуто, для записи см. write-сериализатор"),
     )
-    programs = ProgramShortSerializer(
+    programs = ProgramWithDirectionSerializer(
         many=True,
         read_only=True,
         label=_("Программы"),
-        help_text=_("Показываются развёрнуто, для записи см. write-сериализатор"),
+        help_text=_("Показываются развёрнуто, с направлением; для записи см. write-сериализатор"),
     )
 
     class Meta:

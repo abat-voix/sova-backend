@@ -32,6 +32,7 @@ from sova.interactions.models import (
 from sova.interactions.services import (
     assignment_candidates,
     contact_link_service,
+    interaction_service,
     responsible_service,
     visible_interactions,
 )
@@ -73,6 +74,8 @@ class InteractionViewSet(SovaBaseViewSet):
     поэтому напрямую в теле взаимодействия не редактируется.
 
     Права на операции — `policy_actions` (`accounts.policy`): наблюдатель только читает взаимодействия и их контакты.
+
+    Удалить можно только незапущенное взаимодействие — без процесса и договоров (`can_delete`); иначе 409.
     """
 
     policy_actions = {
@@ -108,9 +111,9 @@ class InteractionViewSet(SovaBaseViewSet):
         return self._with_details(visible_interactions(self.request.user))
 
     def _with_details(self, queryset: QuerySet) -> QuerySet:
-        """Дополняет выборку счётчиками состава и действующим ответственным."""
+        """Дополняет выборку счётчиками состава, действующим ответственным и признаком `can_delete`."""
         return (
-            queryset
+            interaction_service.annotate_can_delete(queryset)
             .select_related("organization", "b2c_client")
             .prefetch_related(
                 Prefetch(
@@ -127,6 +130,10 @@ class InteractionViewSet(SovaBaseViewSet):
                 products_count=_active_count(InteractionProduct),
             )
         )
+
+    def perform_destroy(self, instance: Interaction) -> None:
+        """Удаляет незапущенное взаимодействие; запущенное или с договорами — 409."""
+        interaction_service.delete(instance)
 
     def perform_create(self, serializer: serializers.WriteInteractionSerializer) -> None:
         """Создаёт взаимодействие; КАМ-автор сразу становится ответственным. Ответ — из аннотированного queryset."""
