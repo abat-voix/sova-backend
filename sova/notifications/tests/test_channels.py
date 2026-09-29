@@ -43,7 +43,7 @@ class EmailChannelSenderTest(TestCase):
         # Проверяем, что ошибка не поднимается наружу
         self.assertFalse(result)
 
-    @override_settings(FRONTEND_URL="https://sova.example.ru")
+    @override_settings(APP_PUBLIC_URL="https://sova.example.ru")
     def test_send_appends_absolute_link_to_body(self) -> None:
         """Ссылка из Message дописывается в конец письма полным адресом; тема не меняется."""
         EmailChannelSender().send(
@@ -56,9 +56,9 @@ class EmailChannelSenderTest(TestCase):
         # Проверяем, что тема — по-прежнему первая строка
         self.assertEqual(mail.outbox[0].subject, "Вас назначили КАМом")
 
-    @override_settings(FRONTEND_URL="")
-    def test_send_without_frontend_url_skips_link(self) -> None:
-        """Без FRONTEND_URL письмо уходит без ссылки — относительный адрес наружу не попадает."""
+    @override_settings(APP_PUBLIC_URL="")
+    def test_send_without_app_public_url_skips_link(self) -> None:
+        """Без APP_PUBLIC_URL письмо уходит без ссылки — относительный адрес наружу не попадает."""
         EmailChannelSender().send(
             target="user@example.com",
             message=Message(text="Вас назначили КАМом", link="/interactions?interaction=1"),
@@ -150,7 +150,7 @@ class TelegramChannelSenderTest(SimpleTestCase):
         # Проверяем, что предупреждение записано один раз
         self.assertEqual(len(logs.records), 1)
 
-    @override_settings(FRONTEND_URL="https://sova.example.ru")
+    @override_settings(APP_PUBLIC_URL="https://sova.example.ru")
     @patch("sova.notifications.services.channels.telegram.requests.post")
     def test_send_appends_absolute_link(self, post: Mock) -> None:
         """Ссылка из Message дописывается в конец текста полным адресом."""
@@ -251,7 +251,7 @@ class MaxChannelSenderTest(SimpleTestCase):
         self.assertEqual(len(logs.records), 1)
 
 
-    @override_settings(FRONTEND_URL="https://sova.example.ru")
+    @override_settings(APP_PUBLIC_URL="https://sova.example.ru")
     @patch("sova.notifications.services.channels.max.requests.post")
     def test_send_appends_absolute_link(self, post: Mock) -> None:
         """Ссылка из Message дописывается в конец текста полным адресом."""
@@ -357,7 +357,7 @@ class SystemChannelSenderTest(TestCase):
         # Проверяем ссылку
         self.assertEqual(notification.link, "/interactions/1")
 
-    @override_settings(FRONTEND_URL="https://sova.example.ru")
+    @override_settings(APP_PUBLIC_URL="https://sova.example.ru")
     def test_send_keeps_relative_link_and_text(self) -> None:
         """Колокольчик хранит относительную ссылку и не дописывает её в текст — фронт переходит сам."""
         user = UserFactory()

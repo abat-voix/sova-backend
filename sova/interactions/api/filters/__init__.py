@@ -1,6 +1,6 @@
 from sova.interactions.api.filters.contract import ContractFilter
 from sova.interactions.api.filters.contract_file import ContractFileFilter
-from sova.interactions.api.filters.interaction import InteractionFilter
+from sova.interactions.api.filters.interaction import InteractionFilter, InteractionSearchFilter
 from sova.interactions.api.filters.interaction_direction import (
     InteractionDirectionFilter,
 )
@@ -20,6 +20,7 @@ __all__ = [
     "InteractionFilter",
     "InteractionProductFilter",
     "InteractionProgramFilter",
+    "InteractionSearchFilter",
     "LicenseFilter",
     "ResponsibleFilter",
 ]

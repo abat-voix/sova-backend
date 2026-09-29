@@ -4,11 +4,13 @@ from django.db import transaction
 from django.db.models import Count, IntegerField, OuterRef, Prefetch, QuerySet, Subquery
 from django.db.models.functions import Coalesce
 from django.utils.translation import gettext_lazy as _
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.fields import UUIDField
+from rest_framework.filters import OrderingFilter
 from rest_framework.response import Response
 
 from accounts.exceptions import KamHasHeadError
@@ -76,6 +78,8 @@ class InteractionViewSet(SovaBaseViewSet):
     Права на операции — `policy_actions` (`accounts.policy`): наблюдатель только читает взаимодействия и их контакты.
 
     Удалить можно только незапущенное взаимодействие — без процесса и договоров (`can_delete`); иначе 409.
+
+    `search` ищет по комментарию, организации, B2C-клиенту и имени, фамилии или email действующего ответственного.
     """
 
     policy_actions = {
@@ -105,6 +109,7 @@ class InteractionViewSet(SovaBaseViewSet):
         "b2c_client__full_name",
     )
     filterset_class = filters.InteractionFilter
+    filter_backends = [DjangoFilterBackend, filters.InteractionSearchFilter, OrderingFilter]
 
     def get_queryset(self) -> QuerySet:
         """Взаимодействия, видимые пользователю по его роли в СОВА."""
