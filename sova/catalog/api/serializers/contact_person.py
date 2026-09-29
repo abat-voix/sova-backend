@@ -86,7 +86,8 @@ class WriteContactPersonSerializer(serializers.ModelSerializer):
     """
     Контактное лицо — данные человека (create/update).
 
-    Связь с организацией создаётся отдельно: `/organization-contacts/`, `/b2c-client-contacts/`, `/vendor-contacts/`.
+    Связь с организацией — `/organization-contacts/`, `/b2c-client-contacts/`, `/vendor-contacts/`; там же нового
+    человека можно создать вместе со связью (`new_contact`).
     """
 
     class Meta:
@@ -106,6 +107,25 @@ class WriteContactPersonSerializer(serializers.ModelSerializer):
             return normalize_telegram(value)
         except ValueError as error:
             raise serializers.ValidationError(str(error)) from error
+
+    def validate(self, attrs: dict) -> dict:
+        """Поле, выбранное способом связи в какой-либо связи человека, нельзя очистить."""
+        if self.instance is None:
+            return attrs
+        values = {
+            field: attrs.get(field, getattr(self.instance, field)) for field in ("email", "phone", "telegram")
+        }
+        unfilled = contact_affiliation_service.unfilled_channels(
+            channels=contact_affiliation_service.used_channels(contact=self.instance), **values
+        )
+        if unfilled:
+            raise serializers.ValidationError(
+                {
+                    channel: _("Выбрано способом связи у организации: сначала уберите его из способов связи.")
+                    for channel in unfilled
+                }
+            )
+        return attrs
 
     @transaction.atomic
     def update(self, instance: ContactPerson, validated_data: dict) -> ContactPerson:

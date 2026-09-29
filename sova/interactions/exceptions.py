@@ -29,3 +29,11 @@ class AmbiguousManagerError(Exception):
 
 class ContractAlreadyAttachedError(Exception):
     """Договор уже привязан к взаимодействию — привязать его повторно нельзя."""
+
+
+class InteractionDeleteError(APIException):
+    """Взаимодействие нельзя удалить: по нему запущен процесс или есть договоры."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "Взаимодействие нельзя удалить."
+    default_code = "interaction_delete_conflict"

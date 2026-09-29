@@ -13,6 +13,16 @@ class ProgramShortSerializer(serializers.ModelSerializer):
         fields = ("id", "name")
 
 
+class ProgramWithDirectionSerializer(serializers.ModelSerializer):
+    """Программа с направлением — для вложенных списков: одинаковые названия бывают в разных направлениях."""
+
+    direction = DirectionShortSerializer(read_only=True, label=_("Направление"))
+
+    class Meta:
+        model = Program
+        fields = ("id", "name", "direction")
+
+
 class ProgramSerializer(serializers.ModelSerializer):
     """Программа — представление для чтения (list/retrieve)."""
 

@@ -2,6 +2,7 @@ from django.db import models
 from django.db.models import Q
 
 from sova.core.models import NormalizedTextFieldsMixin, TimeStampedModel
+from sova.core.validators import validate_phone
 from sova.training.enum import AcademicDegree, AcademicTitle
 
 
@@ -16,7 +17,7 @@ class TrainingInstructor(NormalizedTextFieldsMixin, TimeStampedModel):
     first_name = models.CharField(max_length=255, verbose_name="Имя")
     middle_name = models.CharField(max_length=255, blank=True, verbose_name="Отчество")
     email = models.EmailField(blank=True, verbose_name="Email")
-    phone = models.CharField(max_length=50, blank=True, verbose_name="Телефон")
+    phone = models.CharField(max_length=50, blank=True, validators=[validate_phone], verbose_name="Телефон")
     telegram = models.CharField(max_length=64, blank=True, verbose_name="Telegram")
 
     organization = models.ForeignKey(

@@ -27,7 +27,9 @@ from sova.interactions.tests.factories import (
     ResponsibleFactory,
 )
 from sova.processes.enum import ActionInstanceStatus
-from sova.processes.tests.factories import ActionInstanceFactory
+from sova.messaging.models import Conversation
+from sova.messaging.services import conversation_service
+from sova.processes.tests.factories import ActionInstanceFactory, WorkflowInstanceFactory
 
 
 class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
@@ -126,14 +128,52 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_delete_returns_409_when_interaction_has_contract(self) -> None:
-        """Удаление взаимодействия с договором возвращает 409 с кодом protected."""
+        """Удаление взаимодействия с договором возвращает 409 с кодом has_contracts."""
         contract = ContractFactory()
 
         response = self.client.delete(path=self.detail_url(contract.interaction))
 
-        # Проверяем, что защита PROTECT превращается в 409, а не 500
+        # Проверяем понятную ошибку вместо 500 и общего protected
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
-        self.assertEqual(response.data["code"], "protected")
+        self.assertEqual(response.data["code"], "has_contracts")
+        self.assertTrue(Interaction.objects.filter(pk=contract.interaction_id).exists())
+
+    def test_delete_not_started_interaction_removes_it_with_chat(self) -> None:
+        """Незапущенное взаимодействие удаляется вместе с чатом."""
+        interaction = InteractionFactory()
+        conversation, _created = conversation_service.get_or_create_interaction(interaction=interaction, actor=self.user)
+
+        response = self.client.delete(path=self.detail_url(interaction))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Interaction.objects.filter(pk=interaction.pk).exists())
+        self.assertFalse(Conversation.objects.filter(pk=conversation.pk).exists())
+
+    def test_delete_started_interaction_returns_409(self) -> None:
+        """Взаимодействие с запущенным процессом не удаляется."""
+        process = WorkflowInstanceFactory()
+
+        response = self.client.delete(path=self.detail_url(process.interaction))
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "workflow_started")
+        self.assertTrue(Interaction.objects.filter(pk=process.interaction_id).exists())
+
+    def test_can_delete_flag(self) -> None:
+        """`can_delete` — только у взаимодействия без процесса и договоров."""
+        not_started = InteractionFactory()
+        started = WorkflowInstanceFactory().interaction
+        with_contract = ContractFactory().interaction
+
+        response = self.client.get(path=reverse(f"{self.url_basename}-list"))
+
+        flags = {item["id"]: item["can_delete"] for item in response.data["results"]}
+        self.assertEqual(
+            flags,
+            {str(not_started.pk): True, str(started.pk): False, str(with_contract.pk): False},
+        )
+        detail = self.client.get(path=self.detail_url(not_started))
+        self.assertTrue(detail.data["can_delete"])
 
     def test_list_returns_counts_and_current_responsibles(self) -> None:
         """В списке считаются активные направления/программы/продукты и видны действующие ответственные."""

@@ -4,6 +4,7 @@ from django.db import transaction
 from django.db.models import OuterRef, QuerySet, Subquery, Value
 from django.db.models.functions import Coalesce
 
+from sova.catalog.enum import ContactChannel
 from sova.catalog.models import (
     B2CClient,
     B2CClientContact,
@@ -95,6 +96,21 @@ class ContactAffiliationService:
             preferred_channels=list(preferred_channels),
             **{field: organization},
         )
+
+    def unfilled_channels(
+        self,
+        channels: Iterable[str],
+        email: str = "",
+        phone: str = "",
+        telegram: str = "",
+    ) -> list[str]:
+        """Способы связи, для которых у человека не заполнено поле: «Телефон» требует телефон, «Почта» — email и т. д."""
+        values = {ContactChannel.EMAIL: email, ContactChannel.PHONE: phone, ContactChannel.TELEGRAM: telegram}
+        return [channel for channel in channels if not (values.get(channel) or "").strip()]
+
+    def used_channels(self, contact: ContactPerson) -> set[str]:
+        """Способы связи, выбранные хотя бы в одной связи человека."""
+        return {channel for link in self.links_of(contact=contact) for channel in link.preferred_channels}
 
     def set_products(self, affiliation: VendorContact, products: Iterable[Product]) -> None:
         """Продукты, за которые отвечает контакт вендора; только продукты этого вендора."""

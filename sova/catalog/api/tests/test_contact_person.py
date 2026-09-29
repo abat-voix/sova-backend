@@ -3,9 +3,10 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from accounts.models import SystemRole, UserRole
-from sova.catalog.models import ContactPerson, OrganizationContact
+from sova.catalog.models import B2CClientContact, ContactPerson, OrganizationContact
 from sova.catalog.tests.factories import (
     B2CClientContactFactory,
+    B2CClientFactory,
     ContactPersonFactory,
     ProductFactory,
     OrganizationContactFactory,
@@ -198,7 +199,7 @@ class ContactAffiliationApiTestCase(APITestCase):
 
     def test_create_organization_contact(self) -> None:
         """Связь создаётся с должностью и способами связи."""
-        contact = ContactPersonFactory()
+        contact = ContactPersonFactory(email="ivanov@example.com", telegram="ivanov")
         organization = OrganizationFactory()
 
         response = self.client.post(
@@ -274,6 +275,134 @@ class ContactAffiliationApiTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(OrganizationContact.objects.exists())
         self.assertFalse(InteractionContact.objects.filter(unlinked_at__isnull=True).exists())
+
+
+    def test_channel_requires_filled_contact_field(self) -> None:
+        """Способ связи «Телефон» без телефона у человека — 400 по preferred_channels."""
+        response = self.client.post(
+            path=reverse("catalog:b2c-client-contact-list"),
+            data={
+                "contact": str(ContactPersonFactory(email="ivanov@example.com").pk),
+                "b2c_client": str(B2CClientFactory().pk),
+                "preferred_channels": ["email", "phone"],
+            },
+            format="json",
+        )
+
+        # Проверяем, что ошибка называет незаполненный канал
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("«Телефон»", str(response.data["preferred_channels"]))
+        self.assertNotIn("«Почта»", str(response.data["preferred_channels"]))
+
+    def test_update_checks_channels_against_contact(self) -> None:
+        """Добавить в связь канал, для которого у человека нет данных, нельзя."""
+        link = B2CClientContactFactory()
+
+        response = self.client.patch(
+            path=reverse("catalog:b2c-client-contact-detail", args=[link.pk]),
+            data={"preferred_channels": ["telegram"]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("preferred_channels", response.data)
+
+    def test_new_contact_is_created_with_affiliation(self) -> None:
+        """`new_contact` — человек создаётся вместе со связью одним запросом."""
+        b2c_client = B2CClientFactory()
+
+        response = self.client.post(
+            path=reverse("catalog:b2c-client-contact-list"),
+            data={
+                "new_contact": {"full_name": "Иванов Иван", "phone": "+7 999 123-45-67", "telegram": "@ivanov"},
+                "b2c_client": str(b2c_client.pk),
+                "position": "Директор",
+                "preferred_channels": ["phone", "telegram"],
+            },
+            format="json",
+        )
+
+        # Проверяем человека и связь
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
+        link = B2CClientContact.objects.get(b2c_client=b2c_client)
+        self.assertEqual(link.contact.full_name, "Иванов Иван")
+        self.assertEqual(link.contact.telegram, "ivanov")
+        self.assertEqual(link.preferred_channels, ["phone", "telegram"])
+
+    def test_new_contact_is_not_created_when_affiliation_is_invalid(self) -> None:
+        """Ошибка связи не оставляет созданного человека без организации."""
+        response = self.client.post(
+            path=reverse("catalog:b2c-client-contact-list"),
+            data={
+                "new_contact": {"full_name": "Иванов Иван"},
+                "b2c_client": str(B2CClientFactory().pk),
+                "preferred_channels": ["phone"],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(ContactPerson.objects.exists())
+
+    def test_new_contact_rejects_invalid_person_data(self) -> None:
+        """Данные нового человека проверяются как при создании контакта."""
+        response = self.client.post(
+            path=reverse("catalog:b2c-client-contact-list"),
+            data={"new_contact": {"full_name": "Иванов Иван", "phone": "abc"}, "b2c_client": str(B2CClientFactory().pk)},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("phone", response.data["new_contact"])
+        self.assertFalse(ContactPerson.objects.exists())
+
+    def test_exactly_one_of_contact_and_new_contact(self) -> None:
+        """Нужен ровно один человек: существующий или новый."""
+        b2c_client = B2CClientFactory()
+        url = reverse("catalog:b2c-client-contact-list")
+
+        neither = self.client.post(path=url, data={"b2c_client": str(b2c_client.pk)}, format="json")
+        both = self.client.post(
+            path=url,
+            data={
+                "contact": str(ContactPersonFactory().pk),
+                "new_contact": {"full_name": "Иванов Иван"},
+                "b2c_client": str(b2c_client.pk),
+            },
+            format="json",
+        )
+
+        self.assertEqual(neither.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(both.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_new_contact_only_on_create(self) -> None:
+        """При правке связи сменить человека через `new_contact` нельзя."""
+        link = B2CClientContactFactory()
+
+        response = self.client.patch(
+            path=reverse("catalog:b2c-client-contact-detail", args=[link.pk]),
+            data={"new_contact": {"full_name": "Иванов Иван"}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("new_contact", response.data)
+
+    def test_contact_field_used_as_channel_cannot_be_cleared(self) -> None:
+        """Телефон, выбранный способом связи у организации, у человека не очистить."""
+        link = B2CClientContactFactory(
+            contact=ContactPersonFactory(phone="+7 999 123-45-67", email="ivanov@example.com"),
+            preferred_channels=["phone"],
+        )
+        url = reverse("catalog:contact-person-detail", args=[link.contact_id])
+
+        cleared_phone = self.client.patch(path=url, data={"phone": ""}, format="json")
+        cleared_email = self.client.patch(path=url, data={"email": ""}, format="json")
+
+        # Проверяем: телефон занят способом связи, email — нет
+        self.assertEqual(cleared_phone.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("phone", cleared_phone.data)
+        self.assertEqual(cleared_email.status_code, status.HTTP_200_OK, msg=cleared_email.data)
 
 
 class ContactObserverApiTestCase(APITestCase):

@@ -15,7 +15,8 @@ class ContactPersonViewSet(CatalogPolicyMixin, SovaBaseViewSet):
     """
     Контактные лица — люди со связями с организациями, B2C-клиентами и вендорами. Доступны CRUD операции.
 
-    Связи создаются и меняются через `/organization-contacts/`, `/b2c-client-contacts/`, `/vendor-contacts/`.
+    Связи создаются и меняются через `/organization-contacts/`, `/b2c-client-contacts/`, `/vendor-contacts/`;
+    там же создаётся новый человек вместе со связью (`new_contact`).
     """
 
     read_serializer_class = serializers.ContactPersonSerializer
