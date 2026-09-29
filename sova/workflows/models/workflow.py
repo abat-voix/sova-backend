@@ -6,12 +6,7 @@ from sova.core.models import TimeStampedModel
 
 
 class Workflow(TimeStampedModel):
-    """
-    Шаблон workflow — процесс для одной аудитории (B2B/B2C).
-
-    Один активный (`is_base=True`) workflow на аудиторию — гарантируется constraint'ом
-    `one_base_workflow_per_audience`.
-    """
+    """Шаблон workflow — процесс для одной аудитории (B2B/B2C)."""
 
     name = models.CharField(
         max_length=255,
@@ -63,13 +58,6 @@ class Workflow(TimeStampedModel):
         verbose_name = "Workflow"
         verbose_name_plural = "Workflow"
         ordering = ["name"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["audience"],
-                condition=models.Q(is_base=True),
-                name="one_base_workflow_per_audience",
-            ),
-        ]
 
     def __str__(self):
         return self.name

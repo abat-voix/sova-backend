@@ -125,8 +125,8 @@ class WorkflowApiTestCase(BaseApiTestMixin, APITestCase):
         # Проверяем, что аннотация доступна сразу после создания
         self.assertEqual(response.data["stages_count"], 0)
 
-    def test_add_base_returns_400_when_audience_already_has_base(self) -> None:
-        """Второй базовый workflow для аудитории отклоняется с 400."""
+    def test_add_allows_duplicate_audience_for_base_workflows(self) -> None:
+        """Базовые workflow одной аудитории могут сосуществовать."""
         WorkflowFactory(is_base=True, audience=Audience.B2B)
 
         response = self.client.post(
@@ -135,9 +135,7 @@ class WorkflowApiTestCase(BaseApiTestMixin, APITestCase):
             format="json",
         )
 
-        # Проверяем, что ограничение БД не доходит до 500/409
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("is_base", response.data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, msg=response.data)
 
     def test_add_base_for_another_audience_creates_workflow(self) -> None:
         """Базовые workflow разных аудиторий сосуществуют."""
@@ -170,8 +168,8 @@ class WorkflowApiTestCase(BaseApiTestMixin, APITestCase):
         # Проверяем, что собственный флаг is_base не считается конфликтом
         self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
 
-    def test_change_audience_of_base_returns_400_when_target_has_base(self) -> None:
-        """Смена аудитории базового workflow на занятую отклоняется."""
+    def test_change_audience_of_base_allows_target_with_another_base(self) -> None:
+        """Базовому workflow можно сменить аудиторию на уже используемую."""
         WorkflowFactory(is_base=True, audience=Audience.B2C)
         base = WorkflowFactory(is_base=True, audience=Audience.B2B)
 
@@ -181,8 +179,8 @@ class WorkflowApiTestCase(BaseApiTestMixin, APITestCase):
             format="json",
         )
 
-        # Проверяем, что при PATCH учитывается сохранённый is_base
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=response.data)
+        self.assertEqual(response.data["audience"], Audience.B2C)
 
     def test_delete_returns_409_when_workflow_has_instances(self) -> None:
         """Удаление workflow с запущенными процессами возвращает 409 с кодом protected."""
