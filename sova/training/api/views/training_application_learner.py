@@ -45,10 +45,18 @@ class TrainingApplicationLearnerViewSet(
         return super().get_serializer_class()
 
     def perform_create(self, serializer) -> None:
+        data = serializer.validated_data
+        if "new_learner" in data:
+            serializer.instance = training_application_service.add_new_learner(
+                application=data["application"],
+                learner_fields=data["new_learner"],
+                is_paid=data.get("is_paid", False),
+            )
+            return
         serializer.instance = training_application_service.add_learner(
-            application=serializer.validated_data["application"],
-            learner=serializer.validated_data["learner"],
-            is_paid=serializer.validated_data.get("is_paid", False),
+            application=data["application"],
+            learner=data["learner"],
+            is_paid=data.get("is_paid", False),
         )
 
     def perform_update(self, serializer) -> None:

@@ -77,6 +77,7 @@ class Action:
     TRAINING_UPDATE = "training.update"
     # Полные персональные данные обучающихся (паспорт, СНИЛС, адрес, диплом) — только администратор платформы
     TRAINING_PERSONAL_DATA_READ = "training.personal_data.read"
+    TRAINING_PERSONAL_DATA_UPDATE = "training.personal_data.update"
     NOTIFICATIONS_USE = "notifications.use"
     MESSAGING_USE = "messaging.use"
     REALTIME_CONNECT = "realtime.connect"
@@ -125,7 +126,15 @@ _PROCESSES_WORK = frozenset(
     }
 )
 _REPORTS_WORK = frozenset({Action.REPORTS_READ, Action.REPORTS_EXPORT})
-_TRAINING_WORK = frozenset({Action.TRAINING_READ, Action.TRAINING_UPDATE})
+_TRAINING_WORK = frozenset(
+    {
+        Action.TRAINING_READ,
+        Action.TRAINING_UPDATE,
+        # ПД обучающихся нужны в работе всем рабочим ролям; каждый просмотр и изменение — в журнале
+        Action.TRAINING_PERSONAL_DATA_READ,
+        Action.TRAINING_PERSONAL_DATA_UPDATE,
+    }
+)
 _CATALOG_WORK = frozenset(
     {Action.CATALOG_READ, Action.CATALOG_CREATE, Action.CATALOG_UPDATE, Action.CATALOG_DELETE}
 )
@@ -178,7 +187,6 @@ ROLE_ACTIONS: dict[str, frozenset[str]] = {
         Action.USERS_MANAGE,
         Action.TEAMS_MANAGE,
         Action.INTEGRATIONS_MANAGE,
-        Action.TRAINING_PERSONAL_DATA_READ,
         Action.CATALOG_PERSONAL_DATA_READ,
         Action.CATALOG_PERSONAL_DATA_UPDATE,
     },

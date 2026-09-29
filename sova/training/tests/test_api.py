@@ -307,29 +307,19 @@ class LearnerApiTestCase(TrainingApiTestCase):
         self.assertTrue(response.data["participations"][0]["is_paid"])
         self.assertTrue(response.data["participations"][0]["is_enrolled"])
 
-    def test_no_manual_creation_or_editing(self) -> None:
-        self.client.force_authenticate(self.admin)
-        url = f"{BASE}/learners/{self.learner.pk}/"
-
-        created = self.client.post(f"{BASE}/learners/", {"last_name": "Иванов", "first_name": "Иван"})
-        updated = self.client.patch(url, {"last_name": "Петров"}, format="json")
-        personal = self.client.patch(f"{url}personal-data/", {"passport_series": "4510"}, format="json")
-
-        for response in (created, updated, personal):
-            self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
-
-    def test_personal_data_only_for_platform_admin(self) -> None:
+    def test_personal_data_for_working_roles_not_observer(self) -> None:
+        """КАМ видит полные ПД с записью в журнал; наблюдатель — нет."""
         url = f"{BASE}/learners/{self.learner.pk}/personal-data/"
 
-        denied = self.client.get(url)
-        self.client.force_authenticate(self.admin)
         allowed = self.client.get(url)
+        self.client.force_authenticate(create_user(SystemRole.OBSERVER))
+        denied = self.client.get(url)
 
         self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(allowed.status_code, status.HTTP_200_OK)
         self.assertEqual(allowed.data["snils"], "123-456-789 45")
         self.assertEqual(allowed.data["email"], "cherepanona.s@test.ru")
-        self.assertEqual(LearnerPersonalDataAccessLog.objects.get().user, self.admin)
+        self.assertEqual(LearnerPersonalDataAccessLog.objects.get().user, self.kam)
 
 
 class InstructorApiTestCase(TrainingApiTestCase):

@@ -3,9 +3,13 @@ from sova.training.api.serializers.learner import (
     LearnerDetailSerializer,
     LearnerParticipationSerializer,
     LearnerSerializer,
+    WriteLearnerSerializer,
 )
 from sova.training.api.serializers.learner_import import LearnerImportResultSerializer, LearnerImportSerializer
-from sova.training.api.serializers.learner_personal_data import LearnerPersonalDataSerializer
+from sova.training.api.serializers.learner_personal_data import (
+    LearnerPersonalDataSerializer,
+    WriteLearnerPersonalDataSerializer,
+)
 from sova.training.api.serializers.training_application import (
     TrainingApplicationSerializer,
     UpdateTrainingApplicationSerializer,
@@ -50,6 +54,8 @@ __all__ = [
     "UpdateTrainingApplicationSerializer",
     "VisibleApplicationField",
     "VisibleStreamField",
+    "WriteLearnerPersonalDataSerializer",
+    "WriteLearnerSerializer",
     "WriteTrainingApplicationLearnerSerializer",
     "WriteTrainingApplicationSerializer",
     "WriteTrainingInstructorSerializer",

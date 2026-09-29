@@ -29,10 +29,11 @@ def login(client, user) -> None:
 
 
 class PersonalDataPolicyTestCase(TestCase):
-    def test_only_platform_admin_reads_personal_data(self) -> None:
-        self.assertTrue(can(create_user(SystemRole.PLATFORM_ADMIN), Action.TRAINING_PERSONAL_DATA_READ))
-        for role in (SystemRole.KAM, SystemRole.HEAD, SystemRole.OBSERVER):
-            self.assertFalse(can(create_user(role), Action.TRAINING_PERSONAL_DATA_READ), role)
+    def test_working_roles_read_personal_data(self) -> None:
+        """ПД нужны в работе КАМу, руководителю и админу; наблюдателю — нет."""
+        for role in (SystemRole.KAM, SystemRole.HEAD, SystemRole.PLATFORM_ADMIN):
+            self.assertTrue(can(create_user(role), Action.TRAINING_PERSONAL_DATA_READ), role)
+        self.assertFalse(can(create_user(SystemRole.OBSERVER), Action.TRAINING_PERSONAL_DATA_READ))
 
 
 class LearnerAdminTestCase(TestCase):
