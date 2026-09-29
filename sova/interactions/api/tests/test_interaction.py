@@ -16,7 +16,7 @@ from sova.catalog.tests.factories import (
 )
 from sova.core.tests.factories import UserFactory
 from sova.core.tests.base import BaseApiTestMixin
-from sova.interactions.models import Interaction
+from sova.interactions.models import Interaction, InteractionProduct, InteractionProgram
 from sova.interactions.services import responsible_service
 from sova.interactions.tests.factories import (
     ContractFactory,
@@ -148,6 +148,20 @@ class InteractionApiTestCase(BaseApiTestMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Interaction.objects.filter(pk=interaction.pk).exists())
         self.assertFalse(Conversation.objects.filter(pk=conversation.pk).exists())
+
+    def test_delete_interaction_with_product_linked_to_program(self) -> None:
+        """Взаимодействие с продуктом, привязанным к его программе, удаляется вместе с составом."""
+        interaction = InteractionFactory()
+        program = InteractionProgramFactory(interaction=interaction)
+        product = InteractionProductFactory(interaction=interaction, interaction_program=program)
+
+        response = self.client.delete(path=self.detail_url(interaction))
+
+        # Проверяем, что PROTECT продукта на программу не блокирует удаление
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Interaction.objects.filter(pk=interaction.pk).exists())
+        self.assertFalse(InteractionProgram.objects.filter(pk=program.pk).exists())
+        self.assertFalse(InteractionProduct.objects.filter(pk=product.pk).exists())
 
     def test_delete_started_interaction_returns_409(self) -> None:
         """Взаимодействие с запущенным процессом не удаляется."""

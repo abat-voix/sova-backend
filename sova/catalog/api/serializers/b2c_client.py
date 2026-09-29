@@ -66,6 +66,8 @@ class WriteB2CClientSerializer(serializers.ModelSerializer):
             "is_active",
             "address",
         )
+        # Длину ИНН проверяет validate_inn с понятным сообщением; стандартное «не более 12 символов» было бы лишним
+        extra_kwargs = {"inn": {"max_length": None}}
 
     def create(self, validated_data: dict) -> B2CClient:
         address = validated_data.pop("address", ...)

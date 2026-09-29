@@ -43,6 +43,17 @@ class B2CClientInnPhoneValidationTestCase(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("inn", response.json())
 
+    def test_create_rejects_too_long_inn_with_single_message(self) -> None:
+        """Слишком длинный ИНН — одно понятное сообщение, без стандартного «не более 12 символов»."""
+        response = self.client.post(
+            reverse("catalog:b2c-client-list"),
+            {"full_name": "Иванов Иван", "inn": "1234567890123"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["inn"], ["ИНН должен состоять из 10 или 12 цифр."])
+
     def test_update_rejects_phone_with_letters(self) -> None:
         b2c_client = B2CClientFactory()
 

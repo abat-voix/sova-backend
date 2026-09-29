@@ -50,6 +50,9 @@ class InteractionService:
                 detail="К взаимодействию привязаны договоры — удалить его нельзя.",
                 code="has_contracts",
             )
+        # Продукт ссылается на программу взаимодействия через PROTECT: каскад от взаимодействия
+        # упёрся бы в него на удалении программ, поэтому продукты удаляем раньше
+        interaction.interaction_products.all().delete()
         interaction.delete()
 
 

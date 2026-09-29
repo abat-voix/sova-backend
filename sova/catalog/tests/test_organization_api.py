@@ -71,3 +71,23 @@ class OrganizationHasInteractionsTestCase(APITestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertFalse(response.json()["has_interactions"])
+
+
+class OrganizationInnValidationTestCase(APITestCase):
+    """ИНН организации: понятное сообщение об ошибке."""
+
+    def setUp(self) -> None:
+        user = UserFactory()
+        UserRole.objects.create(user=user, role=SystemRole.PLATFORM_ADMIN)
+        self.client.force_authenticate(user=user)
+
+    def test_create_rejects_too_long_inn_with_single_message(self) -> None:
+        """Слишком длинный ИНН — одно понятное сообщение, без стандартного «не более 12 символов»."""
+        response = self.client.post(
+            reverse("catalog:organization-list"),
+            {"name": "Новый вуз", "inn": "1234567890123"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["inn"], ["ИНН должен состоять из 10 или 12 цифр."])
