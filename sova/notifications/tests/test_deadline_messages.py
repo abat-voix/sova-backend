@@ -3,7 +3,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from sova.notifications.enum import NotifyEvent, NotifyType
 from sova.notifications.services.deadline_messages import deadline_message_service
@@ -79,6 +79,58 @@ class RenderDigestTest(SimpleTestCase):
 
         # Проверяем первую строку
         self.assertEqual(text.splitlines()[0], "Сроки — просрочено 1, скоро срок 0")
+
+    @override_settings(FRONTEND_URL="https://sova.example.ru")
+    def test_digest_puts_link_under_each_item(self) -> None:
+        """Под пунктом со взаимодействием — его полная ссылка; пункт без взаимодействия — без ссылки."""
+        stage = replace(
+            item(NotifyType.STAGE_DEADLINE, NotifyEvent.OVERDUE, NOW - timedelta(days=5)),
+            interaction_id=INTERACTION_ID,
+            workflow_instance_id=PROCESS_ID,
+        )
+        reminder = replace(
+            item(NotifyType.ACTION_DEADLINE, NotifyEvent.REMINDER, NOW + timedelta(days=2)),
+            interaction_id=INTERACTION_ID,
+            workflow_instance_id=PROCESS_ID,
+        )
+        without_interaction = item(NotifyType.ACTION_DEADLINE, NotifyEvent.OVERDUE, NOW - timedelta(days=7))
+
+        text = deadline_message_service.render_digest(items=[stage, reminder, without_interaction], now=NOW)
+
+        # Проверяем текст целиком: ссылка строкой ниже пункта с отступом
+        self.assertEqual(
+            text,
+            "СОВА: сроки — просрочено 2, скоро срок 1\n"
+            "\n"
+            "Просроченные этапы:\n"
+            "- МГУ — Подписание договора: срок 10.10.2026, просрочено на 5 дн.\n"
+            f"  https://sova.example.ru/interactions?interaction={INTERACTION_ID}&process={PROCESS_ID}"
+            f"&stage={stage.object_id}\n"
+            "\n"
+            "Просроченные действия:\n"
+            "- МГУ — Подписание договора — Согласование документов: срок 08.10.2026, просрочено на 7 дн.\n"
+            "\n"
+            "Скоро срок:\n"
+            "- МГУ — Подписание договора — Согласование документов (действие): срок 17.10.2026, осталось 2 дн.\n"
+            f"  https://sova.example.ru/interactions?interaction={INTERACTION_ID}&process={PROCESS_ID}"
+            f"&action={reminder.object_id}",
+        )
+
+    @override_settings(FRONTEND_URL="")
+    def test_digest_without_frontend_url_has_no_links(self) -> None:
+        """Без FRONTEND_URL сводка без ссылок — относительный адрес наружу не попадает."""
+        text = deadline_message_service.render_digest(
+            items=[
+                replace(
+                    item(NotifyType.STAGE_DEADLINE, NotifyEvent.OVERDUE, NOW - timedelta(days=1)),
+                    interaction_id=INTERACTION_ID,
+                ),
+            ],
+            now=NOW,
+        )
+
+        # Проверяем, что ссылок нет
+        self.assertNotIn("/interactions", text)
 
 
 class RenderSingleTest(SimpleTestCase):

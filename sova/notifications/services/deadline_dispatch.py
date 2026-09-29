@@ -151,7 +151,7 @@ class DeadlineDispatchService:
         return messages + list(digests.values())
 
     def _link(self, message: _Message) -> str:
-        """Ссылка на объект для отдельного сообщения; у сводки ссылки нет."""
+        """Ссылка на объект для отдельного сообщения; у сводки общей ссылки нет — ссылки пунктов в её тексте."""
         if message.mode == DeliveryMode.SEPARATE:
             return deadline_message_service.link(item=message.items[0])
         return ""

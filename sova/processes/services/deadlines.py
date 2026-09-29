@@ -32,7 +32,7 @@ class DeadlineItem:
     stage_name: str = ""
     action_name: str = ""
     recipients: tuple = ()
-    # Для ссылки в колокольчике: взаимодействие и процесс, где искать объект
+    # Для ссылки на объект: взаимодействие и процесс, где искать объект
     interaction_id: UUID | None = None
     workflow_instance_id: UUID | None = None
 
