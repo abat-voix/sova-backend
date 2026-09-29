@@ -1,4 +1,3 @@
-from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from accounts.models import SystemRole, UserRole
@@ -8,7 +7,7 @@ from sova.interactions.exceptions import AmbiguousManagerError, ManagerNotFoundE
 from sova.interactions.models import InteractionProduct, Responsible
 from sova.interactions.services import responsible_service
 from sova.interactions.services.contract_attachment import contract_attachment_service
-from sova.interactions.tests.factories import ContractFactory, InteractionFactory, InteractionProductFactory
+from sova.interactions.tests.factories import ContractFactory, InteractionProductFactory
 
 
 class AttachToNewInteractionTestCase(TestCase):
@@ -107,34 +106,3 @@ class FindManagerTestCase(TestCase):
         with self.assertRaises(ManagerNotFoundError):
             responsible_service.find_manager("Иванов Иван")
 
-
-class AttachToExistingInteractionTestCase(TestCase):
-    """Привязка договора к уже существующему Interaction не трогает comment/Responsible."""
-
-    def test_attaches_products_without_touching_comment_or_responsible(self) -> None:
-        interaction = InteractionFactory(organization=OrganizationFactory(), comment="Исходный комментарий")
-        contract = ContractFactory(
-            interaction=None,
-            organization=interaction.organization,
-            draft_comment="Комментарий из второго договора",
-        )
-        InteractionProductFactory(contract=contract, interaction=None)
-
-        contract_attachment_service.attach_to_existing_interaction(contract=contract, interaction=interaction)
-
-        contract.refresh_from_db()
-        interaction.refresh_from_db()
-        self.assertEqual(contract.interaction_id, interaction.id)
-        self.assertEqual(interaction.comment, "Исходный комментарий")
-        self.assertFalse(Responsible.objects.filter(interaction=interaction).exists())
-        self.assertTrue(InteractionProduct.objects.filter(contract=contract, interaction=interaction).exists())
-
-    def test_rejects_interaction_with_another_counterparty(self) -> None:
-        interaction = InteractionFactory(organization=OrganizationFactory())
-        contract = ContractFactory(interaction=None, organization=OrganizationFactory())
-
-        with self.assertRaises(ValidationError):
-            contract_attachment_service.attach_to_existing_interaction(contract=contract, interaction=interaction)
-
-        contract.refresh_from_db()
-        self.assertIsNone(contract.interaction_id)

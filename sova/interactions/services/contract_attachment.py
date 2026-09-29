@@ -20,15 +20,26 @@ class ContractAttachmentService:
     """
     Переводит headless-договор (созданный импортом реестра) в состояние «привязан к Interaction».
 
+    Договор из реестра нужен только для создания взаимодействия: к уже существующему Interaction он не
+    привязывается.
+
     Не вызывает processes.services — запуск/досоздание этапов workflow остаётся на уровне
     API/оркестрации, как и для обычного создания Interaction (досоздание этапов в идущем
     процессе — `WorkflowEngineService.sync_contexts`).
     """
 
     @transaction.atomic
-    def attach_to_new_interaction(self, contract: Contract, author: AbstractBaseUser | None) -> Interaction:
+    def attach_to_new_interaction(
+        self,
+        contract: Contract,
+        author: AbstractBaseUser | None,
+        comment: str | None = None,
+        is_active: bool = True,
+    ) -> Interaction:
         """
         Создаёт новый Interaction из headless-договора и переносит на него все его записи.
+
+        Комментарий взаимодействия — `comment`, если он передан, иначе черновой комментарий договора из реестра.
 
         Ответственные — как при обычном создании взаимодействия: автор-КАМ становится ответственным, у руководителя
         и администратора взаимодействие остаётся ничьим до назначения через `assign-responsible`. КАМы договора из
@@ -39,7 +50,8 @@ class ContractAttachmentService:
         interaction = Interaction.objects.create(
             organization=contract.organization,
             b2c_client=contract.b2c_client,
-            comment=contract.draft_comment,
+            comment=contract.draft_comment if comment is None else comment,
+            is_active=is_active,
         )
         self._attach(contract=contract, interaction=interaction)
 
@@ -47,16 +59,6 @@ class ContractAttachmentService:
             responsible_service.assign(interaction=interaction, manager=author, assigned_by=author)
 
         return interaction
-
-    @transaction.atomic
-    def attach_to_existing_interaction(self, contract: Contract, interaction: Interaction) -> None:
-        """
-        Привязывает дополнительный договор к уже существующему Interaction (переиздание/расширение).
-
-        Ответственные договора не переносятся и остаются на договоре.
-        """
-        self._check_headless(contract=contract)
-        self._attach(contract=contract, interaction=interaction)
 
     @staticmethod
     def _check_headless(contract: Contract) -> None:

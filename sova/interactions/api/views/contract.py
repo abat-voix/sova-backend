@@ -74,20 +74,31 @@ class ContractViewSet(SovaBaseViewSet):
         "download": Action.CONTRACTS_READ,
     }
 
-    @extend_schema(request=None, responses={200: serializers.ContractSerializer})
+    @extend_schema(
+        request=serializers.AttachContractToNewInteractionSerializer,
+        responses={200: serializers.ContractSerializer},
+    )
     @action(methods=["POST"], detail=True, url_path="attach-to-new-interaction")
     def attach_to_new_interaction(self, request, pk=None) -> Response:
         """
         Создаёт взаимодействие из договора и привязывает к нему договор.
 
-        Контрагент и комментарий берутся из договора. Ответственные — как при обычном создании: КАМ становится
+        Контрагент берётся из договора, комментарий — из тела запроса, а если он не передан — из договора.
+        Ответственные — как при обычном создании: КАМ становится
         ответственным сам, у руководителя и администратора взаимодействие остаётся ничьим до `assign-responsible`.
         КАМы из реестра не назначаются — их подсказывает `assignable-managers` взаимодействия. Процесс workflow не
         запускается — это отдельный запуск процесса.
         """
+        serializer = serializers.AttachContractToNewInteractionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         with transaction.atomic(), translate_attachment_errors():
             contract = self._lock_contract()
-            contract_attachment_service.attach_to_new_interaction(contract=contract, author=request.user)
+            contract_attachment_service.attach_to_new_interaction(
+                contract=contract,
+                author=request.user,
+                comment=serializer.validated_data.get("comment"),
+                is_active=serializer.validated_data["is_active"],
+            )
 
         return self._contract_response()
 
